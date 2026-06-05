@@ -1,2 +1,13 @@
 architecture.md
 roadmap.md
+venv/
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.tox/
+*.py[cod]
+*.egg-info/
+.env
+.DS_Store
