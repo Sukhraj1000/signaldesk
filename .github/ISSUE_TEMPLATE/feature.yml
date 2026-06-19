@@ -1,0 +1,36 @@
+name: Feature request
+about: Propose a scoped SignalDesk feature
+labels: [feature]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What user-visible outcome should this feature create?
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What is in scope and out of scope?
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List concrete checks or behavior that prove completion.
+      placeholder: |
+        - Given ..., when ..., then ...
+        - `make check` passes
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety
+      options:
+        - label: This does not require production secrets
+        - label: This does not add live trading or execution behavior
+        - label: Risky paths are called out in the description if touched

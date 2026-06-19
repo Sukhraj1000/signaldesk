@@ -1,0 +1,38 @@
+name: Bug report
+about: Report a reproducible SignalDesk defect
+labels: [bug]
+body:
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behavior
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      description: Include commands, inputs, and output.
+      placeholder: |
+        1. Run `...`
+        2. Observe `...`
+    validations:
+      required: true
+  - type: textarea
+    id: regression
+    attributes:
+      label: Regression test idea
+      description: What test would fail before the fix and pass after?
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety
+      options:
+        - label: No secrets are included in this report
+        - label: External market/news text included here should be treated as untrusted input
