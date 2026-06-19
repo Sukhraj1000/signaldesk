@@ -1,0 +1,18 @@
+# CodeRabbit is part of the SignalDesk feedback loop.
+# It reviews PRs, leaves actionable comments, and approves after comments are resolved
+# and required pre-merge checks are green. GitHub auto-merge then handles the merge.
+
+reviews:
+  profile: chill
+  request_changes_workflow: true
+  review_status: true
+  commit_status: true
+  fail_commit_status: false
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    drafts: false
+    # Review PRs targeting any branch so the feedback loop still works if the
+    # default branch or release branches change later.
+    base_branches:
+      - ".*"
