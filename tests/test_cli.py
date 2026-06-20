@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from datetime import datetime
 
+import signaldesk_cli.main as cli_main
+from pytest import MonkeyPatch
 from signaldesk_backend import (
     Candle,
     ProviderCapability,
@@ -9,7 +11,12 @@ from signaldesk_backend import (
     Quote,
     Symbol,
 )
-from signaldesk_cli.main import _format_provider_health, _run_provider_health_checks, app
+from signaldesk_cli.main import (
+    _format_provider_capabilities,
+    _format_provider_health,
+    _run_provider_health_checks,
+    app,
+)
 from typer.testing import CliRunner
 
 
@@ -37,6 +44,14 @@ class ExplodingProvider:
         raise RuntimeError("secret detail should not be shown")
 
 
+@dataclass(frozen=True)
+class ExplodingCapabilitiesProvider(ExplodingProvider):
+    name: str = "exploding-capabilities"
+
+    def capabilities(self) -> tuple[ProviderCapability, ...]:
+        raise RuntimeError("secret capability detail should not be shown")
+
+
 def test_health_command() -> None:
     result = CliRunner().invoke(app, ["health"])
 
@@ -49,6 +64,16 @@ def test_providers_check_is_available_from_help() -> None:
 
     assert result.exit_code == 0
     assert "check" in result.stdout
+    assert "list" in result.stdout
+
+
+def test_providers_list_reports_yfinance_capabilities() -> None:
+    result = CliRunner().invoke(app, ["providers", "list"])
+
+    assert result.exit_code == 0
+    assert "provider\trealtime\thistorical\tasset_classes" in result.stdout
+    assert "local-fixture\tfalse\tfalse\tfixture" in result.stdout
+    assert "yfinance\ttrue\ttrue\tcrypto,equity,etf,index" in result.stdout
 
 
 def test_providers_check_reports_default_local_provider_without_secrets() -> None:
@@ -68,6 +93,27 @@ def test_provider_health_formatter_reports_failure_status() -> None:
     )
 
     assert line == "broken\tfailed\tunavailable without configured adapter"
+
+
+def test_provider_capability_formatter_reports_registry_capabilities() -> None:
+    lines = _format_provider_capabilities(ProviderRegistry((ExplodingProvider(),)))
+
+    assert lines == ("provider\trealtime\thistorical\tasset_classes", "exploding\tfalse\tfalse\t")
+
+
+def test_providers_list_continues_when_capabilities_raise(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        cli_main,
+        "default_provider_registry",
+        lambda: ProviderRegistry((ExplodingCapabilitiesProvider(), ExplodingProvider())),
+    )
+
+    result = CliRunner().invoke(app, ["providers", "list"])
+
+    assert result.exit_code == 0
+    assert "exploding-capabilities\tfalse\tfalse\t" in result.stdout
+    assert "exploding\tfalse\tfalse\t" in result.stdout
+    assert "secret capability detail" not in result.stdout
 
 
 def test_provider_health_checks_convert_exceptions_to_sanitized_failures() -> None:

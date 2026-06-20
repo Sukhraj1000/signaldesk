@@ -19,6 +19,9 @@ dev = [
   "ruff>=0.5.0",
   "tox>=4.15.0",
 ]
+yfinance = [
+  "yfinance>=0.2.40",
+]
 
 [project.scripts]
 signaldesk = "signaldesk_cli.main:app"

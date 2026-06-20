@@ -17,6 +17,7 @@ from signaldesk_backend.providers import (
     LocalFixtureProvider,
     MarketDataProvider,
     ProviderRegistry,
+    YFinanceProvider,
     default_provider_registry,
     normalize_provider_name,
 )
@@ -36,6 +37,7 @@ __all__ = [
     "Symbol",
     "TechnicalEvent",
     "TechnicalSnapshot",
+    "YFinanceProvider",
     "default_provider_registry",
     "normalize_provider_name",
 ]

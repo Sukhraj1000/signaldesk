@@ -1,9 +1,11 @@
-"""Provider contracts and registry for market-data adapters."""
+"""Provider contracts, adapters, and registry for market-data providers."""
 
 from collections.abc import Iterable
-from dataclasses import dataclass
-from datetime import datetime
-from typing import Protocol
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, time
+from decimal import Decimal, InvalidOperation
+from importlib import import_module
+from typing import Any, Protocol, cast
 
 from signaldesk_backend.models import Candle, ProviderCapability, ProviderResult, Quote, Symbol
 
@@ -147,7 +149,225 @@ class LocalFixtureProvider:
         )
 
 
+@dataclass(frozen=True)
+class YFinanceProvider:
+    """Optional yfinance-backed market-data provider adapter."""
+
+    name: str = "yfinance"
+    _module: Any | None = field(default=None, repr=False, compare=False)
+
+    def capabilities(self) -> tuple[ProviderCapability, ...]:
+        """Return yfinance quote and candle capabilities without importing the package."""
+
+        return (
+            ProviderCapability(
+                provider=self.name,
+                supports_realtime=True,
+                supports_historical=True,
+                supported_asset_classes=frozenset({"equity", "etf", "crypto", "index"}),
+            ),
+        )
+
+    def get_historical_candles(
+        self,
+        symbol: Symbol,
+        *,
+        start: datetime,
+        end: datetime,
+        interval: str,
+    ) -> ProviderResult[tuple[Candle, ...]]:
+        """Fetch historical candles via yfinance and translate them to domain models."""
+
+        module_result = self._load_module()
+        if not module_result.ok:
+            return ProviderResult.failure(
+                provider=self.name, error=module_result.error or "unavailable"
+            )
+        if start > end:
+            return ProviderResult.failure(provider=self.name, error="start must be before end")
+        normalized_interval = interval.strip()
+        if not normalized_interval:
+            return ProviderResult.failure(provider=self.name, error="interval is required")
+
+        module = module_result.data
+        if module is None:
+            return ProviderResult.failure(
+                provider=self.name, error="optional dependency yfinance is not installed"
+            )
+
+        try:
+            ticker = module.Ticker(symbol.ticker)
+            history = ticker.history(start=start, end=end, interval=normalized_interval)
+        except Exception:
+            return ProviderResult.failure(
+                provider=self.name, error="yfinance historical fetch failed"
+            )
+
+        if bool(getattr(history, "empty", False)):
+            return ProviderResult.failure(
+                provider=self.name, error=f"no historical data for {symbol.ticker}"
+            )
+
+        candles: list[Candle] = []
+        try:
+            for timestamp, row in history.iterrows():
+                candle = self._row_to_candle(symbol, timestamp, row)
+                if candle is not None:
+                    candles.append(candle)
+        except Exception:
+            return ProviderResult.failure(
+                provider=self.name, error="yfinance historical data was invalid"
+            )
+
+        if not candles:
+            return ProviderResult.failure(
+                provider=self.name, error=f"no usable historical data for {symbol.ticker}"
+            )
+        return ProviderResult.success(provider=self.name, data=tuple(candles))
+
+    def get_quote(self, symbol: Symbol) -> ProviderResult[Quote]:
+        """Fetch a quote via yfinance and translate it to a Quote model."""
+
+        module_result = self._load_module()
+        if not module_result.ok:
+            return ProviderResult.failure(
+                provider=self.name, error=module_result.error or "unavailable"
+            )
+
+        module = module_result.data
+        if module is None:
+            return ProviderResult.failure(
+                provider=self.name, error="optional dependency yfinance is not installed"
+            )
+
+        try:
+            ticker = module.Ticker(symbol.ticker)
+            fast_info = getattr(ticker, "fast_info", {})
+        except Exception:
+            return ProviderResult.failure(provider=self.name, error="yfinance quote fetch failed")
+
+        last = self._pick_decimal(fast_info, "last_price", "lastPrice", "regularMarketPrice")
+        bid = self._pick_decimal(fast_info, "bid", "bidPrice")
+        ask = self._pick_decimal(fast_info, "ask", "askPrice")
+        if last is None or bid is None or ask is None:
+            try:
+                info = getattr(ticker, "info", {})
+            except Exception:
+                info = {}
+            if last is None:
+                last = self._pick_decimal(
+                    info, "regularMarketPrice", "currentPrice", "previousClose"
+                )
+            if bid is None:
+                bid = self._pick_decimal(info, "bid", "bidPrice")
+            if ask is None:
+                ask = self._pick_decimal(info, "ask", "askPrice")
+
+        if last is None and bid is None and ask is None:
+            return ProviderResult.failure(
+                provider=self.name, error=f"no quote data for {symbol.ticker}"
+            )
+
+        try:
+            quote = Quote(
+                symbol=symbol,
+                timestamp=datetime.now(UTC),
+                bid=bid,
+                ask=ask,
+                last=last,
+            )
+        except ValueError:
+            return ProviderResult.failure(
+                provider=self.name, error="yfinance quote data was invalid"
+            )
+        return ProviderResult.success(provider=self.name, data=quote)
+
+    def health_check(self) -> ProviderResult[str]:
+        """Report whether the optional yfinance dependency can be imported."""
+
+        module_result = self._load_module()
+        if not module_result.ok:
+            return ProviderResult.success(
+                provider=self.name,
+                data="unavailable until optional dependency yfinance is installed",
+            )
+        return ProviderResult.success(
+            provider=self.name, data="ready (optional dependency installed)"
+        )
+
+    def _load_module(self) -> ProviderResult[Any]:
+        if self._module is not None:
+            return ProviderResult.success(provider=self.name, data=self._module)
+        try:
+            return ProviderResult.success(provider=self.name, data=import_module("yfinance"))
+        except ImportError:
+            return ProviderResult.failure(
+                provider=self.name,
+                error="optional dependency yfinance is not installed",
+            )
+
+    def _row_to_candle(self, symbol: Symbol, timestamp: object, row: object) -> Candle | None:
+        open_price = self._decimal_from_value(self._get_row_value(row, "Open"))
+        high = self._decimal_from_value(self._get_row_value(row, "High"))
+        low = self._decimal_from_value(self._get_row_value(row, "Low"))
+        close = self._decimal_from_value(self._get_row_value(row, "Close"))
+        volume_value = self._get_row_value(row, "Volume")
+        if open_price is None or high is None or low is None or close is None:
+            return None
+        volume_decimal = self._decimal_from_value(volume_value)
+        volume = int(volume_decimal) if volume_decimal is not None else 0
+        return Candle(
+            symbol=symbol,
+            timestamp=self._coerce_timestamp(timestamp),
+            open=open_price,
+            high=high,
+            low=low,
+            close=close,
+            volume=volume,
+        )
+
+    def _coerce_timestamp(self, value: object) -> datetime:
+        if isinstance(value, datetime):
+            timestamp = value
+        elif hasattr(value, "to_pydatetime"):
+            timestamp = cast(Any, value).to_pydatetime()
+        elif hasattr(value, "date"):
+            timestamp = datetime.combine(cast(Any, value), time.min)
+        else:
+            raise ValueError("timestamp is not datetime-like")
+        if timestamp.tzinfo is None or timestamp.utcoffset() is None:
+            return timestamp.replace(tzinfo=UTC)
+        return timestamp.astimezone(UTC)
+
+    def _pick_decimal(self, mapping: object, *keys: str) -> Decimal | None:
+        for key in keys:
+            value = self._get_row_value(mapping, key)
+            decimal_value = self._decimal_from_value(value)
+            if decimal_value is not None:
+                return decimal_value
+        return None
+
+    def _get_row_value(self, row: object, key: str) -> object:
+        if isinstance(row, dict):
+            return row.get(key)
+        try:
+            return row[key]  # type: ignore[index]
+        except Exception:
+            return None
+
+    def _decimal_from_value(self, value: object) -> Decimal | None:
+        if value is None or value == "":
+            return None
+        try:
+            decimal_value = Decimal(str(value))
+        except (InvalidOperation, ValueError):
+            return None
+        if not decimal_value.is_finite() or decimal_value <= Decimal("0"):
+            return None
+        return decimal_value
+
+
 def default_provider_registry() -> ProviderRegistry:
     """Return the safe default provider registry for local CLI commands."""
 
-    return ProviderRegistry((LocalFixtureProvider(),))
+    return ProviderRegistry((LocalFixtureProvider(), YFinanceProvider()))
