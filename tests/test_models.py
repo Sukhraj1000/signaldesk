@@ -284,7 +284,7 @@ def test_analysis_models_serialize_with_dataclass_payloads() -> None:
     assert card_payload["snapshot"]["key_levels"]["confirmation"] == Decimal("111")
     assert card_payload["provenance"][0]["source"] == "unit-test-candles"
     assert card_payload["unavailable_context"][0]["context_type"] == "fundamentals"
-    assert card_payload["unavailable_context"][0]["reason"] != "no fundamental risk"
+    assert card_payload["unavailable_context"][0]["reason"] == "enhanced provider not configured"
 
 
 @pytest.mark.parametrize(
@@ -333,6 +333,18 @@ def test_analysis_models_serialize_with_dataclass_payloads() -> None:
         (
             lambda: UnavailableContext(context_type="catalyst", reason=" "),
             "reason",
+        ),
+        (
+            lambda: SignalCard(
+                symbol=Symbol("AMD"),
+                generated_at=NOW,
+                timeframe="1d",
+                bias="watch",
+                summary="facts",
+                confidence=Decimal("0.5"),
+                unavailable_context=("missing",),  # type: ignore[arg-type]
+            ),
+            "unavailable_context entries",
         ),
         (
             lambda: SignalCard(

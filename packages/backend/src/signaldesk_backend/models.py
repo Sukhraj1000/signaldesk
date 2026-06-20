@@ -359,6 +359,9 @@ class SignalCard:
         object.__setattr__(self, "summary", summary)
         object.__setattr__(self, "events", tuple(self.events))
         object.__setattr__(self, "provenance", tuple(self.provenance))
-        object.__setattr__(self, "unavailable_context", tuple(self.unavailable_context))
+        unavailable_context = tuple(self.unavailable_context)
+        if any(not isinstance(entry, UnavailableContext) for entry in unavailable_context):
+            raise TypeError("unavailable_context entries must be UnavailableContext")
+        object.__setattr__(self, "unavailable_context", unavailable_context)
         normalized_tags = tuple(tag.strip().lower() for tag in self.tags if tag.strip())
         object.__setattr__(self, "tags", normalized_tags)
