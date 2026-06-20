@@ -67,9 +67,59 @@ def exponential_moving_average(
     return tuple(averages)
 
 
+def relative_strength_index(
+    values: Sequence[PriceInput], *, period: int = 14
+) -> tuple[Decimal | None, ...]:
+    """Return an input-aligned Relative Strength Index over close prices.
+
+    RSI needs ``period`` price changes, so the first computable value appears at
+    index ``period``. Initial average gain/loss values use simple means, then
+    subsequent values use Wilder smoothing. A flat window with no gain or loss
+    returns neutral RSI ``50``; a no-loss rising window returns ``100``.
+    """
+
+    closes = _coerce_prices(values)
+    _validate_period(period)
+    if not closes:
+        return ()
+
+    rsi_values: list[Decimal | None] = [None] * min(period, len(closes))
+    if len(closes) <= period:
+        return tuple(rsi_values)
+
+    decimal_period = Decimal(period)
+    gains: list[Decimal] = []
+    losses: list[Decimal] = []
+    for previous, current in zip(closes, closes[1:], strict=False):
+        change = current - previous
+        gains.append(max(change, Decimal("0")))
+        losses.append(max(-change, Decimal("0")))
+
+    average_gain = sum(gains[:period], Decimal("0")) / decimal_period
+    average_loss = sum(losses[:period], Decimal("0")) / decimal_period
+    rsi_values.append(_rsi_from_average_gain_loss(average_gain, average_loss))
+
+    for gain, loss in zip(gains[period:], losses[period:], strict=True):
+        average_gain = ((average_gain * Decimal(period - 1)) + gain) / decimal_period
+        average_loss = ((average_loss * Decimal(period - 1)) + loss) / decimal_period
+        rsi_values.append(_rsi_from_average_gain_loss(average_gain, average_loss))
+
+    return tuple(rsi_values)
+
+
 def _validate_period(period: int) -> None:
     if period <= 0:
         raise ValueError("period must be positive")
+
+
+def _rsi_from_average_gain_loss(average_gain: Decimal, average_loss: Decimal) -> Decimal:
+    if average_loss == 0:
+        if average_gain == 0:
+            return Decimal("50")
+        return Decimal("100")
+
+    relative_strength = average_gain / average_loss
+    return Decimal("100") - (Decimal("100") / (Decimal("1") + relative_strength))
 
 
 def _coerce_prices(values: Sequence[PriceInput]) -> tuple[Decimal, ...]:
