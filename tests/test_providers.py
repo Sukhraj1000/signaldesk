@@ -179,6 +179,20 @@ class RecordingProvider(FakeProvider):
         return super().get_quote(symbol)
 
 
+class RaisingQuoteProvider(FakeProvider):
+    exception: Exception
+    quote_calls: int
+
+    def __init__(self, name: str, exception: Exception) -> None:
+        super().__init__(name)
+        object.__setattr__(self, "exception", exception)
+        object.__setattr__(self, "quote_calls", 0)
+
+    def get_quote(self, symbol: Symbol) -> ProviderResult[Quote]:
+        object.__setattr__(self, "quote_calls", self.quote_calls + 1)
+        raise self.exception
+
+
 class FakeHistory:
     empty = False
 
@@ -375,6 +389,36 @@ def test_fallback_provider_does_not_call_later_providers_after_success() -> None
     assert result.provider == "primary"
     assert first.quote_calls == 1
     assert second.quote_calls == 0
+
+
+def test_fallback_provider_continues_after_raised_exception() -> None:
+    first = RaisingQuoteProvider("primary", TimeoutError("primary token=secret-token timed out"))
+    second = RecordingProvider("backup", fail=False)
+    provider = FallbackProvider((first, second))
+
+    result = provider.get_quote(Symbol("amd"))
+
+    assert result.ok is True
+    assert result.provider == "backup"
+    assert first.quote_calls == 1
+    assert second.quote_calls == 1
+
+
+def test_fallback_provider_reports_raised_exceptions_with_redacted_provenance() -> None:
+    first = RaisingQuoteProvider(
+        "primary", RuntimeError("GET https://example.test/quote?apikey=secret-key failed")
+    )
+    provider = FallbackProvider((first,), name="equity-fallback")
+
+    result = provider.get_quote(Symbol("amd"))
+
+    assert result.ok is False
+    assert result.provider == "equity-fallback"
+    assert result.error is not None
+    assert "secret-key" not in result.error
+    assert result.warnings == (
+        "primary: RuntimeError: GET https://example.test/quote?apikey=<redacted> failed",
+    )
 
 
 def test_fallback_provider_reports_all_failures_with_provenance() -> None:

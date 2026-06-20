@@ -166,7 +166,11 @@ def fallback_provider_call[T](
 
     failures: list[str] = []
     for provider_call in provider_calls:
-        result = provider_call()
+        try:
+            result = provider_call()
+        except Exception as exc:
+            failures.append(_provider_exception_summary(provider_call, exc))
+            continue
         if result.ok:
             return result
         failures.append(_provider_failure_summary(result))
@@ -188,6 +192,37 @@ def _provider_failure_summary(result: ProviderResult[Any]) -> str:
         result.error or "provider returned an unknown failure"
     )
     return f"{result.provider}: {error}"
+
+
+def _provider_exception_summary(
+    provider_call: Callable[[], ProviderResult[Any]], exc: Exception
+) -> str:
+    provider = _provider_call_name(provider_call)
+    error = redact_provider_diagnostic(f"{type(exc).__name__}: {exc}")
+    return f"{provider}: {error}"
+
+
+def _provider_call_name(provider_call: Callable[[], ProviderResult[Any]]) -> str:
+    bound_self = getattr(provider_call, "__self__", None)
+    if bound_self is not None:
+        name = getattr(bound_self, "name", None)
+        if isinstance(name, str) and name.strip():
+            return name
+
+    partial_func = getattr(provider_call, "func", None)
+    partial_self = getattr(partial_func, "__self__", None)
+    if partial_self is not None:
+        name = getattr(partial_self, "name", None)
+        if isinstance(name, str) and name.strip():
+            return name
+
+    partial_args = getattr(provider_call, "args", ())
+    if partial_args:
+        name = getattr(partial_args[0], "name", None)
+        if isinstance(name, str) and name.strip():
+            return name
+
+    return "unknown-provider"
 
 
 @dataclass(frozen=True)
