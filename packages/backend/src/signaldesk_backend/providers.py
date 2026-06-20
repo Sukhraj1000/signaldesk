@@ -7,7 +7,7 @@ import os
 import re
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, time
+from datetime import UTC, datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
 from functools import partial
 from importlib import import_module
@@ -331,7 +331,7 @@ class ProviderRegistry:
 
 @dataclass(frozen=True)
 class LocalFixtureProvider:
-    """Built-in provider used for local health checks before adapters exist."""
+    """Built-in deterministic provider for local health checks and smoke tests."""
 
     name: str = "local-fixture"
 
@@ -342,8 +342,8 @@ class LocalFixtureProvider:
             ProviderCapability(
                 provider=self.name,
                 supports_realtime=False,
-                supports_historical=False,
-                supported_asset_classes=frozenset({"fixture"}),
+                supports_historical=True,
+                supported_asset_classes=frozenset({"equity", "fixture"}),
             ),
         )
 
@@ -355,12 +355,41 @@ class LocalFixtureProvider:
         end: datetime,
         interval: str,
     ) -> ProviderResult[tuple[Candle, ...]]:
-        """Report that the fixture provider does not serve market data."""
+        """Return deterministic daily candles without network or credentials."""
 
-        return ProviderResult.failure(
-            provider=self.name,
-            error="local fixture provider does not serve historical market data",
-        )
+        if start > end:
+            return ProviderResult.failure(provider=self.name, error="start must be before end")
+        if interval.strip().lower() != "1d":
+            return ProviderResult.failure(
+                provider=self.name,
+                error="local fixture supports only daily historical intervals",
+            )
+
+        start_timestamp = datetime.combine(start.date(), time.min, tzinfo=UTC)
+        end_timestamp = datetime.combine(end.date(), time.min, tzinfo=UTC)
+        candles: list[Candle] = []
+        for index in range(60):
+            candle_timestamp = end_timestamp - timedelta(days=59 - index)
+            if start_timestamp <= candle_timestamp <= end_timestamp:
+                candles.append(
+                    Candle(
+                        symbol=symbol,
+                        timestamp=candle_timestamp,
+                        open=Decimal(index + 100),
+                        high=Decimal(index + 102),
+                        low=Decimal(index + 98),
+                        close=Decimal(index + 101),
+                        volume=10_000 + index,
+                    )
+                )
+        fixture_candles = tuple(candles)
+        if not fixture_candles:
+            return ProviderResult.failure(
+                provider=self.name,
+                error="local fixture returned no candles for requested date range",
+            )
+
+        return ProviderResult.success(provider=self.name, data=fixture_candles)
 
     def get_quote(self, symbol: Symbol) -> ProviderResult[Quote]:
         """Report that the fixture provider does not serve market data."""
@@ -375,7 +404,7 @@ class LocalFixtureProvider:
 
         return ProviderResult.success(
             provider=self.name,
-            data="ready (no external credentials required)",
+            data="ready (deterministic historical candles; no external credentials required)",
         )
 
 

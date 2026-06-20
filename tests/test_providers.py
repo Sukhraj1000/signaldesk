@@ -12,6 +12,7 @@ from signaldesk_backend import (
     FallbackProvider,
     FmpProvider,
     LocalCsvProvider,
+    LocalFixtureProvider,
     PolygonProvider,
     ProviderCapability,
     ProviderRegistry,
@@ -495,7 +496,76 @@ def test_default_provider_registry_includes_safe_local_fixture_provider() -> Non
     health = registry.get("local-fixture").health_check()
     assert health == ProviderResult.success(
         provider="local-fixture",
-        data="ready (no external credentials required)",
+        data="ready (deterministic historical candles; no external credentials required)",
+    )
+
+
+def test_local_fixture_provider_returns_deterministic_daily_candles() -> None:
+    provider = LocalFixtureProvider()
+    symbol = Symbol("AMD")
+    start = datetime(2026, 1, 1, tzinfo=UTC)
+    end = datetime(2026, 3, 1, 12, tzinfo=UTC)
+
+    capabilities = provider.capabilities()
+    result = provider.get_historical_candles(symbol, start=start, end=end, interval="1d")
+
+    assert capabilities == (
+        ProviderCapability(
+            provider="local-fixture",
+            supports_realtime=False,
+            supports_historical=True,
+            supported_asset_classes=frozenset({"equity", "fixture"}),
+        ),
+    )
+    assert result.ok is True
+    assert result.data is not None
+    assert len(result.data) == 60
+    assert result.data[0] == Candle(
+        symbol=symbol,
+        timestamp=datetime(2026, 1, 1, tzinfo=UTC),
+        open=Decimal("100"),
+        high=Decimal("102"),
+        low=Decimal("98"),
+        close=Decimal("101"),
+        volume=10_000,
+    )
+    assert result.data[-1] == Candle(
+        symbol=symbol,
+        timestamp=datetime(2026, 3, 1, tzinfo=UTC),
+        open=Decimal("159"),
+        high=Decimal("161"),
+        low=Decimal("157"),
+        close=Decimal("160"),
+        volume=10_059,
+    )
+
+
+def test_local_fixture_provider_filters_dates_and_rejects_invalid_requests() -> None:
+    provider = LocalFixtureProvider()
+    symbol = Symbol("AMD")
+    start = datetime(2026, 2, 27, 12, tzinfo=UTC)
+    end = datetime(2026, 3, 1, 12, tzinfo=UTC)
+
+    filtered = provider.get_historical_candles(symbol, start=start, end=end, interval="1d")
+    unsupported_interval = provider.get_historical_candles(
+        symbol, start=start, end=end, interval="1h"
+    )
+    reversed_dates = provider.get_historical_candles(symbol, start=end, end=start, interval="1d")
+
+    assert filtered.ok is True
+    assert filtered.data is not None
+    assert [candle.timestamp for candle in filtered.data] == [
+        datetime(2026, 2, 27, tzinfo=UTC),
+        datetime(2026, 2, 28, tzinfo=UTC),
+        datetime(2026, 3, 1, tzinfo=UTC),
+    ]
+    assert unsupported_interval == ProviderResult.failure(
+        provider="local-fixture",
+        error="local fixture supports only daily historical intervals",
+    )
+    assert reversed_dates == ProviderResult.failure(
+        provider="local-fixture",
+        error="start must be before end",
     )
 
 
