@@ -14,14 +14,17 @@ from signaldesk_backend.models import (
     TechnicalSnapshot,
 )
 from signaldesk_backend.providers import (
+    LocalFixtureProvider,
     MarketDataProvider,
     ProviderRegistry,
+    default_provider_registry,
     normalize_provider_name,
 )
 
 __all__ = [
     "Candle",
     "KeyLevels",
+    "LocalFixtureProvider",
     "MarketDataProvider",
     "ProviderCapability",
     "ProviderRegistry",
@@ -33,5 +36,6 @@ __all__ = [
     "Symbol",
     "TechnicalEvent",
     "TechnicalSnapshot",
+    "default_provider_registry",
     "normalize_provider_name",
 ]

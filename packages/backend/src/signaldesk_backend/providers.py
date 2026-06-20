@@ -1,6 +1,7 @@
 """Provider contracts and registry for market-data adapters."""
 
 from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
@@ -94,3 +95,59 @@ class ProviderRegistry:
 
     def __len__(self) -> int:
         return len(self._providers)
+
+
+@dataclass(frozen=True)
+class LocalFixtureProvider:
+    """Built-in provider used for local health checks before adapters exist."""
+
+    name: str = "local-fixture"
+
+    def capabilities(self) -> tuple[ProviderCapability, ...]:
+        """Return safe local-only capabilities for CLI discovery."""
+
+        return (
+            ProviderCapability(
+                provider=self.name,
+                supports_realtime=False,
+                supports_historical=False,
+                supported_asset_classes=frozenset({"fixture"}),
+            ),
+        )
+
+    def get_historical_candles(
+        self,
+        symbol: Symbol,
+        *,
+        start: datetime,
+        end: datetime,
+        interval: str,
+    ) -> ProviderResult[tuple[Candle, ...]]:
+        """Report that the fixture provider does not serve market data."""
+
+        return ProviderResult.failure(
+            provider=self.name,
+            error="local fixture provider does not serve historical market data",
+        )
+
+    def get_quote(self, symbol: Symbol) -> ProviderResult[Quote]:
+        """Report that the fixture provider does not serve market data."""
+
+        return ProviderResult.failure(
+            provider=self.name,
+            error="local fixture provider does not serve quotes",
+        )
+
+    def health_check(self) -> ProviderResult[str]:
+        """Return a deterministic no-secret health status."""
+
+        return ProviderResult.success(
+            provider=self.name,
+            data="ready (no external credentials required)",
+        )
+
+
+def default_provider_registry() -> ProviderRegistry:
+    """Return the safe default provider registry for local CLI commands."""
+
+    return ProviderRegistry((LocalFixtureProvider(),))

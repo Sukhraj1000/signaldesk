@@ -10,6 +10,7 @@ from signaldesk_backend import (
     ProviderResult,
     Quote,
     Symbol,
+    default_provider_registry,
     normalize_provider_name,
 )
 
@@ -128,3 +129,14 @@ def test_fake_provider_satisfies_interface_result_shapes() -> None:
     assert quote.data is not None
     assert quote.data.last == Decimal("100.50")
     assert health == ProviderResult.success(provider="fixture", data="healthy")
+
+
+def test_default_provider_registry_includes_safe_local_fixture_provider() -> None:
+    registry = default_provider_registry()
+
+    assert registry.names() == ("local-fixture",)
+    health = registry.get("local-fixture").health_check()
+    assert health == ProviderResult.success(
+        provider="local-fixture",
+        data="ready (no external credentials required)",
+    )
