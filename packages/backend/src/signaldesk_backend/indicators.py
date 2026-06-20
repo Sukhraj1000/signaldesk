@@ -188,6 +188,61 @@ def average_true_range(
     return tuple(atr_values)
 
 
+def volume_moving_average(
+    candles: Sequence[CandleInput], *, period: int = 20
+) -> tuple[Decimal | None, ...]:
+    """Return an input-aligned simple moving average of candle volume."""
+
+    _validate_period(period)
+    if not candles:
+        return ()
+
+    volumes = _coerce_volumes(candles)
+    averages: list[Decimal | None] = []
+    rolling_sum = Decimal("0")
+    decimal_period = Decimal(period)
+    for index, volume in enumerate(volumes):
+        rolling_sum += volume
+        if index >= period:
+            rolling_sum -= volumes[index - period]
+        if index < period - 1:
+            averages.append(None)
+        else:
+            averages.append(rolling_sum / decimal_period)
+    return tuple(averages)
+
+
+def relative_volume(
+    candles: Sequence[CandleInput], *, period: int = 20
+) -> tuple[Decimal | None, ...]:
+    """Return volume divided by the prior trailing average volume.
+
+    Entries are ``None`` until ``period`` prior candles are available. If the
+    trailing average is zero, ``None`` is returned to avoid division by zero.
+    """
+
+    _validate_period(period)
+    if not candles:
+        return ()
+
+    volumes = _coerce_volumes(candles)
+    relative_values: list[Decimal | None] = []
+    rolling_sum = Decimal("0")
+    decimal_period = Decimal(period)
+    for index, volume in enumerate(volumes):
+        if index < period:
+            relative_values.append(None)
+        else:
+            trailing_average = rolling_sum / decimal_period
+            relative_values.append(
+                None if trailing_average == 0 else volume / trailing_average
+            )
+        rolling_sum += volume
+        if index >= period:
+            rolling_sum -= volumes[index - period]
+    return tuple(relative_values)
+
+
 def _validate_period(period: int) -> None:
     if period <= 0:
         raise ValueError("period must be positive")
@@ -233,6 +288,10 @@ def _true_ranges(candles: Sequence[CandleInput]) -> tuple[Decimal, ...]:
 
 def _coerce_prices(values: Sequence[PriceInput]) -> tuple[Decimal, ...]:
     return tuple(_coerce_price(value) for value in values)
+
+
+def _coerce_volumes(candles: Sequence[CandleInput]) -> tuple[Decimal, ...]:
+    return tuple(Decimal(candle.volume) for candle in candles)
 
 
 def _coerce_price(value: PriceInput) -> Decimal:
