@@ -8,6 +8,8 @@ SignalDesk is an open-source, TA-first market intelligence workbench. It turns m
 
 SignalDesk must always be useful in default open-source mode. Enhanced adapters add depth, reliability, and richer context, but they must not be required for the core technical-analysis workflow.
 
+The durable user-facing contract lives in `docs/product-contract.md`. Architecture changes should preserve that contract unless a future GitHub issue explicitly updates it.
+
 Default workflow:
 
 ```bash
