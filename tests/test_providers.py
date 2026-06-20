@@ -10,12 +10,14 @@ from signaldesk_backend import (
     Candle,
     FmpProvider,
     LocalCsvProvider,
+    PolygonProvider,
     ProviderCapability,
     ProviderRegistry,
     ProviderResult,
     Quote,
     StooqProvider,
     Symbol,
+    TwelveDataProvider,
     YFinanceProvider,
     default_provider_registry,
     normalize_provider_name,
@@ -269,12 +271,59 @@ def test_fake_provider_satisfies_interface_result_shapes() -> None:
 def test_default_provider_registry_includes_safe_local_fixture_provider() -> None:
     registry = default_provider_registry()
 
-    assert registry.names() == ("fmp", "local-fixture", "stooq", "yfinance")
+    assert registry.names() == (
+        "fmp",
+        "local-fixture",
+        "polygon",
+        "stooq",
+        "twelve-data",
+        "yfinance",
+    )
     health = registry.get("local-fixture").health_check()
     assert health == ProviderResult.success(
         provider="local-fixture",
         data="ready (no external credentials required)",
     )
+
+
+@pytest.mark.parametrize(
+    ("provider", "provider_name", "display_name"),
+    (
+        (PolygonProvider(), "polygon", "Polygon"),
+        (TwelveDataProvider(), "twelve-data", "Twelve Data"),
+    ),
+)
+def test_enhanced_provider_placeholders_are_offline_and_explicit(
+    provider: PolygonProvider | TwelveDataProvider,
+    provider_name: str,
+    display_name: str,
+) -> None:
+    capabilities = provider.capabilities()
+    health = provider.health_check()
+    quote = provider.get_quote(Symbol("amd"))
+    candles = provider.get_historical_candles(Symbol("amd"), start=NOW, end=NOW, interval="1d")
+
+    assert capabilities == (
+        ProviderCapability(
+            provider=provider_name,
+            supports_realtime=True,
+            supports_historical=True,
+            supported_asset_classes=frozenset({"equity", "etf", "index"}),
+        ),
+    )
+    assert health == ProviderResult.success(
+        provider=provider_name,
+        data=f"unavailable until {display_name} integration is implemented/configured",
+    )
+    expected_failure: ProviderResult[object] = ProviderResult.failure(
+        provider=provider_name,
+        error=(
+            f"{display_name} provider is a placeholder; "
+            "integration is not implemented or configured"
+        ),
+    )
+    assert quote == expected_failure
+    assert candles == expected_failure
 
 
 def test_fmp_provider_reports_capabilities_and_missing_key_safely(

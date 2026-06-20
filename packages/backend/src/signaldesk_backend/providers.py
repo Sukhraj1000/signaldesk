@@ -930,9 +930,87 @@ class FmpProvider:
         return interval.strip().lower() in {"d", "1d", "day", "daily"}
 
 
+@dataclass(frozen=True)
+class PlaceholderEnhancedProvider:
+    """Offline placeholder for planned credentialed enhanced-data providers."""
+
+    name: str
+    display_name: str
+    supported_asset_classes: frozenset[str] = frozenset({"equity", "etf", "index"})
+
+    def capabilities(self) -> tuple[ProviderCapability, ...]:
+        """Advertise planned provider capabilities without network or secret checks."""
+
+        return (
+            ProviderCapability(
+                provider=self.name,
+                supports_realtime=True,
+                supports_historical=True,
+                supported_asset_classes=self.supported_asset_classes,
+            ),
+        )
+
+    def get_historical_candles(
+        self,
+        symbol: Symbol,
+        *,
+        start: datetime,
+        end: datetime,
+        interval: str,
+    ) -> ProviderResult[tuple[Candle, ...]]:
+        """Return an explicit deterministic failure until the adapter is implemented."""
+
+        return self._unavailable_failure()
+
+    def get_quote(self, symbol: Symbol) -> ProviderResult[Quote]:
+        """Return an explicit deterministic failure until the adapter is implemented."""
+
+        return self._unavailable_failure()
+
+    def health_check(self) -> ProviderResult[str]:
+        """Report placeholder status without requiring credentials or network I/O."""
+
+        return ProviderResult.success(
+            provider=self.name,
+            data=f"unavailable until {self.display_name} integration is implemented/configured",
+        )
+
+    def _unavailable_failure(self) -> ProviderResult[Any]:
+        return ProviderResult.failure(
+            provider=self.name,
+            error=(
+                f"{self.display_name} provider is a placeholder; "
+                "integration is not implemented or configured"
+            ),
+        )
+
+
+@dataclass(frozen=True)
+class PolygonProvider(PlaceholderEnhancedProvider):
+    """Offline placeholder for a future Polygon.io provider adapter."""
+
+    name: str = "polygon"
+    display_name: str = "Polygon"
+
+
+@dataclass(frozen=True)
+class TwelveDataProvider(PlaceholderEnhancedProvider):
+    """Offline placeholder for a future Twelve Data provider adapter."""
+
+    name: str = "twelve-data"
+    display_name: str = "Twelve Data"
+
+
 def default_provider_registry() -> ProviderRegistry:
     """Return the safe default provider registry for local CLI commands."""
 
     return ProviderRegistry(
-        (FmpProvider(), LocalFixtureProvider(), StooqProvider(), YFinanceProvider())
+        (
+            FmpProvider(),
+            LocalFixtureProvider(),
+            PolygonProvider(),
+            StooqProvider(),
+            TwelveDataProvider(),
+            YFinanceProvider(),
+        )
     )
