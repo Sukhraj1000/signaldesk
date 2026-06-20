@@ -1,7 +1,11 @@
 """Backend package for SignalDesk."""
 
 from signaldesk_backend.config import Settings
-from signaldesk_backend.indicators import exponential_moving_average, simple_moving_average
+from signaldesk_backend.indicators import (
+    exponential_moving_average,
+    relative_strength_index,
+    simple_moving_average,
+)
 from signaldesk_backend.models import (
     Candle,
     KeyLevels,
@@ -62,5 +66,6 @@ __all__ = [
     "normalize_provider_name",
     "provider_rate_limit_failure",
     "redact_provider_diagnostic",
+    "relative_strength_index",
     "simple_moving_average",
 ]

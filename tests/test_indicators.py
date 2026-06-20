@@ -3,7 +3,13 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
-from signaldesk_backend import Candle, Symbol, exponential_moving_average, simple_moving_average
+from signaldesk_backend import (
+    Candle,
+    Symbol,
+    exponential_moving_average,
+    relative_strength_index,
+    simple_moving_average,
+)
 
 Indicator = Callable[[tuple[Decimal, ...]], tuple[Decimal | None, ...]]
 
@@ -69,11 +75,60 @@ def test_exponential_moving_average_accepts_candles_and_uses_close_prices() -> N
     )
 
 
+def test_relative_strength_index_uses_wilder_smoothing() -> None:
+    values = tuple(
+        Decimal(value)
+        for value in (
+            "44.34",
+            "44.09",
+            "44.15",
+            "43.61",
+            "44.33",
+            "44.83",
+            "45.10",
+            "45.42",
+            "45.84",
+            "46.08",
+            "45.89",
+            "46.03",
+            "45.61",
+            "46.28",
+            "46.28",
+            "46.00",
+        )
+    )
+
+    rsi = relative_strength_index(values, period=14)
+
+    assert rsi[:14] == (None,) * 14
+    assert rsi[14] == Decimal("70.46413502109704641350210971")
+    assert rsi[15] == Decimal("66.24961855355508086664632285")
+
+
+def test_relative_strength_index_accepts_candles_and_uses_close_prices() -> None:
+    candles = tuple(make_candle(index, close) for index, close in enumerate(("10", "11", "12")))
+
+    assert relative_strength_index(candles, period=2) == (
+        None,
+        None,
+        Decimal("100"),
+    )
+
+
+def test_relative_strength_index_documents_flat_series_as_neutral() -> None:
+    assert relative_strength_index((Decimal("10"), Decimal("10"), Decimal("10")), period=2) == (
+        None,
+        None,
+        Decimal("50"),
+    )
+
+
 @pytest.mark.parametrize(
     "indicator",
     [
         lambda values: simple_moving_average(values, period=0),
         lambda values: exponential_moving_average(values, period=0),
+        lambda values: relative_strength_index(values, period=0),
     ],
 )
 def test_moving_averages_reject_non_positive_periods(indicator: Indicator) -> None:
@@ -86,6 +141,7 @@ def test_moving_averages_reject_non_positive_periods(indicator: Indicator) -> No
     [
         lambda values: simple_moving_average(values, period=3),
         lambda values: exponential_moving_average(values, period=3),
+        lambda values: relative_strength_index(values, period=3),
     ],
 )
 def test_moving_averages_preserve_input_length_for_empty_and_insufficient_inputs(
