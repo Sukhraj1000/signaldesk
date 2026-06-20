@@ -1,8 +1,9 @@
 """Deterministic technical-analysis indicator calculations."""
 
 from collections.abc import Sequence
+from datetime import datetime
 from decimal import Decimal
-from typing import NamedTuple
+from typing import Literal, NamedTuple
 
 from signaldesk_backend.models import Candle
 
@@ -16,6 +17,16 @@ class MacdResult(NamedTuple):
     macd_line: tuple[Decimal | None, ...]
     signal_line: tuple[Decimal | None, ...]
     histogram: tuple[Decimal | None, ...]
+
+
+class SwingPoint(NamedTuple):
+    """A local swing high or low detected from a candle series."""
+
+    kind: Literal["high", "low"]
+    candle_index: int
+    timestamp: datetime
+    price: Decimal
+    candle: Candle
 
 
 def simple_moving_average(
@@ -243,9 +254,150 @@ def relative_volume(
     return tuple(relative_values)
 
 
+def detect_swing_highs(
+    candles: Sequence[CandleInput],
+    *,
+    window: int = 2,
+    lookback: int | None = None,
+    lookahead: int | None = None,
+) -> tuple[SwingPoint, ...]:
+    """Return local swing highs with a full surrounding candle window.
+
+    A swing high is a candle whose high is strictly greater than every high in
+    the surrounding candles. By default ``window`` is used for both the backward
+    and forward comparison windows; callers may pass ``lookback`` and/or
+    ``lookahead`` for asymmetric confirmation. Equal highs are treated as ties
+    and are not reported so flat/tie behavior is deterministic.
+    """
+
+    return _detect_swings(
+        candles,
+        window=window,
+        lookback=lookback,
+        lookahead=lookahead,
+        kind="high",
+    )
+
+
+def detect_swing_lows(
+    candles: Sequence[CandleInput],
+    *,
+    window: int = 2,
+    lookback: int | None = None,
+    lookahead: int | None = None,
+) -> tuple[SwingPoint, ...]:
+    """Return local swing lows with a full surrounding candle window.
+
+    A swing low is a candle whose low is strictly lower than every low in the
+    surrounding candles. By default ``window`` is used for both the backward and
+    forward comparison windows; callers may pass ``lookback`` and/or
+    ``lookahead`` for asymmetric confirmation. Equal lows are treated as ties and
+    are not reported so flat/tie behavior is deterministic.
+    """
+
+    return _detect_swings(
+        candles,
+        window=window,
+        lookback=lookback,
+        lookahead=lookahead,
+        kind="low",
+    )
+
+
+def detect_swing_points(
+    candles: Sequence[CandleInput],
+    *,
+    window: int = 2,
+    lookback: int | None = None,
+    lookahead: int | None = None,
+) -> tuple[SwingPoint, ...]:
+    """Return swing highs and lows ordered by their original candle index."""
+
+    swing_points = (
+        *detect_swing_highs(
+            candles,
+            window=window,
+            lookback=lookback,
+            lookahead=lookahead,
+        ),
+        *detect_swing_lows(
+            candles,
+            window=window,
+            lookback=lookback,
+            lookahead=lookahead,
+        ),
+    )
+    return tuple(sorted(swing_points, key=lambda point: (point.candle_index, point.kind)))
+
+
 def _validate_period(period: int) -> None:
     if period <= 0:
         raise ValueError("period must be positive")
+
+
+def _validate_swing_window(value: int, name: str) -> None:
+    if value <= 0:
+        raise ValueError(f"{name} must be positive")
+
+
+def _resolve_swing_windows(
+    *, window: int, lookback: int | None, lookahead: int | None
+) -> tuple[int, int]:
+    resolved_lookback = window if lookback is None else lookback
+    resolved_lookahead = window if lookahead is None else lookahead
+    _validate_swing_window(resolved_lookback, "lookback")
+    _validate_swing_window(resolved_lookahead, "lookahead")
+    return resolved_lookback, resolved_lookahead
+
+
+def _detect_swings(
+    candles: Sequence[CandleInput],
+    *,
+    window: int,
+    lookback: int | None,
+    lookahead: int | None,
+    kind: Literal["high", "low"],
+) -> tuple[SwingPoint, ...]:
+    resolved_lookback, resolved_lookahead = _resolve_swing_windows(
+        window=window,
+        lookback=lookback,
+        lookahead=lookahead,
+    )
+    if len(candles) < resolved_lookback + resolved_lookahead + 1:
+        return ()
+
+    swings: list[SwingPoint] = []
+    for index in range(resolved_lookback, len(candles) - resolved_lookahead):
+        candle = candles[index]
+        neighbors = (
+            *candles[index - resolved_lookback : index],
+            *candles[index + 1 : index + resolved_lookahead + 1],
+        )
+        if kind == "high":
+            price = candle.high
+            if all(price > neighbor.high for neighbor in neighbors):
+                swings.append(
+                    SwingPoint(
+                        kind=kind,
+                        candle_index=index,
+                        timestamp=candle.timestamp,
+                        price=price,
+                        candle=candle,
+                    )
+                )
+        else:
+            price = candle.low
+            if all(price < neighbor.low for neighbor in neighbors):
+                swings.append(
+                    SwingPoint(
+                        kind=kind,
+                        candle_index=index,
+                        timestamp=candle.timestamp,
+                        price=price,
+                        candle=candle,
+                    )
+                )
+    return tuple(swings)
 
 
 def _validate_macd_periods(

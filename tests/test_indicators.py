@@ -5,8 +5,12 @@ from decimal import Decimal
 import pytest
 from signaldesk_backend import (
     Candle,
+    SwingPoint,
     Symbol,
     average_true_range,
+    detect_swing_highs,
+    detect_swing_lows,
+    detect_swing_points,
     exponential_moving_average,
     macd,
     relative_strength_index,
@@ -308,6 +312,187 @@ def test_relative_volume_returns_none_for_zero_trailing_average() -> None:
     )
 
     assert relative_volume(candles, period=3) == (None, None, None, None)
+
+
+def test_detect_swing_highs_returns_structured_local_maxima() -> None:
+    candles = tuple(
+        make_ohlc_candle(
+            index,
+            open_=Decimal("10"),
+            high=Decimal(str(high)),
+            low=Decimal("9"),
+            close=Decimal("10"),
+        )
+        for index, high in enumerate((10, 12, 15, 11, 13, 10, 14))
+    )
+
+    assert detect_swing_highs(candles, window=1) == (
+        SwingPoint(
+            kind="high",
+            candle_index=2,
+            timestamp=candles[2].timestamp,
+            price=Decimal("15"),
+            candle=candles[2],
+        ),
+        SwingPoint(
+            kind="high",
+            candle_index=4,
+            timestamp=candles[4].timestamp,
+            price=Decimal("13"),
+            candle=candles[4],
+        ),
+    )
+
+
+def test_detect_swing_lows_returns_structured_local_minima() -> None:
+    candles = tuple(
+        make_ohlc_candle(
+            index,
+            open_=Decimal("10"),
+            high=Decimal("12"),
+            low=Decimal(str(low)),
+            close=Decimal("10"),
+        )
+        for index, low in enumerate((8, 7, 6, 7, 5, 8, 4))
+    )
+
+    assert detect_swing_lows(candles, window=1) == (
+        SwingPoint(
+            kind="low",
+            candle_index=2,
+            timestamp=candles[2].timestamp,
+            price=Decimal("6"),
+            candle=candles[2],
+        ),
+        SwingPoint(
+            kind="low",
+            candle_index=4,
+            timestamp=candles[4].timestamp,
+            price=Decimal("5"),
+            candle=candles[4],
+        ),
+    )
+
+
+def test_detect_swing_points_combines_highs_and_lows_by_candle_order() -> None:
+    candles = tuple(
+        make_ohlc_candle(
+            index,
+            open_=Decimal("10"),
+            high=Decimal(str(high)),
+            low=Decimal(str(low)),
+            close=Decimal("10"),
+        )
+        for index, high, low in (
+            (0, 10, 8),
+            (1, 14, 7),
+            (2, 11, 6),
+            (3, 16, 9),
+            (4, 12, 5),
+            (5, 13, 8),
+        )
+    )
+
+    points = detect_swing_points(candles, window=1)
+
+    assert tuple(point.kind for point in points) == ("high", "low", "high", "low")
+    assert tuple(point.candle_index for point in points) == (1, 2, 3, 4)
+    assert tuple(point.price for point in points) == (
+        Decimal("14"),
+        Decimal("6"),
+        Decimal("16"),
+        Decimal("5"),
+    )
+
+
+def test_swing_detection_excludes_edges_and_requires_full_window() -> None:
+    candles = tuple(
+        make_ohlc_candle(
+            index,
+            open_=Decimal("10"),
+            high=Decimal(str(high)),
+            low=Decimal("9"),
+            close=Decimal("10"),
+        )
+        for index, high in enumerate((20, 10, 11, 12, 30))
+    )
+
+    assert detect_swing_highs(candles, window=1) == ()
+    assert detect_swing_highs(candles[:2], window=1) == ()
+
+
+def test_swing_detection_supports_asymmetric_lookback_and_lookahead() -> None:
+    candles = tuple(
+        make_ohlc_candle(
+            index,
+            open_=Decimal("10"),
+            high=Decimal(str(high)),
+            low=Decimal(str(low)),
+            close=Decimal("10"),
+        )
+        for index, high, low in (
+            (0, 10, 8),
+            (1, 11, 7),
+            (2, 15, 6),
+            (3, 12, 8),
+            (4, 16, 7),
+            (5, 13, 9),
+        )
+    )
+
+    assert detect_swing_highs(candles, lookback=2, lookahead=1) == (
+        SwingPoint(
+            kind="high",
+            candle_index=2,
+            timestamp=candles[2].timestamp,
+            price=Decimal("15"),
+            candle=candles[2],
+        ),
+        SwingPoint(
+            kind="high",
+            candle_index=4,
+            timestamp=candles[4].timestamp,
+            price=Decimal("16"),
+            candle=candles[4],
+        ),
+    )
+    assert detect_swing_lows(candles, lookback=1, lookahead=2) == (
+        SwingPoint(
+            kind="low",
+            candle_index=2,
+            timestamp=candles[2].timestamp,
+            price=Decimal("6"),
+            candle=candles[2],
+        ),
+    )
+
+
+def test_swing_detection_uses_strict_comparison_for_ties() -> None:
+    candles = tuple(
+        make_ohlc_candle(
+            index,
+            open_=Decimal("10"),
+            high=Decimal(str(high)),
+            low=Decimal(str(low)),
+            close=Decimal("10"),
+        )
+        for index, high, low in (
+            (0, 10, 8),
+            (1, 12, 7),
+            (2, 12, 7),
+            (3, 11, 8),
+        )
+    )
+
+    assert detect_swing_highs(candles, window=1) == ()
+    assert detect_swing_lows(candles, window=1) == ()
+
+
+def test_swing_detection_rejects_non_positive_windows() -> None:
+    with pytest.raises(ValueError, match="lookback must be positive"):
+        detect_swing_points((make_candle(0, "10"),), window=0)
+    with pytest.raises(ValueError, match="lookahead must be positive"):
+        detect_swing_points((make_candle(0, "10"),), lookahead=0)
 
 
 @pytest.mark.parametrize(
