@@ -2,9 +2,12 @@
 
 from signaldesk_backend.config import Settings
 from signaldesk_backend.indicators import (
+    LevelZone,
     MacdResult,
+    SupportResistanceZones,
     SwingPoint,
     average_true_range,
+    detect_support_resistance_zones,
     detect_swing_highs,
     detect_swing_lows,
     detect_swing_points,
@@ -51,6 +54,7 @@ __all__ = [
     "FallbackProvider",
     "FmpProvider",
     "KeyLevels",
+    "LevelZone",
     "LocalCsvProvider",
     "LocalFixtureProvider",
     "MacdResult",
@@ -64,6 +68,7 @@ __all__ = [
     "Quote",
     "Settings",
     "SignalCard",
+    "SupportResistanceZones",
     "SwingPoint",
     "StooqProvider",
     "Symbol",
@@ -73,6 +78,7 @@ __all__ = [
     "YFinanceProvider",
     "average_true_range",
     "default_provider_registry",
+    "detect_support_resistance_zones",
     "detect_swing_highs",
     "detect_swing_lows",
     "detect_swing_points",

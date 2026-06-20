@@ -5,9 +5,11 @@ from decimal import Decimal
 import pytest
 from signaldesk_backend import (
     Candle,
+    LevelZone,
     SwingPoint,
     Symbol,
     average_true_range,
+    detect_support_resistance_zones,
     detect_swing_highs,
     detect_swing_lows,
     detect_swing_points,
@@ -493,6 +495,109 @@ def test_swing_detection_rejects_non_positive_windows() -> None:
         detect_swing_points((make_candle(0, "10"),), window=0)
     with pytest.raises(ValueError, match="lookahead must be positive"):
         detect_swing_points((make_candle(0, "10"),), lookahead=0)
+
+
+def test_detect_support_resistance_zones_clusters_nearby_swing_levels() -> None:
+    candles = tuple(
+        make_ohlc_candle(
+            index,
+            open_=Decimal("10"),
+            high=Decimal(str(high)),
+            low=Decimal(str(low)),
+            close=Decimal("10"),
+        )
+        for index, high, low in (
+            (0, 10, 8),
+            (1, 15, 7),
+            (2, 11, 9),
+            (3, 15.2, 6.8),
+            (4, 12, 9),
+            (5, 20, 6.9),
+            (6, 13, 8),
+        )
+    )
+
+    result = detect_support_resistance_zones(
+        candles,
+        window=1,
+        tolerance=Decimal("0.30"),
+        tolerance_mode="absolute",
+    )
+
+    assert result.resistance[0] == LevelZone(
+        kind="resistance",
+        lower_bound=Decimal("15"),
+        upper_bound=Decimal("15.2"),
+        representative_price=Decimal("15.1"),
+        evidence_count=2,
+        first_candle_index=1,
+        last_candle_index=3,
+        touches=(
+            detect_swing_points(candles, window=1)[0],
+            detect_swing_points(candles, window=1)[2],
+        ),
+    )
+    assert result.support[0].lower_bound == Decimal("6.8")
+    assert result.support[0].upper_bound == Decimal("7")
+    assert result.support[0].representative_price == Decimal("6.9")
+    assert result.support[0].evidence_count == 3
+
+
+def test_detect_support_resistance_zones_separates_support_from_resistance() -> None:
+    candles = tuple(
+        make_ohlc_candle(
+            index,
+            open_=Decimal("10"),
+            high=Decimal(str(high)),
+            low=Decimal(str(low)),
+            close=Decimal("10"),
+        )
+        for index, high, low in (
+            (0, 10, 8),
+            (1, 14, 7),
+            (2, 11, 9),
+            (3, 14.1, 6.9),
+            (4, 12, 9),
+        )
+    )
+
+    result = detect_support_resistance_zones(
+        candles,
+        window=1,
+        tolerance=Decimal("0.2"),
+        tolerance_mode="absolute",
+    )
+
+    assert tuple(zone.kind for zone in result.support) == ("support",)
+    assert tuple(zone.kind for zone in result.resistance) == ("resistance",)
+    assert result.support[0].representative_price == Decimal("6.95")
+    assert result.resistance[0].representative_price == Decimal("14.05")
+
+
+def test_detect_support_resistance_zones_accepts_precomputed_swing_points() -> None:
+    candles = tuple(make_candle(index, "10") for index in range(4))
+    swing_points = (
+        SwingPoint("high", 0, candles[0].timestamp, Decimal("12"), candles[0]),
+        SwingPoint("high", 1, candles[1].timestamp, Decimal("12.05"), candles[1]),
+        SwingPoint("low", 2, candles[2].timestamp, Decimal("9"), candles[2]),
+    )
+
+    result = detect_support_resistance_zones(
+        swing_points=swing_points,
+        tolerance=Decimal("0.1"),
+        tolerance_mode="absolute",
+    )
+
+    assert len(result.resistance) == 1
+    assert result.resistance[0].evidence_count == 2
+    assert len(result.support) == 1
+
+
+def test_detect_support_resistance_zones_returns_empty_result_for_insufficient_input() -> None:
+    assert detect_support_resistance_zones((), window=1).support == ()
+    assert detect_support_resistance_zones((), window=1).resistance == ()
+    assert detect_support_resistance_zones(swing_points=()).support == ()
+    assert detect_support_resistance_zones(swing_points=()).resistance == ()
 
 
 @pytest.mark.parametrize(
