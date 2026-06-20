@@ -2,7 +2,9 @@
 
 from signaldesk_backend.config import Settings
 from signaldesk_backend.indicators import (
+    MacdResult,
     exponential_moving_average,
+    macd,
     relative_strength_index,
     simple_moving_average,
 )
@@ -44,6 +46,7 @@ __all__ = [
     "KeyLevels",
     "LocalCsvProvider",
     "LocalFixtureProvider",
+    "MacdResult",
     "MarketDataProvider",
     "PlaceholderEnhancedProvider",
     "PolygonProvider",
@@ -63,6 +66,7 @@ __all__ = [
     "default_provider_registry",
     "exponential_moving_average",
     "fallback_provider_call",
+    "macd",
     "normalize_provider_name",
     "provider_rate_limit_failure",
     "redact_provider_diagnostic",

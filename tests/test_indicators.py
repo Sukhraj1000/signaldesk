@@ -7,6 +7,7 @@ from signaldesk_backend import (
     Candle,
     Symbol,
     exponential_moving_average,
+    macd,
     relative_strength_index,
     simple_moving_average,
 )
@@ -123,12 +124,68 @@ def test_relative_strength_index_documents_flat_series_as_neutral() -> None:
     )
 
 
+def test_macd_returns_aligned_line_signal_and_histogram() -> None:
+    values = tuple(Decimal(value) for value in range(1, 11))
+
+    result = macd(values, fast_period=3, slow_period=6, signal_period=3)
+
+    assert result.macd_line == (
+        None,
+        None,
+        None,
+        None,
+        None,
+        Decimal("1.500"),
+        Decimal("1.500000000000000000000000000"),
+        Decimal("1.500000000000000000000000000"),
+        Decimal("1.500000000000000000000000000"),
+        Decimal("1.500000000000000000000000000"),
+    )
+    assert result.signal_line == (
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        Decimal("1.500000000000000000000000000"),
+        Decimal("1.500000000000000000000000000"),
+        Decimal("1.500000000000000000000000000"),
+    )
+    assert result.histogram == (
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        Decimal("0E-27"),
+        Decimal("0E-27"),
+        Decimal("0E-27"),
+    )
+
+
+def test_macd_accepts_candles_and_uses_close_prices() -> None:
+    candles = tuple(make_candle(index, str(index + 1)) for index in range(10))
+
+    result = macd(candles, fast_period=3, slow_period=6, signal_period=3)
+
+    assert result.macd_line[-1] == Decimal("1.500000000000000000000000000")
+    assert result.signal_line[-1] == Decimal("1.500000000000000000000000000")
+    assert result.histogram[-1] == Decimal("0E-27")
+
+
 @pytest.mark.parametrize(
     "indicator",
     [
         lambda values: simple_moving_average(values, period=0),
         lambda values: exponential_moving_average(values, period=0),
         lambda values: relative_strength_index(values, period=0),
+        lambda values: macd(values, fast_period=0),
+        lambda values: macd(values, slow_period=0),
+        lambda values: macd(values, signal_period=0),
     ],
 )
 def test_moving_averages_reject_non_positive_periods(indicator: Indicator) -> None:
@@ -142,6 +199,7 @@ def test_moving_averages_reject_non_positive_periods(indicator: Indicator) -> No
         lambda values: simple_moving_average(values, period=3),
         lambda values: exponential_moving_average(values, period=3),
         lambda values: relative_strength_index(values, period=3),
+        lambda values: macd(values, fast_period=2, slow_period=3, signal_period=2).macd_line,
     ],
 )
 def test_moving_averages_preserve_input_length_for_empty_and_insufficient_inputs(
@@ -149,3 +207,8 @@ def test_moving_averages_preserve_input_length_for_empty_and_insufficient_inputs
 ) -> None:
     assert indicator(()) == ()
     assert indicator((Decimal("10"), Decimal("11"))) == (None, None)
+
+
+def test_macd_rejects_fast_period_that_is_not_less_than_slow_period() -> None:
+    with pytest.raises(ValueError, match="fast_period must be less than slow_period"):
+        macd((Decimal("1"),), fast_period=6, slow_period=6)
