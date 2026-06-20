@@ -10,7 +10,10 @@
 - [ ] CI/safety/docs
 - [ ] Runtime integration
 
-## Product / architecture impact
+## Linked issue and product / architecture impact
+
+Linked GitHub issue:
+-
 
 User-facing outcome:
 -
@@ -62,6 +65,7 @@ Paste real command output or CI links. Do not write "not run" without explaining
 - [ ] Remaining risks or skipped checks are stated
 - [ ] Default/enhanced/LLM mode impact is declared
 - [ ] Secrets/dependencies/CI/Docker/scripts/releases/risky paths touched are declared
+- [ ] Reviewer/aligner/integrator pass has confirmed issue, architecture, provider-mode, and runtime alignment
 - [ ] PR/review comments are addressed or explicitly answered, if this is a review-response pass
 
 ## Merge-readiness report

@@ -95,7 +95,7 @@ Provider roles should become explicit over time:
 - Fundamentals provider: company profile, financial metrics, analyst/estimate context.
 - LLM provider: explanation only, never source-of-truth data.
 
-Current CLI may expose a simple `--provider` flag. The roadmap should evolve toward role-specific provider config once enhanced data expands.
+Current CLI may expose a simple `--provider` flag. GitHub roadmap issues should evolve this toward role-specific provider config once enhanced data expands.
 
 ### Default adapter tier
 

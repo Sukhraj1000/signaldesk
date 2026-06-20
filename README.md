@@ -78,6 +78,13 @@ Rules:
 └── roadmap.md               # Architecture-led delivery plan
 ```
 
+
+## Planning model
+
+GitHub issues are the canonical execution plan. `roadmap.md` is an index of roadmap issues, not a separate backlog to translate. Agents should read open issues, PRs, review comments, CI, and runtime evidence directly.
+
+The old roadmap-to-issues agent role is replaced by a reviewer/aligner/integrator agent documented in `docs/reviewer-aligner-integrator-agent.md`.
+
 ## Local Setup
 
 Use Python 3.12 or newer.

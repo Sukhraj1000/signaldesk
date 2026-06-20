@@ -2,20 +2,19 @@
 
 This is the intended SignalDesk workflow. The heartbeat reads current project state, chooses the next bounded lane, updates GitHub context, and waits for feedback before continuing.
 
-The heartbeat must not become a blind issue factory. It should prefer runtime/product gaps, CI/review feedback, and roadmap dependencies that improve the real program.
+The heartbeat must not become a roadmap-to-issues translator or blind issue factory. GitHub issues are the plan. It should prefer runtime/product gaps, CI/review feedback, and open issue dependencies that improve the real program.
 
 ## Source of truth
 
 Use these, in order:
 
-1. product contract and architecture docs
-2. roadmap: what we intend to build
+1. GitHub issues labeled `roadmap` or implementation-specific labels: canonical plan and scoped work
+2. product contract and architecture docs
 3. runtime evidence: what actually works/fails locally or in CI
-4. GitHub issues: scoped units of work
-5. PRs: proposed code changes
-6. PR comments and review comments: feedback that should modify the branch
-7. CI/check results: executable feedback
-8. human approval: merge gate
+4. PRs: proposed code changes
+5. PR comments and review comments: feedback that should modify the branch
+6. CI/check results: executable feedback
+7. human approval: merge gate
 
 Do not rely on an agent's private memory as the source of truth. Durable context should be in docs, issues, PR bodies, comments, code, and CI output.
 
@@ -23,9 +22,10 @@ Do not rely on an agent's private memory as the source of truth. Durable context
 
 ```text
 heartbeat
-  -> read architecture and roadmap
+  -> read open GitHub issues
+  -> read architecture docs for alignment
   -> read current CI/main status
-  -> read open issues and PRs
+  -> read open PRs
   -> read PR comments/review comments
   -> check runtime/smoke gaps
   -> choose lane
@@ -65,7 +65,7 @@ signaldesk ta AMD --provider yfinance --llm none --output json
 
 ### Feature lane
 
-Triggered when a roadmap capability has a clear user-facing outcome and no active PR.
+Triggered when an open GitHub issue has a clear user-facing outcome and no active PR.
 
 Output:
 
@@ -86,6 +86,17 @@ Output:
 - minimal fix
 - targeted tests plus full checks
 - PR comment explaining the evidence
+
+### Reviewer / aligner / integrator lane
+
+Triggered for every code PR before merge, and whenever a PR may be drifting from product direction.
+
+Output:
+
+- review against linked issue and `architecture.md`
+- provider-mode impact check
+- data/provenance/fact-signal-risk boundary check
+- integration recommendation: approve, request changes, or split scope
 
 ### Review-response lane
 
@@ -189,6 +200,7 @@ Stop and ask/report instead of continuing when:
 
 Never forget the loop:
 
+- GitHub issues are the plan; no roadmap-to-issues translation step exists.
 - GitHub context tells us what changed since the last heartbeat.
 - Runtime checks tell us whether the product actually works.
 - Sub-agents do bounded work.

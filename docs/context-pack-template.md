@@ -11,7 +11,7 @@ Copy this into an issue, PR comment, or agent prompt before dispatching a sub-ag
 
 ## Goal
 
-Describe the exact feature, bug fix, review response, docs update, runtime integration fix, or cleanup task.
+Describe the exact feature, bug fix, review/aligner pass, docs update, runtime integration fix, or cleanup task. Prefer a linked GitHub issue over free-form roadmap text.
 
 ## User-facing outcome
 
@@ -51,11 +51,12 @@ Mark all that apply:
 
 ## Source context
 
-- Roadmap section:
+- GitHub issue URL/number:
 - Architecture section:
 - Issue URL/number:
 - PR URL/number, if continuing existing work:
 - Relevant comments/review threads:
+- Reviewer/aligner/integrator concerns to check:
 - Relevant files/docs:
 
 ## Constraints from AGENTS.md
