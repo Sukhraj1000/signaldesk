@@ -9,6 +9,7 @@ choose the next bounded sub-agent lane.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -27,6 +28,25 @@ class Action:
     target: str
     reason: str
     suggested_agent: str
+
+
+@dataclass(frozen=True)
+class OrderedTarget:
+    issue: dict[str, Any]
+    parent_number: int
+
+    @property
+    def issue_number(self) -> int:
+        return int(self.issue["number"])
+
+    @property
+    def label(self) -> str:
+        parent = (
+            f" under roadmap parent #{self.parent_number}"
+            if self.parent_number != self.issue_number
+            else ""
+        )
+        return f"Issue #{self.issue_number}: {self.issue['title']}{parent}"
 
 
 def run(args: list[str], check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -159,6 +179,39 @@ def label_names(item: dict[str, Any]) -> set[str]:
     return {label["name"] for label in item.get("labels", []) if "name" in label}
 
 
+def parent_issue_number(issue: dict[str, Any]) -> int:
+    """Return the roadmap parent used for ordered execution.
+
+    GitHub issues are the execution plan. Roadmap parents keep their own issue
+    number; implementation children may declare ``Parent: #NN`` in their body.
+    When no parent is declared, the issue orders by its own number.
+    """
+
+    labels = label_names(issue)
+    if "roadmap" in labels:
+        return int(issue["number"])
+
+    match = re.search(r"(?im)^\s*Parent:\s*#(\d+)\b", issue.get("body") or "")
+    if match:
+        return int(match.group(1))
+    return int(issue["number"])
+
+
+def ordered_issue_targets(issues: list[dict[str, Any]]) -> list[OrderedTarget]:
+    """Return open issues in canonical roadmap/issue order, lowest first."""
+
+    targets = [
+        OrderedTarget(issue=issue, parent_number=parent_issue_number(issue))
+        for issue in issues
+    ]
+    return sorted(targets, key=lambda target: (target.parent_number, target.issue_number))
+
+
+def active_ordered_target(issues: list[dict[str, Any]]) -> OrderedTarget | None:
+    ordered = ordered_issue_targets(issues)
+    return ordered[0] if ordered else None
+
+
 def actionable_comments(comments: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Filter out bot/status comments that should not block the loop."""
 
@@ -248,7 +301,9 @@ def propose_actions(issues: list[dict[str, Any]], prs: list[dict[str, Any]]) -> 
                 )
             )
 
-    for issue in issues:
+    ordered_target = active_ordered_target(issues)
+    issue_pool = [ordered_target.issue] if ordered_target else []
+    for issue in issue_pool:
         labels = label_names(issue)
         title = issue["title"].lower()
         already_has_pr = any(title[:30] and title[:30] in pr_title for pr_title in pr_titles)
@@ -259,7 +314,7 @@ def propose_actions(issues: list[dict[str, Any]], prs: list[dict[str, Any]]) -> 
                 Action(
                     lane="bug",
                     target=f"Issue #{issue['number']}: {issue['title']}",
-                    reason="open bug issue with no obvious active PR",
+                    reason="earliest open ordered bug issue has no active PR",
                     suggested_agent="bug agent with regression-test-first loop",
                 )
             )
@@ -268,18 +323,39 @@ def propose_actions(issues: list[dict[str, Any]], prs: list[dict[str, Any]]) -> 
                 Action(
                     lane="feature",
                     target=f"Issue #{issue['number']}: {issue['title']}",
-                    reason="open feature issue with no obvious active PR",
+                    reason="earliest open ordered feature issue has no active PR",
                     suggested_agent="feature agent on fresh branch from main",
+                )
+            )
+        elif "roadmap" in labels:
+            actions.append(
+                Action(
+                    lane="issue-decomposition",
+                    target=f"Issue #{issue['number']}: {issue['title']}",
+                    reason=(
+                        "earliest open roadmap issue is too broad for a bounded "
+                        "branch unless child issues exist"
+                    ),
+                    suggested_agent="create up to three small linked child implementation issues",
+                )
+            )
+        else:
+            actions.append(
+                Action(
+                    lane="feature",
+                    target=f"Issue #{issue['number']}: {issue['title']}",
+                    reason="earliest open ordered issue has no active PR",
+                    suggested_agent="bounded implementation agent on fresh branch from main",
                 )
             )
 
     if not actions:
         actions.append(
             Action(
-                lane="roadmap-planning",
-                target="roadmap / backlog",
+                lane="wait",
+                target="GitHub issue queue",
                 reason="no open PR or issue needs immediate action",
-                suggested_agent="planning agent turns next roadmap slice into a scoped issue",
+                suggested_agent="no coding agent; poll again later",
             )
         )
     return actions
@@ -355,6 +431,17 @@ def main() -> None:
         print(f"- Issue #{issue['number']} {issue['title']} labels={labels}")
         for comment in issue_comments(issue["number"]):
             print(f"  - comment by {comment['author']}: {comment['body'][:160]!r}")
+
+    print_section("Ordered target")
+    ordered_target = active_ordered_target(issues)
+    if ordered_target is None:
+        print("- None")
+    else:
+        print(f"- {ordered_target.label}")
+        print(
+            "  selection: lowest open roadmap parent / issue number first; "
+            "out-of-order PR service is limited to safety, CI, or review-response gates"
+        )
 
     print_section("Suggested next loop actions")
     for index, action in enumerate(propose_actions(issues, prs), start=1):

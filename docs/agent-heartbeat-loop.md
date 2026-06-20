@@ -4,6 +4,8 @@ This is the intended SignalDesk workflow. The heartbeat reads current project st
 
 The heartbeat must not become a roadmap-to-issues translator or blind issue factory. GitHub issues are the plan. It should prefer runtime/product gaps, CI/review feedback, and open issue dependencies that improve the real program.
 
+The heartbeat works in ordered issue mode: before choosing a lane, it names the current ordered target. The ordered target is the lowest open roadmap parent / issue number, using `Parent: #NN` in implementation issue bodies to keep children attached to their roadmap parent. The loop must not jump to later roadmap parents while earlier ones remain open unless the run report names an explicit blocker or user override. Existing open PRs may be serviced out of order only for safety exceptions such as failing CI, stale/behind branches, or unresolved review-response work.
+
 ## Source of truth
 
 Use these, in order:
