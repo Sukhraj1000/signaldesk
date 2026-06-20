@@ -21,6 +21,7 @@ PYPROJECT = ROOT / "pyproject.toml"
 NAME_RE = re.compile(r"^\s*([A-Za-z0-9_.-]+)")
 LOWER_BOUND_RE = re.compile(r"(?:>=|~=)\s*[^,\s]+")
 WILDCARD_OR_EMPTY_EXACT_PIN_RE = re.compile(r"==\s*(?:$|[,;]|[^,;]*\*)")
+DIRECT_REFERENCE_RE = re.compile(r"@(?=(?:https?|file):)")
 
 # Known dependency names that should not enter this project without an explicit
 # security review. Keep this list conservative to avoid false positives.
@@ -56,6 +57,10 @@ def _redact_requirement(requirement: str) -> str:
     normalized = requirement.strip()
     if " @ " in normalized:
         name, reference = normalized.split(" @ ", maxsplit=1)
+        return f"{name} @ {_redact_url(reference)}"
+    if compact_reference := DIRECT_REFERENCE_RE.search(normalized):
+        name = normalized[: compact_reference.start()]
+        reference = normalized[compact_reference.start() + 1 :]
         return f"{name} @ {_redact_url(reference)}"
     if normalized.startswith(("http://", "https://", "file:")):
         return _redact_url(normalized)
@@ -93,7 +98,11 @@ def check_requirements(pyproject: Path = PYPROJECT) -> list[DependencyIssue]:
                 issues.append(
                     DependencyIssue(section, requirement, "package name is on the denied list")
                 )
-            if " @ " in normalized or normalized.startswith(("http://", "https://", "file:")):
+            if (
+                " @ " in normalized
+                or DIRECT_REFERENCE_RE.search(normalized)
+                or normalized.startswith(("http://", "https://", "file:"))
+            ):
                 issues.append(
                     DependencyIssue(
                         section,

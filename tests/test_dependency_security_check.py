@@ -82,6 +82,23 @@ def test_dependency_security_check_redacts_direct_reference_credentials(tmp_path
     assert "https://example.invalid/pkg.whl?<redacted>" in formatted
 
 
+def test_dependency_security_check_redacts_compact_direct_reference_credentials(
+    tmp_path: Path,
+) -> None:
+    pyproject = write_pyproject(
+        tmp_path,
+        'dependencies = ["example@https://user:secret@example.invalid/pkg.whl?token=secret"]',
+    )
+
+    issues = check_requirements(pyproject)
+
+    assert any("direct URL/path dependencies" in issue.message for issue in issues)
+    formatted = "\n".join(issue.format() for issue in issues)
+    assert "user:secret" not in formatted
+    assert "token=secret" not in formatted
+    assert "example @ https://example.invalid/pkg.whl?<redacted>" in formatted
+
+
 def test_dependency_security_check_does_not_accept_marker_as_lower_bound(tmp_path: Path) -> None:
     pyproject = write_pyproject(
         tmp_path,
