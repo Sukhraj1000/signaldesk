@@ -13,7 +13,7 @@ SignalDesk should be safe for AI-assisted development while staying simple enoug
 ## Loop overview
 
 ```text
-runtime/product gap or issue
+GitHub issue or runtime/product gap
   -> classify: feature / bug / review / chore / docs / runtime-integration
   -> identify provider mode: default / enhanced / both / LLM
   -> risk triage
@@ -21,7 +21,8 @@ runtime/product gap or issue
   -> context pack
   -> implementation agent
   -> local checks + runtime smoke
-  -> review agent or human review
+  -> reviewer/aligner/integrator pass
+  -> human or bot review
   -> PR
   -> CI and safety gates
   -> human approval
@@ -69,13 +70,15 @@ Rules:
 - keep the production patch minimal
 - run targeted tests and then `make check`
 
-### Review agent
+### Reviewer / aligner / integrator agent
 
-Reviews the diff, not the author's intent.
+Replaces the old roadmap-to-issues translator. Reviews the diff, linked issue, runtime evidence, and architecture fit, not the author's intent.
 
 Focus:
 
 - correctness and missing tests
+- linked GitHub issue alignment
+- architecture fit against `architecture.md`
 - runtime behavior, not only isolated functions
 - default/enhanced provider separation
 - secret leakage
@@ -124,7 +127,7 @@ At minimum, give it:
 
 - repo path and remote: `Sukhraj1000/signaldesk`
 - task goal and user-facing outcome
-- roadmap section
+- GitHub issue URL/number
 - provider mode impact: default, enhanced, both, or LLM
 - relevant files and docs
 - constraints from `AGENTS.md`

@@ -20,7 +20,7 @@ SignalDesk uses AI agents as bounded contributors, not autonomous maintainers. A
 - Do not push directly to `main`.
 - Do not merge your own PR unless the user explicitly asks and all gates are satisfied.
 - Do not claim a result is safe unless local checks or CI actually ran.
-- Do not create branches/PRs just because roadmap bullets exist. First identify the runtime/product bridge being improved.
+- GitHub issues are the canonical execution plan. Do not translate roadmap text into issues during normal operation; read/update GitHub issues directly.
 
 ## Required local loop
 
@@ -53,13 +53,13 @@ Default mode must keep working even when enhanced keys are absent.
 
 ## Preferred task loop
 
-`roadmap -> runtime/product gap -> issue/PR/comment context -> lane selection -> branch/context pack -> bounded work -> local checks + runtime smoke -> PR -> CI/review feedback -> heartbeat again -> approval -> squash merge -> post-merge check`
+`GitHub issues -> runtime/product gap -> PR/comment context -> lane selection -> branch/context pack -> bounded work -> local checks + runtime smoke -> reviewer/aligner/integrator pass -> PR -> CI/review feedback -> heartbeat again -> approval -> squash merge -> post-merge check`
 
 Never forget the loop. PR comments, review comments, CI results, runtime failures, and user feedback are signals that the next heartbeat must consume before deciding whether to continue a branch, start a new task, or wait for human approval.
 
 ## Runtime-first pause rule
 
-If the repo is producing clean PRs but the actual program path is not proven, stop feature branching and run the installed program through real entrypoints. Add or improve smoke checks before resuming roadmap slices.
+If the repo is producing clean PRs but the actual program path is not proven, stop feature branching and run the installed program through real entrypoints. Add or improve smoke checks before continuing issue work.
 
 Examples:
 
@@ -68,6 +68,10 @@ Examples:
 - `signaldesk providers list`
 - `signaldesk providers check`
 - `signaldesk ta AMD --provider yfinance --llm none --output json`
+
+## Reviewer / aligner / integrator rule
+
+The old roadmap-to-issues agent role is removed. Use a reviewer/aligner/integrator pass for code changes. That pass checks that the PR fits the linked issue, `architecture.md`, provider-mode rules, data/provenance boundaries, tests, runtime evidence, and overall SignalDesk product direction. See `docs/reviewer-aligner-integrator-agent.md`.
 
 ## Risky paths
 
