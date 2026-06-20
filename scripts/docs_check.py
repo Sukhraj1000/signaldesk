@@ -69,7 +69,7 @@ def check_file(path: Path, root: Path = ROOT) -> list[LinkProblem]:
         for match in MARKDOWN_LINK_RE.finditer(line):
             raw_target = match.group(1).strip("<>")
             parsed = urlsplit(raw_target)
-            if parsed.scheme in IGNORED_SCHEMES or raw_target.startswith("#"):
+            if parsed.scheme in IGNORED_SCHEMES:
                 continue
 
             target_path, fragment = split_target(raw_target)

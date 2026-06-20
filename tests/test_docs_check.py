@@ -53,6 +53,22 @@ def test_docs_check_reports_missing_heading_anchor(tmp_path: Path) -> None:
     assert problems[0].message == "heading anchor #missing-heading not found"
 
 
+def test_docs_check_accepts_same_file_heading_anchor(tmp_path: Path) -> None:
+    write(tmp_path / "README.md", "See [jump](#runtime-checks).\n\n## Runtime checks\n")
+
+    assert check_docs(tmp_path) == []
+
+
+def test_docs_check_reports_missing_same_file_heading_anchor(tmp_path: Path) -> None:
+    write(tmp_path / "README.md", "See [jump](#missing-heading).\n\n## Present Heading\n")
+
+    problems = check_docs(tmp_path)
+
+    assert len(problems) == 1
+    assert problems[0].target == "#missing-heading"
+    assert problems[0].message == "heading anchor #missing-heading not found"
+
+
 def test_docs_check_ignores_external_links(tmp_path: Path) -> None:
     write(tmp_path / "README.md", "See [site](https://example.com/missing.md#heading).\n")
 
