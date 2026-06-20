@@ -21,6 +21,7 @@ from signaldesk_backend import (
     YFinanceProvider,
     default_provider_registry,
     normalize_provider_name,
+    redact_provider_diagnostic,
 )
 
 NOW = datetime(2026, 1, 15, 14, 30, tzinfo=UTC)
@@ -208,6 +209,44 @@ def test_normalize_provider_name_canonicalizes_registry_keys() -> None:
 def test_normalize_provider_name_rejects_blank_names(name: str) -> None:
     with pytest.raises(ValueError, match="provider name"):
         normalize_provider_name(name)
+
+
+def test_redact_provider_diagnostic_redacts_query_credentials() -> None:
+    diagnostic = "GET https://example.test/path?apikey=abc123&symbol=AMD failed"
+
+    redacted = redact_provider_diagnostic(diagnostic)
+
+    assert "abc123" not in redacted
+    assert "https://example.test/path" in redacted
+    assert "apikey=<redacted>" in redacted
+    assert "symbol=AMD" in redacted
+
+
+def test_redact_provider_diagnostic_redacts_mixed_case_query_credentials() -> None:
+    diagnostic = (
+        "https://example.test/path?Access_Token=secret-token&Password=hunter2&symbol=AMD"
+    )
+
+    redacted = redact_provider_diagnostic(diagnostic)
+
+    assert "secret-token" not in redacted
+    assert "hunter2" not in redacted
+    assert "Access_Token=<redacted>" in redacted
+    assert "Password=<redacted>" in redacted
+    assert "symbol=AMD" in redacted
+
+
+def test_redact_provider_diagnostic_redacts_inline_token_substrings() -> None:
+    diagnostic = "transport failed: token=abc123 api_key: secret456 password hunter2"
+
+    redacted = redact_provider_diagnostic(diagnostic)
+
+    assert "abc123" not in redacted
+    assert "secret456" not in redacted
+    assert "hunter2" not in redacted
+    assert "token=<redacted>" in redacted
+    assert "api_key: <redacted>" in redacted
+    assert "password <redacted>" in redacted
 
 
 def test_provider_registry_registers_lists_and_retrieves_by_normalized_name() -> None:
