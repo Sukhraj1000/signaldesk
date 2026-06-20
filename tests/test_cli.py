@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
+import signaldesk_backend.providers as providers_module
 import signaldesk_cli.main as cli_main
 from pytest import MonkeyPatch
 from signaldesk_backend import (
@@ -182,7 +183,7 @@ def test_providers_list_reports_yfinance_capabilities() -> None:
 
     assert result.exit_code == 0
     assert "provider\trealtime\thistorical\tasset_classes" in result.stdout
-    assert "local-fixture\tfalse\tfalse\tfixture" in result.stdout
+    assert "local-fixture\tfalse\ttrue\tequity,fixture" in result.stdout
     assert "polygon\ttrue\ttrue\tequity,etf,index" in result.stdout
     assert "twelve-data\ttrue\ttrue\tequity,etf,index" in result.stdout
     assert "yfinance\ttrue\ttrue\tcrypto,equity,etf,index" in result.stdout
@@ -193,7 +194,10 @@ def test_providers_check_reports_default_local_provider_without_secrets() -> Non
 
     assert result.exit_code == 0
     assert "provider\tstatus\tresult" in result.stdout
-    assert "local-fixture\tok\tready (no external credentials required)" in result.stdout
+    assert (
+        "local-fixture\tok\tready (deterministic historical candles; "
+        "no external credentials required)" in result.stdout
+    )
     assert (
         "polygon\tok\tunavailable until Polygon integration is implemented/configured"
         in result.stdout
@@ -204,6 +208,35 @@ def test_providers_check_reports_default_local_provider_without_secrets() -> Non
     )
     assert "API_KEY" not in result.stdout
     assert "TOKEN" not in result.stdout
+
+
+def test_ta_command_runs_against_default_local_fixture_without_network(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    def fail_on_network(*args: object, **kwargs: object) -> None:
+        raise AssertionError("local-fixture smoke path must not open network connections")
+
+    monkeypatch.setattr(providers_module, "urlopen", fail_on_network)
+
+    result = CliRunner().invoke(
+        app,
+        ["ta", "AMD", "--provider", "local-fixture", "--llm", "none", "--output", "json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["symbol"] == "AMD"
+    assert payload["provider"] == "local-fixture"
+    assert payload["candles"] == 60
+    assert payload["provenance"] == [
+        {
+            "provider": "local-fixture",
+            "source": "historical_candles",
+            "timeframe": "1d",
+            "inputs": ["AMD"],
+            "observations": 60,
+        }
+    ]
 
 
 def test_ta_command_runs_provider_to_indicator_bridge(monkeypatch: MonkeyPatch) -> None:
