@@ -7,6 +7,7 @@ from typing import NamedTuple
 from signaldesk_backend.models import Candle
 
 PriceInput = Candle | Decimal | int | float | str
+CandleInput = Candle
 
 
 class MacdResult(NamedTuple):
@@ -154,6 +155,39 @@ def macd(
     return MacdResult(macd_line=macd_line, signal_line=signal_line, histogram=histogram)
 
 
+def average_true_range(
+    candles: Sequence[CandleInput], *, period: int = 14
+) -> tuple[Decimal | None, ...]:
+    """Return an input-aligned Average True Range over OHLC candles.
+
+    True range is the greatest of current high-low, current high minus previous
+    close, and current low minus previous close in absolute terms. The first ATR
+    value is seeded with the simple mean of the initial ``period`` true ranges;
+    subsequent values use Wilder smoothing.
+    """
+
+    _validate_period(period)
+    if not candles:
+        return ()
+
+    true_ranges = _true_ranges(candles)
+    atr_values: list[Decimal | None] = [None] * min(period - 1, len(true_ranges))
+    if len(true_ranges) < period:
+        return tuple(atr_values)
+
+    decimal_period = Decimal(period)
+    previous_atr = sum(true_ranges[:period], Decimal("0")) / decimal_period
+    atr_values.append(previous_atr)
+
+    for true_range in true_ranges[period:]:
+        previous_atr = (
+            (previous_atr * Decimal(period - 1)) + true_range
+        ) / decimal_period
+        atr_values.append(previous_atr)
+
+    return tuple(atr_values)
+
+
 def _validate_period(period: int) -> None:
     if period <= 0:
         raise ValueError("period must be positive")
@@ -177,6 +211,24 @@ def _rsi_from_average_gain_loss(average_gain: Decimal, average_loss: Decimal) ->
 
     relative_strength = average_gain / average_loss
     return Decimal("100") - (Decimal("100") / (Decimal("1") + relative_strength))
+
+
+def _true_ranges(candles: Sequence[CandleInput]) -> tuple[Decimal, ...]:
+    true_ranges: list[Decimal] = []
+    previous_close: Decimal | None = None
+    for candle in candles:
+        high_low_range = candle.high - candle.low
+        if previous_close is None:
+            true_range = high_low_range
+        else:
+            true_range = max(
+                high_low_range,
+                abs(candle.high - previous_close),
+                abs(candle.low - previous_close),
+            )
+        true_ranges.append(true_range)
+        previous_close = candle.close
+    return tuple(true_ranges)
 
 
 def _coerce_prices(values: Sequence[PriceInput]) -> tuple[Decimal, ...]:
