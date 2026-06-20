@@ -29,6 +29,26 @@ class SwingPoint(NamedTuple):
     candle: Candle
 
 
+class LevelZone(NamedTuple):
+    """A clustered support or resistance price area backed by swing points."""
+
+    kind: Literal["support", "resistance"]
+    lower_bound: Decimal
+    upper_bound: Decimal
+    representative_price: Decimal
+    evidence_count: int
+    first_candle_index: int
+    last_candle_index: int
+    touches: tuple[SwingPoint, ...]
+
+
+class SupportResistanceZones(NamedTuple):
+    """Support and resistance zones detected from swing highs and lows."""
+
+    support: tuple[LevelZone, ...]
+    resistance: tuple[LevelZone, ...]
+
+
 def simple_moving_average(
     values: Sequence[PriceInput], *, period: int
 ) -> tuple[Decimal | None, ...]:
@@ -328,6 +348,141 @@ def detect_swing_points(
         ),
     )
     return tuple(sorted(swing_points, key=lambda point: (point.candle_index, point.kind)))
+
+
+def detect_support_resistance_zones(
+    candles: Sequence[CandleInput] = (),
+    *,
+    swing_points: Sequence[SwingPoint] | None = None,
+    tolerance: Decimal | int | float | str = Decimal("0.01"),
+    tolerance_mode: Literal["percent", "absolute"] = "percent",
+    window: int = 2,
+    lookback: int | None = None,
+    lookahead: int | None = None,
+) -> SupportResistanceZones:
+    """Cluster nearby swing lows as support and swing highs as resistance.
+
+    Callers may pass precomputed ``swing_points`` or raw ``candles``. In percent
+    mode, ``tolerance`` is interpreted as a fraction of the cluster's current
+    representative price (``0.01`` means 1%). In absolute mode, it is an exact
+    price distance. Empty candle or swing input returns empty support and
+    resistance tuples.
+    """
+
+    resolved_tolerance = _coerce_price(tolerance)
+    if resolved_tolerance < 0:
+        raise ValueError("tolerance must be non-negative")
+    if tolerance_mode not in {"percent", "absolute"}:
+        raise ValueError("tolerance_mode must be percent or absolute")
+
+    resolved_swing_points = (
+        tuple(swing_points)
+        if swing_points is not None
+        else detect_swing_points(
+            candles,
+            window=window,
+            lookback=lookback,
+            lookahead=lookahead,
+        )
+    )
+    if not resolved_swing_points:
+        return SupportResistanceZones(support=(), resistance=())
+
+    support_points = tuple(point for point in resolved_swing_points if point.kind == "low")
+    resistance_points = tuple(
+        point for point in resolved_swing_points if point.kind == "high"
+    )
+    return SupportResistanceZones(
+        support=_cluster_level_zones(
+            support_points,
+            zone_kind="support",
+            tolerance=resolved_tolerance,
+            tolerance_mode=tolerance_mode,
+        ),
+        resistance=_cluster_level_zones(
+            resistance_points,
+            zone_kind="resistance",
+            tolerance=resolved_tolerance,
+            tolerance_mode=tolerance_mode,
+        ),
+    )
+
+
+def _cluster_level_zones(
+    points: Sequence[SwingPoint],
+    *,
+    zone_kind: Literal["support", "resistance"],
+    tolerance: Decimal,
+    tolerance_mode: Literal["percent", "absolute"],
+) -> tuple[LevelZone, ...]:
+    if not points:
+        return ()
+
+    sorted_points = sorted(points, key=lambda point: (point.price, point.candle_index))
+    clusters: list[list[SwingPoint]] = []
+    current_cluster: list[SwingPoint] = []
+    for point in sorted_points:
+        if not current_cluster or _point_fits_cluster(
+            point,
+            current_cluster,
+            tolerance=tolerance,
+            tolerance_mode=tolerance_mode,
+        ):
+            current_cluster.append(point)
+        else:
+            clusters.append(current_cluster)
+            current_cluster = [point]
+    if current_cluster:
+        clusters.append(current_cluster)
+
+    zones = tuple(_zone_from_cluster(cluster, zone_kind=zone_kind) for cluster in clusters)
+    return tuple(
+        sorted(
+            zones,
+            key=lambda zone: (-zone.evidence_count, zone.representative_price),
+        )
+    )
+
+
+def _point_fits_cluster(
+    point: SwingPoint,
+    cluster: Sequence[SwingPoint],
+    *,
+    tolerance: Decimal,
+    tolerance_mode: Literal["percent", "absolute"],
+) -> bool:
+    prices = tuple(cluster_point.price for cluster_point in cluster)
+    lower_bound = min(prices)
+    upper_bound = max(prices)
+    representative_price = sum(prices, Decimal("0")) / Decimal(len(prices))
+    allowed_distance = (
+        tolerance
+        if tolerance_mode == "absolute"
+        else abs(representative_price) * tolerance
+    )
+    return (
+        lower_bound - allowed_distance <= point.price <= upper_bound + allowed_distance
+    )
+
+
+def _zone_from_cluster(
+    cluster: Sequence[SwingPoint],
+    *,
+    zone_kind: Literal["support", "resistance"],
+) -> LevelZone:
+    touches = tuple(sorted(cluster, key=lambda point: point.candle_index))
+    prices = tuple(point.price for point in touches)
+    candle_indexes = tuple(point.candle_index for point in touches)
+    return LevelZone(
+        kind=zone_kind,
+        lower_bound=min(prices),
+        upper_bound=max(prices),
+        representative_price=sum(prices, Decimal("0")) / Decimal(len(prices)),
+        evidence_count=len(touches),
+        first_candle_index=min(candle_indexes),
+        last_candle_index=max(candle_indexes),
+        touches=touches,
+    )
 
 
 def _validate_period(period: int) -> None:
