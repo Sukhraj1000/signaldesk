@@ -6,12 +6,14 @@ from typing import Any
 import typer
 from signaldesk_backend import (
     Candle,
+    ConfirmationInvalidationLevel,
     ProviderRegistry,
     ProviderResult,
     Settings,
     Symbol,
     average_true_range,
     default_provider_registry,
+    derive_confirmation_invalidation_levels,
     detect_swing_highs,
     detect_swing_lows,
     exponential_moving_average,
@@ -105,6 +107,7 @@ def _technical_analysis_report(
     relative_volume_20 = relative_volume(candles, period=20)[-1]
     latest_swing_high = _latest_level(detect_swing_highs(candles))
     latest_swing_low = _latest_level(detect_swing_lows(candles))
+    setup_levels = derive_confirmation_invalidation_levels(candles)
     latest_candle = candles[-1]
 
     return {
@@ -125,6 +128,8 @@ def _technical_analysis_report(
         "relative_volume_20": _decimal_text(relative_volume_20),
         "latest_swing_high": latest_swing_high,
         "latest_swing_low": latest_swing_low,
+        "confirmation_level": _setup_level(setup_levels.confirmation),
+        "invalidation_level": _setup_level(setup_levels.invalidation),
         "llm": "none",
     }
 
@@ -137,6 +142,18 @@ def _latest_level(points: tuple[Any, ...]) -> dict[str, Any] | None:
         "candle_index": point.candle_index,
         "timestamp": point.timestamp.isoformat(),
         "price": _decimal_text(point.price),
+    }
+
+
+def _setup_level(level: ConfirmationInvalidationLevel | None) -> dict[str, Any] | None:
+    if level is None:
+        return None
+    return {
+        "kind": level.kind,
+        "price": _decimal_text(level.price),
+        "source_rule": level.source_rule,
+        "source_level": level.source_level,
+        "reason": level.reason,
     }
 
 

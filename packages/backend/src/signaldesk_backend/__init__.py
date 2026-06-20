@@ -2,6 +2,8 @@
 
 from signaldesk_backend.config import Settings
 from signaldesk_backend.indicators import (
+    ConfirmationInvalidationLevel,
+    ConfirmationInvalidationLevels,
     FibonacciRetracementLevel,
     LevelZone,
     MacdResult,
@@ -9,6 +11,7 @@ from signaldesk_backend.indicators import (
     SwingPoint,
     average_true_range,
     calculate_fibonacci_retracement_levels,
+    derive_confirmation_invalidation_levels,
     detect_support_resistance_zones,
     detect_swing_highs,
     detect_swing_lows,
@@ -53,6 +56,8 @@ from signaldesk_backend.providers import (
 
 __all__ = [
     "Candle",
+    "ConfirmationInvalidationLevel",
+    "ConfirmationInvalidationLevels",
     "FallbackProvider",
     "FibonacciRetracementLevel",
     "FmpProvider",
@@ -81,6 +86,7 @@ __all__ = [
     "YFinanceProvider",
     "average_true_range",
     "calculate_fibonacci_retracement_levels",
+    "derive_confirmation_invalidation_levels",
     "default_provider_registry",
     "detect_support_resistance_zones",
     "detect_swing_highs",

@@ -60,6 +60,22 @@ class SupportResistanceZones(NamedTuple):
     resistance: tuple[LevelZone, ...]
 
 
+class ConfirmationInvalidationLevel(NamedTuple):
+    """A traceable deterministic setup level derived from existing TA artifacts."""
+
+    kind: Literal["confirmation", "invalidation"]
+    price: Decimal
+    source_rule: str
+    source_level: str
+    reason: str
+
+
+class ConfirmationInvalidationLevels(NamedTuple):
+    """Nearest deterministic confirmation and invalidation levels, if available."""
+
+    confirmation: ConfirmationInvalidationLevel | None
+    invalidation: ConfirmationInvalidationLevel | None
+
 FIBONACCI_RETRACEMENT_RATIOS: tuple[Decimal, ...] = (
     Decimal("0.236"),
     Decimal("0.382"),
@@ -461,6 +477,100 @@ def detect_support_resistance_zones(
             tolerance=resolved_tolerance,
             tolerance_mode=tolerance_mode,
         ),
+    )
+
+
+def derive_confirmation_invalidation_levels(
+    candles: Sequence[CandleInput],
+    *,
+    zones: SupportResistanceZones | None = None,
+    window: int = 2,
+    lookback: int | None = None,
+    lookahead: int | None = None,
+) -> ConfirmationInvalidationLevels:
+    """Derive nearest traceable setup levels from support/resistance artifacts.
+
+    The rule is intentionally small and deterministic: confirmation is the
+    nearest resistance zone above the latest close, and invalidation is the
+    nearest support zone below the latest close. If a side is unavailable, that
+    side is returned as ``None`` rather than fabricated from narrative context.
+    """
+
+    if not candles:
+        return ConfirmationInvalidationLevels(confirmation=None, invalidation=None)
+
+    latest_close = candles[-1].close
+    resolved_zones = zones or detect_support_resistance_zones(
+        candles,
+        window=window,
+        lookback=lookback,
+        lookahead=lookahead,
+    )
+    confirmation_zone = _nearest_zone_above(latest_close, resolved_zones.resistance)
+    invalidation_zone = _nearest_zone_below(latest_close, resolved_zones.support)
+
+    confirmation = (
+        None
+        if confirmation_zone is None
+        else ConfirmationInvalidationLevel(
+            kind="confirmation",
+            price=confirmation_zone.representative_price,
+            source_rule="nearest_resistance_above_latest_close",
+            source_level=_zone_reference(confirmation_zone),
+            reason=(
+                "Latest close remains below this resistance zone; a move through "
+                "it would confirm upside continuation."
+            ),
+        )
+    )
+    invalidation = (
+        None
+        if invalidation_zone is None
+        else ConfirmationInvalidationLevel(
+            kind="invalidation",
+            price=invalidation_zone.representative_price,
+            source_rule="nearest_support_below_latest_close",
+            source_level=_zone_reference(invalidation_zone),
+            reason=(
+                "Latest close remains above this support zone; a break below it "
+                "would invalidate the current technical setup."
+            ),
+        )
+    )
+    return ConfirmationInvalidationLevels(
+        confirmation=confirmation,
+        invalidation=invalidation,
+    )
+
+
+def _nearest_zone_above(
+    price: Decimal, zones: Sequence[LevelZone]
+) -> LevelZone | None:
+    candidates = tuple(zone for zone in zones if zone.representative_price > price)
+    if not candidates:
+        return None
+    return min(
+        candidates,
+        key=lambda zone: (zone.representative_price - price, -zone.evidence_count),
+    )
+
+
+def _nearest_zone_below(
+    price: Decimal, zones: Sequence[LevelZone]
+) -> LevelZone | None:
+    candidates = tuple(zone for zone in zones if zone.representative_price < price)
+    if not candidates:
+        return None
+    return min(
+        candidates,
+        key=lambda zone: (price - zone.representative_price, -zone.evidence_count),
+    )
+
+
+def _zone_reference(zone: LevelZone) -> str:
+    return (
+        f"{zone.kind}_zone[{zone.lower_bound},{zone.upper_bound}]"
+        f" touches={zone.evidence_count}"
     )
 
 

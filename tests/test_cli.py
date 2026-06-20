@@ -1,3 +1,4 @@
+import json
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -97,6 +98,53 @@ class WorkingProvider:
 
 
 @dataclass(frozen=True)
+class SwingingProvider(WorkingProvider):
+    name: str = "swinging"
+
+    def get_historical_candles(
+        self,
+        symbol: Symbol,
+        *,
+        start: datetime,
+        end: datetime,
+        interval: str,
+    ) -> ProviderResult[tuple[Candle, ...]]:
+        candles = [
+            Candle(
+                symbol=symbol,
+                timestamp=datetime(2024, 1, 1, tzinfo=UTC) + timedelta(days=index),
+                open=Decimal("10"),
+                high=Decimal("10"),
+                low=Decimal("10"),
+                close=Decimal("10"),
+                volume=1000 + index,
+            )
+            for index in range(34)
+        ]
+        pattern = (
+            ("10", "8.50", "9"),
+            ("12.05", "9", "12"),
+            ("11", "8", "8.50"),
+            ("12", "9", "11"),
+            ("10", "8.05", "9"),
+            ("11", "9", "10"),
+        )
+        for offset, (high, low, close) in enumerate(pattern, start=34):
+            candles.append(
+                Candle(
+                    symbol=symbol,
+                    timestamp=datetime(2024, 1, 1, tzinfo=UTC) + timedelta(days=offset),
+                    open=Decimal("10"),
+                    high=Decimal(high),
+                    low=Decimal(low),
+                    close=Decimal(close),
+                    volume=1000 + offset,
+                )
+            )
+        return ProviderResult.success(provider=self.name, data=tuple(candles))
+
+
+@dataclass(frozen=True)
 class FailingHistoricalProvider(WorkingProvider):
     name: str = "failing-history"
 
@@ -173,6 +221,42 @@ def test_ta_command_runs_provider_to_indicator_bridge(monkeypatch: MonkeyPatch) 
     assert '"latest_close": "49"' in result.stdout
     assert '"sma_20"' in result.stdout
     assert '"rsi_14"' in result.stdout
+
+
+def test_ta_command_includes_traceable_confirmation_and_invalidation_levels(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        cli_main, "default_provider_registry", lambda: ProviderRegistry((SwingingProvider(),))
+    )
+
+    result = CliRunner().invoke(
+        app, ["ta", "AMD", "--provider", "swinging", "--llm", "none", "--output", "json"]
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    confirmation = payload["confirmation_level"]
+    invalidation = payload["invalidation_level"]
+
+    assert confirmation is not None
+    assert confirmation["kind"] == "confirmation"
+    assert confirmation["price"] == "12.05"
+    assert confirmation["source_rule"] == "nearest_resistance_above_latest_close"
+    assert confirmation["source_level"] == "resistance_zone[12.05,12.05] touches=1"
+    assert confirmation["reason"] == (
+        "Latest close remains below this resistance zone; a move through it would "
+        "confirm upside continuation."
+    )
+    assert invalidation is not None
+    assert invalidation["kind"] == "invalidation"
+    assert invalidation["price"] == "8"
+    assert invalidation["source_rule"] == "nearest_support_below_latest_close"
+    assert invalidation["source_level"] == "support_zone[8,8] touches=1"
+    assert invalidation["reason"] == (
+        "Latest close remains above this support zone; a break below it would "
+        "invalidate the current technical setup."
+    )
 
 
 def test_ta_command_reports_provider_failures_without_secrets(monkeypatch: MonkeyPatch) -> None:
