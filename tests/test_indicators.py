@@ -5,10 +5,12 @@ from decimal import Decimal
 import pytest
 from signaldesk_backend import (
     Candle,
+    FibonacciRetracementLevel,
     LevelZone,
     SwingPoint,
     Symbol,
     average_true_range,
+    calculate_fibonacci_retracement_levels,
     detect_support_resistance_zones,
     detect_swing_highs,
     detect_swing_lows,
@@ -314,6 +316,71 @@ def test_relative_volume_returns_none_for_zero_trailing_average() -> None:
     )
 
     assert relative_volume(candles, period=3) == (None, None, None, None)
+
+
+def test_calculate_fibonacci_retracement_levels_for_upward_move() -> None:
+    assert calculate_fibonacci_retracement_levels(Decimal("100"), Decimal("200")) == (
+        FibonacciRetracementLevel(
+            ratio=Decimal("0.236"),
+            percent=Decimal("23.6"),
+            price=Decimal("176.400"),
+            direction="up",
+            swing_start=Decimal("100"),
+            swing_end=Decimal("200"),
+        ),
+        FibonacciRetracementLevel(
+            ratio=Decimal("0.382"),
+            percent=Decimal("38.2"),
+            price=Decimal("161.800"),
+            direction="up",
+            swing_start=Decimal("100"),
+            swing_end=Decimal("200"),
+        ),
+        FibonacciRetracementLevel(
+            ratio=Decimal("0.5"),
+            percent=Decimal("50.0"),
+            price=Decimal("150.0"),
+            direction="up",
+            swing_start=Decimal("100"),
+            swing_end=Decimal("200"),
+        ),
+        FibonacciRetracementLevel(
+            ratio=Decimal("0.618"),
+            percent=Decimal("61.8"),
+            price=Decimal("138.200"),
+            direction="up",
+            swing_start=Decimal("100"),
+            swing_end=Decimal("200"),
+        ),
+        FibonacciRetracementLevel(
+            ratio=Decimal("0.786"),
+            percent=Decimal("78.6"),
+            price=Decimal("121.400"),
+            direction="up",
+            swing_start=Decimal("100"),
+            swing_end=Decimal("200"),
+        ),
+    )
+
+
+def test_calculate_fibonacci_retracement_levels_for_downward_move() -> None:
+    levels = calculate_fibonacci_retracement_levels("200", "100")
+
+    assert tuple(level.price for level in levels) == (
+        Decimal("123.600"),
+        Decimal("138.200"),
+        Decimal("150.0"),
+        Decimal("161.800"),
+        Decimal("178.600"),
+    )
+    assert {level.direction for level in levels} == {"down"}
+    assert all(level.swing_start == Decimal("200") for level in levels)
+    assert all(level.swing_end == Decimal("100") for level in levels)
+
+
+def test_calculate_fibonacci_retracement_levels_rejects_zero_width_range() -> None:
+    with pytest.raises(ValueError, match="swing range must not be zero-width"):
+        calculate_fibonacci_retracement_levels(Decimal("100"), Decimal("100"))
 
 
 def test_detect_swing_highs_returns_structured_local_maxima() -> None:

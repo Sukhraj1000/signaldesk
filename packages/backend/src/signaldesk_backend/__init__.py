@@ -2,11 +2,13 @@
 
 from signaldesk_backend.config import Settings
 from signaldesk_backend.indicators import (
+    FibonacciRetracementLevel,
     LevelZone,
     MacdResult,
     SupportResistanceZones,
     SwingPoint,
     average_true_range,
+    calculate_fibonacci_retracement_levels,
     detect_support_resistance_zones,
     detect_swing_highs,
     detect_swing_lows,
@@ -52,6 +54,7 @@ from signaldesk_backend.providers import (
 __all__ = [
     "Candle",
     "FallbackProvider",
+    "FibonacciRetracementLevel",
     "FmpProvider",
     "KeyLevels",
     "LevelZone",
@@ -77,6 +80,7 @@ __all__ = [
     "TwelveDataProvider",
     "YFinanceProvider",
     "average_true_range",
+    "calculate_fibonacci_retracement_levels",
     "default_provider_registry",
     "detect_support_resistance_zones",
     "detect_swing_highs",
