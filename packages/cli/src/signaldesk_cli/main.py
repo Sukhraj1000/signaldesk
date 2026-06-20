@@ -28,7 +28,13 @@ def _run_provider_health_checks(registry: ProviderRegistry) -> tuple[int, tuple[
     lines = ["provider\tstatus\tresult"]
     exit_code = 0
     for provider in registry.list():
-        result = provider.health_check()
+        try:
+            result = provider.health_check()
+        except Exception:
+            result = ProviderResult.failure(
+                provider=provider.name,
+                error="health check raised an exception",
+            )
         lines.append(_format_provider_health(provider.name, result))
         if not result.ok:
             exit_code = 1
