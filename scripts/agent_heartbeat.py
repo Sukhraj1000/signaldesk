@@ -208,8 +208,36 @@ def ordered_issue_targets(issues: list[dict[str, Any]]) -> list[OrderedTarget]:
 
 
 def active_ordered_target(issues: list[dict[str, Any]]) -> OrderedTarget | None:
+    """Return the single open issue the heartbeat is allowed to advance."""
+
     ordered = ordered_issue_targets(issues)
     return ordered[0] if ordered else None
+
+
+def pr_targets_issue(pr: dict[str, Any], issue: dict[str, Any]) -> bool:
+    """Best-effort match between an open PR and its target issue."""
+
+    issue_number = int(issue["number"])
+    for reference in pr.get("closingIssuesReferences", []) or []:
+        if int(reference.get("number", -1)) == issue_number:
+            return True
+
+    issue_title = (issue.get("title") or "").lower()
+    pr_text = f"{pr.get('title') or ''}\n{pr.get('body') or ''}".lower()
+    return bool(issue_title[:30] and issue_title[:30] in pr_text)
+
+
+def pr_needs_safety_service(pr: dict[str, Any]) -> str | None:
+    """Describe PR states that may bypass strict ordered issue execution."""
+
+    merge_state = pr.get("mergeStateStatus")
+    if merge_state == "BEHIND":
+        return "branch is behind the base branch"
+    if merge_state == "DIRTY":
+        return "branch has merge conflicts"
+    if merge_state == "BLOCKED" and pr.get("reviewDecision") == "CHANGES_REQUESTED":
+        return "review changes are requested"
+    return None
 
 
 def actionable_comments(comments: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -306,7 +334,9 @@ def propose_actions(issues: list[dict[str, Any]], prs: list[dict[str, Any]]) -> 
     for issue in issue_pool:
         labels = label_names(issue)
         title = issue["title"].lower()
-        already_has_pr = any(title[:30] and title[:30] in pr_title for pr_title in pr_titles)
+        already_has_pr = any(pr_targets_issue(pr, issue) for pr in prs) or any(
+            title[:30] and title[:30] in pr_title for pr_title in pr_titles
+        )
         if already_has_pr:
             continue
         if "bug" in labels:
@@ -350,6 +380,24 @@ def propose_actions(issues: list[dict[str, Any]], prs: list[dict[str, Any]]) -> 
             )
 
     if not actions:
+        if ordered_target:
+            for pr in prs:
+                reason = pr_needs_safety_service(pr)
+                if reason and pr_targets_issue(pr, ordered_target.issue):
+                    actions.append(
+                        Action(
+                            lane="respond-to-review",
+                            target=f"PR #{pr['number']}: {pr['title']}",
+                            reason=(
+                                "active ordered target already has an open PR "
+                                f"requiring safety-lane service: {reason}"
+                            ),
+                            suggested_agent="review-response agent on existing branch",
+                        )
+                    )
+                    break
+
+    if not actions:
         actions.append(
             Action(
                 lane="wait",
@@ -390,7 +438,7 @@ def main() -> None:
             "--limit",
             "20",
             "--json",
-            "number,title,headRefName,labels,reviewDecision,mergeStateStatus,statusCheckRollup,updatedAt,body",
+            "number,title,headRefName,labels,reviewDecision,mergeStateStatus,statusCheckRollup,updatedAt,body,closingIssuesReferences",
         ]
     )
 
