@@ -73,6 +73,8 @@ def test_providers_list_reports_yfinance_capabilities() -> None:
     assert result.exit_code == 0
     assert "provider\trealtime\thistorical\tasset_classes" in result.stdout
     assert "local-fixture\tfalse\tfalse\tfixture" in result.stdout
+    assert "polygon\ttrue\ttrue\tequity,etf,index" in result.stdout
+    assert "twelve-data\ttrue\ttrue\tequity,etf,index" in result.stdout
     assert "yfinance\ttrue\ttrue\tcrypto,equity,etf,index" in result.stdout
 
 
@@ -82,6 +84,14 @@ def test_providers_check_reports_default_local_provider_without_secrets() -> Non
     assert result.exit_code == 0
     assert "provider\tstatus\tresult" in result.stdout
     assert "local-fixture\tok\tready (no external credentials required)" in result.stdout
+    assert (
+        "polygon\tok\tunavailable until Polygon integration is implemented/configured"
+        in result.stdout
+    )
+    assert (
+        "twelve-data\tok\tunavailable until Twelve Data integration is implemented/configured"
+        in result.stdout
+    )
     assert "API_KEY" not in result.stdout
     assert "TOKEN" not in result.stdout
 
