@@ -5,10 +5,11 @@ import io
 import json
 import os
 import re
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, time
 from decimal import Decimal, InvalidOperation
+from functools import partial
 from importlib import import_module
 from pathlib import Path
 from typing import Any, Protocol, cast
@@ -147,6 +148,102 @@ class MarketDataProvider(Protocol):
     def health_check(self) -> ProviderResult[str]:
         """Return a lightweight provider health status without exposing secrets."""
         ...
+
+
+def fallback_provider_call[T](
+    provider_calls: Iterable[Callable[[], ProviderResult[T]]],
+    *,
+    failure_provider: str = "provider-fallback",
+) -> ProviderResult[T]:
+    """Return the first successful provider result from ordered provider calls.
+
+    Each callable should perform one provider lookup and return a ``ProviderResult``.
+    Provider failures are treated as expected fallback signals; their provider/error
+    pairs are preserved in the final failure result when every provider fails.
+    Successful results are returned unchanged so downstream provenance still points
+    at the provider that actually supplied the data.
+    """
+
+    failures: list[str] = []
+    for provider_call in provider_calls:
+        result = provider_call()
+        if result.ok:
+            return result
+        failures.append(_provider_failure_summary(result))
+
+    if not failures:
+        return ProviderResult.failure(
+            provider=failure_provider,
+            error="no providers configured for fallback",
+        )
+    return ProviderResult.failure(
+        provider=failure_provider,
+        error=f"all providers failed: {'; '.join(failures)}",
+        warnings=tuple(failures),
+    )
+
+
+def _provider_failure_summary(result: ProviderResult[Any]) -> str:
+    error = redact_provider_diagnostic(
+        result.error or "provider returned an unknown failure"
+    )
+    return f"{result.provider}: {error}"
+
+
+@dataclass(frozen=True)
+class FallbackProvider:
+    """Market-data provider wrapper that tries providers in the supplied order."""
+
+    providers: tuple[MarketDataProvider, ...]
+    name: str = "provider-fallback"
+
+    def capabilities(self) -> tuple[ProviderCapability, ...]:
+        """Return the concatenated capabilities advertised by fallback members."""
+
+        capabilities: list[ProviderCapability] = []
+        for provider in self.providers:
+            capabilities.extend(provider.capabilities())
+        return tuple(capabilities)
+
+    def get_historical_candles(
+        self,
+        symbol: Symbol,
+        *,
+        start: datetime,
+        end: datetime,
+        interval: str,
+    ) -> ProviderResult[tuple[Candle, ...]]:
+        """Fetch candles from the first fallback member that succeeds."""
+
+        return fallback_provider_call(
+            (
+                partial(
+                    provider.get_historical_candles,
+                    symbol,
+                    start=start,
+                    end=end,
+                    interval=interval,
+                )
+                for provider in self.providers
+            ),
+            failure_provider=self.name,
+        )
+
+    def get_quote(self, symbol: Symbol) -> ProviderResult[Quote]:
+        """Fetch a quote from the first fallback member that succeeds."""
+
+        return fallback_provider_call(
+            (partial(provider.get_quote, symbol) for provider in self.providers),
+            failure_provider=self.name,
+        )
+
+    def health_check(self) -> ProviderResult[str]:
+        """Return the first successful member health check, or all failures."""
+
+        return fallback_provider_call(
+            (provider.health_check for provider in self.providers),
+            failure_provider=self.name,
+        )
 
 
 class ProviderRegistry:
