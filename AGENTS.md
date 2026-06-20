@@ -53,9 +53,13 @@ Default mode must keep working even when enhanced keys are absent.
 
 ## Preferred task loop
 
-`GitHub issues -> runtime/product gap -> PR/comment context -> lane selection -> branch/context pack -> bounded work -> local checks + runtime smoke -> reviewer/aligner/integrator pass -> PR -> CI/review feedback -> heartbeat again -> approval -> squash merge -> post-merge check`
+`GitHub issues -> ordered target selection -> runtime/product gap -> PR/comment context -> lane selection -> branch/context pack -> bounded work -> local checks + runtime smoke -> reviewer/aligner/integrator pass -> PR -> CI/review feedback -> heartbeat again -> approval -> squash merge -> post-merge check`
 
 Never forget the loop. PR comments, review comments, CI results, runtime failures, and user feedback are signals that the next heartbeat must consume before deciding whether to continue a branch, start a new task, or wait for human approval.
+
+## Ordered issue execution
+
+GitHub issues are the canonical queue. Each heartbeat should name the ordered target issue or roadmap parent before selecting a lane. Select the lowest open roadmap parent / issue number first; implementation issues with a `Parent: #NN` marker remain attached to that roadmap parent. Do not jump to a later roadmap parent while an earlier one remains open unless the report names a concrete blocker or user override. Review-response, stale-branch, failing-CI, and merge-gate work may service an open PR out of order only as a safety exception tied to that PR.
 
 ## Runtime-first pause rule
 
