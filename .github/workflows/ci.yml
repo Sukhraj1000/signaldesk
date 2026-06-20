@@ -44,6 +44,9 @@ jobs:
       - name: Markdown docs link check
         run: tox -e docs
 
+      - name: Dependency/security check
+        run: tox -e dependency-scan
+
       - name: CLI smoke test
         run: tox -e smoke
 
@@ -68,3 +71,6 @@ jobs:
 
       - name: Merge-readiness report
         run: python scripts/merge_readiness.py
+
+      - name: Dependency/security check
+        run: python scripts/dependency_security_check.py

@@ -1,6 +1,6 @@
 PYTHON ?= python3
 
-.PHONY: install lint typecheck test docs smoke check format fix tox agent-preflight merge-readiness heartbeat sandbox-worktree services-up services-down
+.PHONY: install lint typecheck test docs dependency-scan smoke check format fix tox agent-preflight merge-readiness heartbeat sandbox-worktree services-up services-down
 
 install:
 	$(PYTHON) -m pip install --upgrade pip
@@ -20,6 +20,9 @@ smoke:
 
 docs:
 	$(PYTHON) -m tox -e docs
+
+dependency-scan:
+	$(PYTHON) -m tox -e dependency-scan
 
 check:
 	$(PYTHON) -m tox
