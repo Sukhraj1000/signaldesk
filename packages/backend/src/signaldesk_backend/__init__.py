@@ -14,6 +14,7 @@ from signaldesk_backend.models import (
     TechnicalSnapshot,
 )
 from signaldesk_backend.providers import (
+    LocalCsvProvider,
     LocalFixtureProvider,
     MarketDataProvider,
     ProviderRegistry,
@@ -26,6 +27,7 @@ from signaldesk_backend.providers import (
 __all__ = [
     "Candle",
     "KeyLevels",
+    "LocalCsvProvider",
     "LocalFixtureProvider",
     "MarketDataProvider",
     "ProviderCapability",
