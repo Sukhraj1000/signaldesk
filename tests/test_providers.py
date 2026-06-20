@@ -8,6 +8,7 @@ import pytest
 import signaldesk_backend.providers as providers_module
 from signaldesk_backend import (
     Candle,
+    FmpProvider,
     LocalCsvProvider,
     ProviderCapability,
     ProviderRegistry,
@@ -98,6 +99,39 @@ class FakeStooqUrlopen:
 class ExplodingStooqUrlopen:
     def __call__(self, request: object, *, timeout: float) -> FakeStooqResponse:
         raise TimeoutError("network timeout detail")
+
+
+class FakeFmpResponse:
+    def __init__(self, body: bytes, status: int = 200) -> None:
+        self.body = body
+        self.status = status
+
+    def __enter__(self) -> "FakeFmpResponse":
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+    def read(self) -> bytes:
+        return self.body
+
+
+class FakeFmpUrlopen:
+    def __init__(self, body: bytes, status: int = 200) -> None:
+        self.body = body
+        self.status = status
+        self.request_url: str | None = None
+        self.timeout: float | None = None
+
+    def __call__(self, request: object, *, timeout: float) -> FakeFmpResponse:
+        self.request_url = cast(Any, request).full_url
+        self.timeout = timeout
+        return FakeFmpResponse(self.body, status=self.status)
+
+
+class ExplodingFmpUrlopen:
+    def __call__(self, request: object, *, timeout: float) -> FakeFmpResponse:
+        raise TimeoutError("secret transport detail")
 
 
 class FakeHistory:
@@ -235,12 +269,106 @@ def test_fake_provider_satisfies_interface_result_shapes() -> None:
 def test_default_provider_registry_includes_safe_local_fixture_provider() -> None:
     registry = default_provider_registry()
 
-    assert registry.names() == ("local-fixture", "stooq", "yfinance")
+    assert registry.names() == ("fmp", "local-fixture", "stooq", "yfinance")
     health = registry.get("local-fixture").health_check()
     assert health == ProviderResult.success(
         provider="local-fixture",
         data="ready (no external credentials required)",
     )
+
+
+def test_fmp_provider_reports_capabilities_and_missing_key_safely(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("FMP_API_KEY", raising=False)
+    provider = FmpProvider(api_key=None)
+
+    capabilities = provider.capabilities()
+    health = provider.health_check()
+    quote = provider.get_quote(Symbol("amd"))
+    candles = provider.get_historical_candles(Symbol("amd"), start=NOW, end=NOW, interval="1d")
+
+    assert capabilities[0].provider == "fmp"
+    assert capabilities[0].supports_realtime is True
+    assert capabilities[0].supports_historical is True
+    assert health == ProviderResult.success(
+        provider="fmp", data="unavailable until FMP credentials are configured"
+    )
+    assert quote == ProviderResult.failure(
+        provider="fmp", error="FMP credentials are not configured"
+    )
+    assert candles == ProviderResult.failure(
+        provider="fmp", error="FMP credentials are not configured"
+    )
+
+
+def test_fmp_provider_translates_mocked_quote_and_candles() -> None:
+    quote_opener = FakeFmpUrlopen(
+        b'[{"symbol":"AMD","price":176.50,"timestamp":1760000000}]'
+    )
+    candle_opener = FakeFmpUrlopen(
+        b'{"symbol":"AMD","historical":[{"date":"2026-01-14","open":100.00,'
+        b'"high":102.50,"low":99.75,"close":101.25,"volume":123456},'
+        b'{"date":"2026-01-13","open":99.00,"high":101.00,"low":98.00,'
+        b'"close":100.00,"volume":1000}]}'
+    )
+    provider = FmpProvider(api_key="test-key", _urlopen=quote_opener, timeout_seconds=2.5)
+    candle_provider = FmpProvider(api_key="test-key", _urlopen=candle_opener, timeout_seconds=2.5)
+    symbol = Symbol("amd")
+
+    quote = provider.get_quote(symbol)
+    candles = candle_provider.get_historical_candles(
+        symbol, start=datetime(2026, 1, 14, tzinfo=UTC), end=NOW, interval="daily"
+    )
+
+    assert quote.ok is True
+    assert quote.data is not None
+    assert quote.data.symbol == symbol
+    assert quote.data.last == Decimal("176.50")
+    assert quote_opener.request_url is not None
+    assert "apikey=test-key" in quote_opener.request_url
+    assert candles.ok is True
+    assert candles.data is not None
+    assert [candle.timestamp for candle in candles.data] == [
+        datetime(2026, 1, 13, tzinfo=UTC),
+        datetime(2026, 1, 14, tzinfo=UTC),
+    ]
+    assert candles.data == (
+        Candle(
+            symbol=symbol,
+            timestamp=datetime(2026, 1, 13, tzinfo=UTC),
+            open=Decimal("99.0"),
+            high=Decimal("101.0"),
+            low=Decimal("98.0"),
+            close=Decimal("100.0"),
+            volume=1000,
+        ),
+        Candle(
+            symbol=symbol,
+            timestamp=datetime(2026, 1, 14, tzinfo=UTC),
+            open=Decimal("100.0"),
+            high=Decimal("102.5"),
+            low=Decimal("99.75"),
+            close=Decimal("101.25"),
+            volume=123456,
+        ),
+    )
+
+
+def test_fmp_provider_returns_safe_failures_for_errors() -> None:
+    malformed = FmpProvider(api_key="test-key", _urlopen=FakeFmpUrlopen(b"{}"))
+    limited = FmpProvider(api_key="test-key", _urlopen=FakeFmpUrlopen(b"{}", status=429))
+    exploding = FmpProvider(api_key="test-key", _urlopen=ExplodingFmpUrlopen())
+
+    assert malformed.get_quote(Symbol("amd")) == ProviderResult.failure(
+        provider="fmp", error="fmp quote data was invalid"
+    )
+    assert limited.get_quote(Symbol("amd")) == ProviderResult.failure(
+        provider="fmp", error="fmp request was rate limited"
+    )
+    result = exploding.get_quote(Symbol("amd"))
+    assert result == ProviderResult.failure(provider="fmp", error="fmp request failed")
+    assert "secret transport" not in (result.error or "")
 
 
 def test_local_csv_provider_loads_schema_and_filters_daily_candles(tmp_path: Path) -> None:

@@ -2,6 +2,8 @@
 
 import csv
 import io
+import json
+import os
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, time
@@ -9,7 +11,7 @@ from decimal import Decimal, InvalidOperation
 from importlib import import_module
 from pathlib import Path
 from typing import Any, Protocol, cast
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -699,7 +701,238 @@ class StooqProvider:
         return int(volume)
 
 
+@dataclass(frozen=True)
+class FmpProvider:
+    """Optional Financial Modeling Prep provider adapter.
+
+    The API key is read from ``FMP_API_KEY`` unless injected for tests. Health and
+    capability discovery do not perform network I/O or expose credential values.
+    """
+
+    name: str = "fmp"
+    api_key: str | None = field(default=None, repr=False, compare=False)
+    base_url: str = "https://financialmodelingprep.com/api/v3"
+    timeout_seconds: float = 10.0
+    _urlopen: Any | None = field(default=None, repr=False, compare=False)
+
+    def capabilities(self) -> tuple[ProviderCapability, ...]:
+        """Return FMP quote and historical candle capabilities without network I/O."""
+
+        return (
+            ProviderCapability(
+                provider=self.name,
+                supports_realtime=True,
+                supports_historical=True,
+                supported_asset_classes=frozenset({"equity", "etf", "index"}),
+            ),
+        )
+
+    def get_historical_candles(
+        self,
+        symbol: Symbol,
+        *,
+        start: datetime,
+        end: datetime,
+        interval: str,
+    ) -> ProviderResult[tuple[Candle, ...]]:
+        """Fetch daily historical candles from FMP and normalize them."""
+
+        api_key = self._api_key()
+        if api_key is None:
+            return self._missing_key_failure()
+        if start > end:
+            return ProviderResult.failure(provider=self.name, error="start must be before end")
+        if not self._supports_interval(interval):
+            return ProviderResult.failure(
+                provider=self.name, error="fmp supports only daily historical intervals"
+            )
+
+        response = self._fetch_json(
+            f"historical-price-full/{symbol.ticker}",
+            {
+                "from": start.strftime("%Y-%m-%d"),
+                "to": end.strftime("%Y-%m-%d"),
+                "apikey": api_key,
+            },
+        )
+        if not response.ok:
+            return ProviderResult.failure(
+                provider=self.name, error=response.error or "fmp request failed"
+            )
+        return self._parse_candles(symbol, response.data)
+
+    def get_quote(self, symbol: Symbol) -> ProviderResult[Quote]:
+        """Fetch a point-in-time quote from FMP and normalize it."""
+
+        api_key = self._api_key()
+        if api_key is None:
+            return self._missing_key_failure()
+        response = self._fetch_json(f"quote/{symbol.ticker}", {"apikey": api_key})
+        if not response.ok:
+            return ProviderResult.failure(
+                provider=self.name, error=response.error or "fmp request failed"
+            )
+        return self._parse_quote(symbol, response.data)
+
+    def health_check(self) -> ProviderResult[str]:
+        """Report FMP credential readiness without making a live API call."""
+
+        if self._api_key() is None:
+            return ProviderResult.success(
+                provider=self.name, data="unavailable until FMP credentials are configured"
+            )
+        return ProviderResult.success(provider=self.name, data="ready (FMP credentials configured)")
+
+    def _api_key(self) -> str | None:
+        key = self.api_key if self.api_key is not None else os.getenv("FMP_API_KEY")
+        if key is None or not key.strip():
+            return None
+        return key.strip()
+
+    def _missing_key_failure(self) -> ProviderResult[Any]:
+        return ProviderResult.failure(
+            provider=self.name, error="FMP credentials are not configured"
+        )
+
+    def _fetch_json(self, path: str, query: dict[str, str]) -> ProviderResult[Any]:
+        request = Request(self._url(path, query))
+        opener = self._urlopen or urlopen
+        try:
+            with opener(request, timeout=self.timeout_seconds) as response:
+                status = int(getattr(response, "status", 200))
+                if status == 429:
+                    return ProviderResult.failure(
+                        provider=self.name, error="fmp request was rate limited"
+                    )
+                if status >= 400:
+                    return ProviderResult.failure(provider=self.name, error="fmp request failed")
+                body = response.read()
+        except HTTPError as exc:
+            if exc.code == 429:
+                return ProviderResult.failure(
+                    provider=self.name, error="fmp request was rate limited"
+                )
+            return ProviderResult.failure(provider=self.name, error="fmp request failed")
+        except (OSError, URLError, TimeoutError):
+            return ProviderResult.failure(provider=self.name, error="fmp request failed")
+
+        try:
+            text = body.decode("utf-8") if isinstance(body, bytes) else str(body)
+            return ProviderResult.success(provider=self.name, data=json.loads(text))
+        except (TypeError, ValueError, UnicodeDecodeError):
+            return ProviderResult.failure(provider=self.name, error="fmp response was invalid")
+
+    def _url(self, path: str, query: dict[str, str]) -> str:
+        clean_base = self.base_url.rstrip("/")
+        clean_path = path.strip("/")
+        return f"{clean_base}/{clean_path}?{urlencode(query)}"
+
+    def _parse_quote(self, symbol: Symbol, payload: Any) -> ProviderResult[Quote]:
+        if not isinstance(payload, list) or not payload or not isinstance(payload[0], dict):
+            return ProviderResult.failure(provider=self.name, error="fmp quote data was invalid")
+        row = payload[0]
+        last = self._decimal_from_value(row.get("price"))
+        bid = self._decimal_from_value(row.get("bid"))
+        ask = self._decimal_from_value(row.get("ask"))
+        timestamp = self._timestamp_from_value(row.get("timestamp"))
+        if last is None and bid is None and ask is None:
+            return ProviderResult.failure(
+                provider=self.name, error=f"no quote data for {symbol.ticker}"
+            )
+        try:
+            return ProviderResult.success(
+                provider=self.name,
+                data=Quote(symbol=symbol, timestamp=timestamp, bid=bid, ask=ask, last=last),
+            )
+        except ValueError:
+            return ProviderResult.failure(provider=self.name, error="fmp quote data was invalid")
+
+    def _parse_candles(self, symbol: Symbol, payload: Any) -> ProviderResult[tuple[Candle, ...]]:
+        if not isinstance(payload, dict):
+            return ProviderResult.failure(
+                provider=self.name, error="fmp historical data was invalid"
+            )
+        rows = payload.get("historical")
+        if not isinstance(rows, list):
+            return ProviderResult.failure(
+                provider=self.name, error=f"no historical data for {symbol.ticker}"
+            )
+        candles: list[Candle] = []
+        try:
+            for row in rows:
+                if isinstance(row, dict):
+                    candle = self._row_to_candle(symbol, row)
+                    if candle is not None:
+                        candles.append(candle)
+        except (TypeError, ValueError, InvalidOperation):
+            return ProviderResult.failure(
+                provider=self.name, error="fmp historical data was invalid"
+            )
+        if not candles:
+            return ProviderResult.failure(
+                provider=self.name, error=f"no usable historical data for {symbol.ticker}"
+            )
+        return ProviderResult.success(
+            provider=self.name, data=tuple(sorted(candles, key=lambda candle: candle.timestamp))
+        )
+
+    def _row_to_candle(self, symbol: Symbol, row: dict[str, Any]) -> Candle | None:
+        open_price = self._decimal_from_value(row.get("open"))
+        high = self._decimal_from_value(row.get("high"))
+        low = self._decimal_from_value(row.get("low"))
+        close = self._decimal_from_value(row.get("close"))
+        volume = self._volume_from_value(row.get("volume"))
+        if open_price is None or high is None or low is None or close is None or volume is None:
+            return None
+        return Candle(
+            symbol=symbol,
+            timestamp=self._date_from_text(row.get("date")),
+            open=open_price,
+            high=high,
+            low=low,
+            close=close,
+            volume=volume,
+        )
+
+    def _date_from_text(self, value: object) -> datetime:
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("date is required")
+        return datetime.strptime(value.strip(), "%Y-%m-%d").replace(tzinfo=UTC)
+
+    def _timestamp_from_value(self, value: object) -> datetime:
+        if isinstance(value, int | float):
+            return datetime.fromtimestamp(value, tz=UTC)
+        return datetime.now(UTC)
+
+    def _decimal_from_value(self, value: object) -> Decimal | None:
+        if value is None or value == "":
+            return None
+        try:
+            decimal_value = Decimal(str(value))
+        except (InvalidOperation, ValueError):
+            return None
+        if not decimal_value.is_finite() or decimal_value <= Decimal("0"):
+            return None
+        return decimal_value
+
+    def _volume_from_value(self, value: object) -> int | None:
+        if value is None or value == "":
+            return 0
+        try:
+            volume = Decimal(str(value))
+        except (InvalidOperation, ValueError):
+            return None
+        if not volume.is_finite() or volume < Decimal("0"):
+            return None
+        return int(volume)
+
+    def _supports_interval(self, interval: str) -> bool:
+        return interval.strip().lower() in {"d", "1d", "day", "daily"}
+
+
 def default_provider_registry() -> ProviderRegistry:
     """Return the safe default provider registry for local CLI commands."""
 
-    return ProviderRegistry((LocalFixtureProvider(), StooqProvider(), YFinanceProvider()))
+    return ProviderRegistry(
+        (FmpProvider(), LocalFixtureProvider(), StooqProvider(), YFinanceProvider())
+    )
