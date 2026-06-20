@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import Any, cast
 
 import pytest
 import signaldesk_backend.providers as providers_module
@@ -10,6 +11,7 @@ from signaldesk_backend import (
     ProviderRegistry,
     ProviderResult,
     Quote,
+    StooqProvider,
     Symbol,
     YFinanceProvider,
     default_provider_registry,
@@ -63,6 +65,37 @@ class FakeProvider:
 
     def health_check(self) -> ProviderResult[str]:
         return ProviderResult.success(provider=self.name, data="healthy")
+
+
+class FakeStooqResponse:
+    def __init__(self, body: bytes) -> None:
+        self.body = body
+
+    def __enter__(self) -> "FakeStooqResponse":
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+    def read(self) -> bytes:
+        return self.body
+
+
+class FakeStooqUrlopen:
+    def __init__(self, body: bytes) -> None:
+        self.body = body
+        self.request_url: str | None = None
+        self.timeout: float | None = None
+
+    def __call__(self, request: object, *, timeout: float) -> FakeStooqResponse:
+        self.request_url = cast(Any, request).full_url
+        self.timeout = timeout
+        return FakeStooqResponse(self.body)
+
+
+class ExplodingStooqUrlopen:
+    def __call__(self, request: object, *, timeout: float) -> FakeStooqResponse:
+        raise TimeoutError("network timeout detail")
 
 
 class FakeHistory:
@@ -200,12 +233,98 @@ def test_fake_provider_satisfies_interface_result_shapes() -> None:
 def test_default_provider_registry_includes_safe_local_fixture_provider() -> None:
     registry = default_provider_registry()
 
-    assert registry.names() == ("local-fixture", "yfinance")
+    assert registry.names() == ("local-fixture", "stooq", "yfinance")
     health = registry.get("local-fixture").health_check()
     assert health == ProviderResult.success(
         provider="local-fixture",
         data="ready (no external credentials required)",
     )
+
+
+def test_stooq_provider_reports_historical_capabilities_without_network() -> None:
+    provider = StooqProvider()
+
+    capabilities = provider.capabilities()
+    health = provider.health_check()
+    quote = provider.get_quote(Symbol("amd"))
+
+    assert capabilities[0].provider == "stooq"
+    assert capabilities[0].supports_realtime is False
+    assert capabilities[0].supports_historical is True
+    assert "equity" in capabilities[0].supported_asset_classes
+    assert health == ProviderResult.success(
+        provider="stooq",
+        data="ready (no external credentials required; network used only for candle fetches)",
+    )
+    assert quote == ProviderResult.failure(
+        provider="stooq", error="stooq quote retrieval is not supported"
+    )
+
+
+def test_stooq_provider_translates_csv_history() -> None:
+    csv_body = (
+        b"Date,Open,High,Low,Close,Volume\n"
+        b"2026-01-14,100.00,102.50,99.75,101.25,123456\n"
+    )
+    opener = FakeStooqUrlopen(csv_body)
+    provider = StooqProvider(_urlopen=opener, timeout_seconds=3.5)
+    symbol = Symbol("amd")
+
+    result = provider.get_historical_candles(symbol, start=NOW, end=NOW, interval="1d")
+
+    assert result.ok is True
+    assert result.data == (
+        Candle(
+            symbol=symbol,
+            timestamp=datetime(2026, 1, 14, tzinfo=UTC),
+            open=Decimal("100.00"),
+            high=Decimal("102.50"),
+            low=Decimal("99.75"),
+            close=Decimal("101.25"),
+            volume=123456,
+        ),
+    )
+    assert opener.timeout == 3.5
+    assert opener.request_url is not None
+    assert "s=amd.us" in opener.request_url
+    assert "i=d" in opener.request_url
+
+
+def test_stooq_provider_handles_unavailable_and_malformed_responses() -> None:
+    unavailable = StooqProvider(_urlopen=FakeStooqUrlopen(b"No data"))
+    malformed = StooqProvider(_urlopen=FakeStooqUrlopen(b"not,candle,data\n1,2,3\n"))
+    exploding = StooqProvider(_urlopen=ExplodingStooqUrlopen())
+    symbol = Symbol("missing")
+
+    unavailable_result = unavailable.get_historical_candles(
+        symbol, start=NOW, end=NOW, interval="1d"
+    )
+    malformed_result = malformed.get_historical_candles(symbol, start=NOW, end=NOW, interval="1d")
+    exploding_result = exploding.get_historical_candles(symbol, start=NOW, end=NOW, interval="1d")
+
+    assert unavailable_result == ProviderResult.failure(
+        provider="stooq", error="no historical data for MISSING"
+    )
+    assert malformed_result == ProviderResult.failure(
+        provider="stooq", error="stooq historical data was invalid"
+    )
+    assert exploding_result == ProviderResult.failure(
+        provider="stooq", error="stooq historical fetch failed"
+    )
+    assert "network timeout" not in (exploding_result.error or "")
+
+
+def test_stooq_provider_rejects_unsupported_intervals_before_network() -> None:
+    opener = FakeStooqUrlopen(b"")
+    provider = StooqProvider(_urlopen=opener)
+
+    result = provider.get_historical_candles(Symbol("amd"), start=NOW, end=NOW, interval="5m")
+
+    assert result == ProviderResult.failure(
+        provider="stooq",
+        error="stooq supports only daily, weekly, and monthly historical intervals",
+    )
+    assert opener.request_url is None
 
 
 def test_yfinance_provider_reports_capabilities_without_importing_dependency() -> None:
