@@ -60,6 +60,20 @@ Rules:
 - CLI/API/dashboard/reporting render the same canonical signal-card output.
 - LLMs consume structured facts only and are optional.
 
+See `docs/product-contract.md` for the durable product contract: supported default and enhanced provider modes, output category boundaries, unavailable-context handling, and non-goals.
+
+## Non-goals
+
+SignalDesk must not imply or implement these capabilities unless a future GitHub issue explicitly changes the product contract:
+
+- live trading
+- broker execution
+- portfolio auto-rebalancing
+- LLM-created market facts, levels, catalysts, risks, or recommendations
+- screenshot-only chart analysis
+- complex realtime infrastructure before batch CLI workflows are proven
+- paid data redistribution
+
 ## Repository Layout
 
 ```text
