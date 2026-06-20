@@ -1,5 +1,11 @@
 import typer
-from signaldesk_backend import ProviderRegistry, ProviderResult, Settings, default_provider_registry
+from signaldesk_backend import (
+    ProviderRegistry,
+    ProviderResult,
+    Settings,
+    default_provider_registry,
+    redact_provider_diagnostic,
+)
 
 app = typer.Typer(help="SignalDesk command-line interface.")
 providers_app = typer.Typer(help="Inspect configured market-data providers.")
@@ -21,6 +27,7 @@ def health() -> None:
 def _format_provider_health(provider_name: str, result: ProviderResult[str]) -> str:
     status = "ok" if result.ok else "failed"
     detail = result.data if result.ok else result.error
+    detail = redact_provider_diagnostic(detail or "")
     return f"{provider_name}\t{status}\t{detail}"
 
 

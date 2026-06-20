@@ -105,6 +105,21 @@ def test_provider_health_formatter_reports_failure_status() -> None:
     assert line == "broken\tfailed\tunavailable without configured adapter"
 
 
+def test_provider_health_formatter_redacts_credential_diagnostics() -> None:
+    line = _format_provider_health(
+        "broken",
+        ProviderResult.failure(
+            provider="broken",
+            error="GET https://example.test/path?apikey=abc123&symbol=AMD failed",
+        ),
+    )
+
+    assert "abc123" not in line
+    assert line == (
+        "broken\tfailed\tGET https://example.test/path?apikey=<redacted>&symbol=AMD failed"
+    )
+
+
 def test_provider_capability_formatter_reports_registry_capabilities() -> None:
     lines = _format_provider_capabilities(ProviderRegistry((ExplodingProvider(),)))
 

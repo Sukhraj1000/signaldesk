@@ -4,6 +4,7 @@ import csv
 import io
 import json
 import os
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, time
@@ -12,10 +13,68 @@ from importlib import import_module
 from pathlib import Path
 from typing import Any, Protocol, cast
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
-from signaldesk_backend.models import Candle, ProviderCapability, ProviderResult, Quote, Symbol
+from signaldesk_backend.models import (
+    Candle,
+    ProviderCapability,
+    ProviderResult,
+    Quote,
+    Symbol,
+)
+
+_CREDENTIAL_QUERY_KEYS = frozenset(
+    {"apikey", "api_key", "token", "access_token", "secret", "password"}
+)
+_URL_PATTERN = re.compile(r"\b[a-zA-Z][a-zA-Z0-9+.-]*://[^\s]+")
+_CREDENTIAL_SUBSTRING_PATTERN = re.compile(
+    r"\b(apikey|api_key|access_token|token|secret|password)\b(\s*[:=]\s*|\s+)([^\s&;,]+)",
+    re.IGNORECASE,
+)
+
+
+def redact_provider_diagnostic(text: object) -> str:
+    """Redact credential-like values from provider diagnostic text.
+
+    The helper preserves useful non-secret context such as URL host/path and
+    non-sensitive query parameters while replacing obvious credential values.
+    """
+
+    diagnostic = str(text)
+    diagnostic = _URL_PATTERN.sub(_redact_url_match, diagnostic)
+    return _CREDENTIAL_SUBSTRING_PATTERN.sub(_redact_credential_substring, diagnostic)
+
+
+def _redact_url_match(match: re.Match[str]) -> str:
+    url = match.group(0)
+    trailing = ""
+    while url and url[-1] in ".,);]}":
+        trailing = url[-1] + trailing
+        url = url[:-1]
+
+    parts = urlsplit(url)
+    if not parts.query:
+        return match.group(0)
+
+    query = [
+        (key, "<redacted>" if key.lower() in _CREDENTIAL_QUERY_KEYS else value)
+        for key, value in parse_qsl(parts.query, keep_blank_values=True)
+    ]
+    redacted_url = urlunsplit(
+        (
+            parts.scheme,
+            parts.netloc,
+            parts.path,
+            urlencode(query, safe="<>", doseq=True),
+            parts.fragment,
+        )
+    )
+    return f"{redacted_url}{trailing}"
+
+
+def _redact_credential_substring(match: re.Match[str]) -> str:
+    return f"{match.group(1)}{match.group(2)}<redacted>"
 
 
 def normalize_provider_name(name: str) -> str:
