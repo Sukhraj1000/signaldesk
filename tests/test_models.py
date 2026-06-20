@@ -272,6 +272,18 @@ def test_analysis_models_serialize_with_dataclass_payloads() -> None:
             "trend",
         ),
         (
+            lambda: TechnicalSnapshot(
+                symbol=Symbol("AMD"),
+                as_of=NOW,
+                timeframe="1d",
+                trend="up",
+                last_price=Decimal("100"),
+                key_levels=KeyLevels(support=(Decimal("90"),)),
+                indicators={"RSI": Decimal("60"), " rsi ": Decimal("61")},
+            ),
+            "indicator names collide",
+        ),
+        (
             lambda: SignalCard(
                 symbol=Symbol("AMD"),
                 generated_at=NOW,
@@ -281,6 +293,17 @@ def test_analysis_models_serialize_with_dataclass_payloads() -> None:
                 confidence=Decimal("1.1"),
             ),
             "confidence",
+        ),
+        (
+            lambda: SignalCard(
+                symbol=Symbol("AMD"),
+                generated_at=NOW,
+                timeframe="1d",
+                bias="watch",
+                summary="facts",
+                confidence=1,  # type: ignore[arg-type]
+            ),
+            "confidence must be a Decimal",
         ),
     ],
 )

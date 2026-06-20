@@ -266,11 +266,25 @@ class TechnicalSnapshot:
         if trend not in {"up", "down", "sideways", "unknown"}:
             raise ValueError("trend must be up, down, sideways, or unknown")
         _require_positive_decimal(self.last_price, "last_price")
-        normalized_indicators = {
-            name.strip().lower(): value
-            for name, value in self.indicators.items()
-            if name.strip()
+        normalized_indicators: dict[str, Decimal] = {}
+        original_indicator_names: dict[str, list[str]] = {}
+        for name, value in self.indicators.items():
+            normalized_name = name.strip().lower()
+            if not normalized_name:
+                continue
+            original_indicator_names.setdefault(normalized_name, []).append(name)
+            normalized_indicators[normalized_name] = value
+        collided_indicators = {
+            normalized_name: names
+            for normalized_name, names in original_indicator_names.items()
+            if len(names) > 1
         }
+        if collided_indicators:
+            collision_details = ", ".join(
+                f"{normalized_name}: {names}"
+                for normalized_name, names in sorted(collided_indicators.items())
+            )
+            raise ValueError(f"indicator names collide after normalization: {collision_details}")
         for name, value in normalized_indicators.items():
             if not isinstance(value, Decimal):
                 raise TypeError(f"indicator {name} must be a Decimal")
@@ -307,6 +321,8 @@ class SignalCard:
             raise ValueError("bias must be bullish, bearish, neutral, or watch")
         if not summary:
             raise ValueError("summary is required")
+        if not isinstance(self.confidence, Decimal):
+            raise TypeError("confidence must be a Decimal")
         if self.confidence < Decimal("0") or self.confidence > Decimal("1"):
             raise ValueError("confidence must be between 0 and 1")
         object.__setattr__(self, "timeframe", timeframe)
