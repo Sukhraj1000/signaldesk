@@ -1,31 +1,34 @@
 PYTHON ?= python3
 
-.PHONY: install lint typecheck test check format fix tox agent-preflight merge-readiness heartbeat sandbox-worktree services-up services-down
+.PHONY: install lint typecheck test smoke check format fix tox agent-preflight merge-readiness heartbeat sandbox-worktree services-up services-down
 
 install:
 	$(PYTHON) -m pip install --upgrade pip
 	$(PYTHON) -m pip install -e ".[dev]"
 
 lint:
-	tox -e lint
+	$(PYTHON) -m tox -e lint
 
 typecheck:
-	tox -e typecheck
+	$(PYTHON) -m tox -e typecheck
 
 test:
-	tox -e py
+	$(PYTHON) -m tox -e py
+
+smoke:
+	$(PYTHON) -m tox -e smoke
 
 check:
-	tox
+	$(PYTHON) -m tox
 
 format:
-	tox -e format
+	$(PYTHON) -m tox -e format
 
 fix:
-	tox -e fix
+	$(PYTHON) -m tox -e fix
 
 tox:
-	tox
+	$(PYTHON) -m tox
 
 agent-preflight:
 	$(PYTHON) scripts/agent_preflight.py

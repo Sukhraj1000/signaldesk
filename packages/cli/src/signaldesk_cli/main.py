@@ -1,10 +1,26 @@
+import json
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+from typing import Any
+
 import typer
 from signaldesk_backend import (
+    Candle,
     ProviderRegistry,
     ProviderResult,
     Settings,
+    Symbol,
+    average_true_range,
     default_provider_registry,
+    detect_swing_highs,
+    detect_swing_lows,
+    exponential_moving_average,
+    macd,
     redact_provider_diagnostic,
+    relative_strength_index,
+    relative_volume,
+    simple_moving_average,
+    volume_moving_average,
 )
 
 app = typer.Typer(help="SignalDesk command-line interface.")
@@ -22,6 +38,111 @@ def health() -> None:
     """Print a basic local configuration health check."""
     settings = Settings.from_env()
     typer.echo(f"SignalDesk is configured for {settings.app_env}.")
+
+
+@app.command("ta")
+def technical_analysis(
+    symbol: str,
+    provider: str = typer.Option("yfinance", help="Registered market-data provider to use."),
+    llm: str = typer.Option("none", help="LLM provider. Only 'none' is currently supported."),
+    interval: str = typer.Option("1d", help="Historical candle interval."),
+    days: int = typer.Option(120, min=1, help="Number of calendar days of history to request."),
+    output: str = typer.Option("table", help="Output format: table or json."),
+) -> None:
+    """Fetch candles and run deterministic technical analysis for one symbol."""
+
+    if llm.strip().lower() != "none":
+        typer.echo("Only --llm none is currently supported.", err=True)
+        raise typer.Exit(2)
+
+    output_format = output.strip().lower()
+    if output_format not in {"table", "json"}:
+        typer.echo("--output must be 'table' or 'json'.", err=True)
+        raise typer.Exit(2)
+
+    registry = default_provider_registry()
+    try:
+        market_data_provider = registry.get(provider)
+    except KeyError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from exc
+
+    end = datetime.now(UTC)
+    start = end - timedelta(days=days)
+    result = market_data_provider.get_historical_candles(
+        Symbol(symbol), start=start, end=end, interval=interval
+    )
+    if not result.ok or not result.data:
+        diagnostic = redact_provider_diagnostic(result.error or "provider returned no candles")
+        typer.echo(f"{market_data_provider.name} failed: {diagnostic}", err=True)
+        raise typer.Exit(1)
+
+    report = _technical_analysis_report(
+        symbol=Symbol(symbol),
+        provider_name=market_data_provider.name,
+        candles=result.data,
+        interval=interval,
+    )
+    if output_format == "json":
+        typer.echo(json.dumps(report, indent=2, sort_keys=True))
+        return
+
+    for key, value in report.items():
+        typer.echo(f"{key}	{value}")
+
+
+def _technical_analysis_report(
+    *, symbol: Symbol, provider_name: str, candles: tuple[Candle, ...], interval: str
+) -> dict[str, Any]:
+    closes = tuple(candle.close for candle in candles)
+    sma_20 = simple_moving_average(closes, period=20)[-1]
+    ema_20 = exponential_moving_average(closes, period=20)[-1]
+    rsi_14 = relative_strength_index(closes, period=14)[-1]
+    macd_result = macd(closes)
+    atr_14 = average_true_range(candles, period=14)[-1]
+    volume_average_20 = volume_moving_average(candles, period=20)[-1]
+    relative_volume_20 = relative_volume(candles, period=20)[-1]
+    latest_swing_high = _latest_level(detect_swing_highs(candles))
+    latest_swing_low = _latest_level(detect_swing_lows(candles))
+    latest_candle = candles[-1]
+
+    return {
+        "symbol": symbol.ticker,
+        "provider": provider_name,
+        "interval": interval,
+        "candles": len(candles),
+        "latest_timestamp": latest_candle.timestamp.isoformat(),
+        "latest_close": _decimal_text(latest_candle.close),
+        "sma_20": _decimal_text(sma_20),
+        "ema_20": _decimal_text(ema_20),
+        "rsi_14": _decimal_text(rsi_14),
+        "macd": _decimal_text(macd_result.macd_line[-1]),
+        "macd_signal": _decimal_text(macd_result.signal_line[-1]),
+        "macd_histogram": _decimal_text(macd_result.histogram[-1]),
+        "atr_14": _decimal_text(atr_14),
+        "volume_average_20": _decimal_text(volume_average_20),
+        "relative_volume_20": _decimal_text(relative_volume_20),
+        "latest_swing_high": latest_swing_high,
+        "latest_swing_low": latest_swing_low,
+        "llm": "none",
+    }
+
+
+def _latest_level(points: tuple[Any, ...]) -> dict[str, Any] | None:
+    if not points:
+        return None
+    point = points[-1]
+    return {
+        "candle_index": point.candle_index,
+        "timestamp": point.timestamp.isoformat(),
+        "price": _decimal_text(point.price),
+    }
+
+
+def _decimal_text(value: Decimal | None) -> str | None:
+    if value is None:
+        return None
+    return str(value)
 
 
 def _format_provider_health(provider_name: str, result: ProviderResult[str]) -> str:
