@@ -34,6 +34,9 @@ Run the checks:
 ```bash
 make check
 signaldesk --help
+signaldesk health
+signaldesk providers list
+signaldesk providers check
 ```
 
 Individual checks are also available:
@@ -42,8 +45,16 @@ Individual checks are also available:
 make lint
 make typecheck
 make test
+make smoke
 make fix
 make format
+```
+
+Run a live no-LLM technical-analysis pass when an external provider is available:
+
+```bash
+python -m pip install -e ".[dev,yfinance]"
+signaldesk ta AMD --provider yfinance --llm none --output json
 ```
 
 ## Local Services

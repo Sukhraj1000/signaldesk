@@ -1,5 +1,6 @@
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 import signaldesk_cli.main as cli_main
 from pytest import MonkeyPatch
@@ -52,6 +53,67 @@ class ExplodingCapabilitiesProvider(ExplodingProvider):
         raise RuntimeError("secret capability detail should not be shown")
 
 
+@dataclass(frozen=True)
+class WorkingProvider:
+    name: str = "working"
+
+    def capabilities(self) -> tuple[ProviderCapability, ...]:
+        return (
+            ProviderCapability(
+                provider=self.name,
+                supports_realtime=False,
+                supports_historical=True,
+                supported_asset_classes=frozenset({"fixture"}),
+            ),
+        )
+
+    def get_historical_candles(
+        self,
+        symbol: Symbol,
+        *,
+        start: datetime,
+        end: datetime,
+        interval: str,
+    ) -> ProviderResult[tuple[Candle, ...]]:
+        candles = tuple(
+            Candle(
+                symbol=symbol,
+                timestamp=datetime(2024, 1, 1, tzinfo=UTC) + timedelta(days=index),
+                open=Decimal(index + 10),
+                high=Decimal(index + 11),
+                low=Decimal(index + 9),
+                close=Decimal(index + 10),
+                volume=1000 + index,
+            )
+            for index in range(40)
+        )
+        return ProviderResult.success(provider=self.name, data=candles)
+
+    def get_quote(self, symbol: Symbol) -> ProviderResult[Quote]:
+        return ProviderResult.failure(provider=self.name, error="not implemented")
+
+    def health_check(self) -> ProviderResult[str]:
+        return ProviderResult.success(provider=self.name, data="healthy")
+
+
+@dataclass(frozen=True)
+class FailingHistoricalProvider(WorkingProvider):
+    name: str = "failing-history"
+
+    def get_historical_candles(
+        self,
+        symbol: Symbol,
+        *,
+        start: datetime,
+        end: datetime,
+        interval: str,
+    ) -> ProviderResult[tuple[Candle, ...]]:
+        return ProviderResult.failure(
+            provider=self.name,
+            error="GET https://example.test/path?apikey=secret failed",
+        )
+
+
 def test_health_command() -> None:
     result = CliRunner().invoke(app, ["health"])
 
@@ -94,6 +156,58 @@ def test_providers_check_reports_default_local_provider_without_secrets() -> Non
     )
     assert "API_KEY" not in result.stdout
     assert "TOKEN" not in result.stdout
+
+
+def test_ta_command_runs_provider_to_indicator_bridge(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        cli_main, "default_provider_registry", lambda: ProviderRegistry((WorkingProvider(),))
+    )
+
+    result = CliRunner().invoke(
+        app, ["ta", "AMD", "--provider", "working", "--llm", "none", "--output", "json"]
+    )
+
+    assert result.exit_code == 0
+    assert '"symbol": "AMD"' in result.stdout
+    assert '"provider": "working"' in result.stdout
+    assert '"latest_close": "49"' in result.stdout
+    assert '"sma_20"' in result.stdout
+    assert '"rsi_14"' in result.stdout
+
+
+def test_ta_command_reports_provider_failures_without_secrets(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        cli_main,
+        "default_provider_registry",
+        lambda: ProviderRegistry((FailingHistoricalProvider(),)),
+    )
+
+    result = CliRunner().invoke(app, ["ta", "AMD", "--provider", "failing-history"])
+
+    assert result.exit_code == 1
+    assert "apikey=<redacted>" in result.stderr
+    assert "secret" not in result.stderr
+
+
+def test_ta_command_rejects_llm_modes_until_guardrails_exist() -> None:
+    result = CliRunner().invoke(app, ["ta", "AMD", "--llm", "openai"])
+
+    assert result.exit_code == 2
+    assert "Only --llm none is currently supported." in result.stderr
+
+
+def test_ta_command_reports_validation_errors(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        cli_main, "default_provider_registry", lambda: ProviderRegistry((WorkingProvider(),))
+    )
+
+    unknown_provider = CliRunner().invoke(app, ["ta", "AMD", "--provider", "missing"])
+    invalid_symbol = CliRunner().invoke(app, ["ta", "bad symbol", "--provider", "working"])
+
+    assert unknown_provider.exit_code == 2
+    assert "provider not registered: missing" in unknown_provider.stderr
+    assert invalid_symbol.exit_code == 2
+    assert "ticker must not contain whitespace" in invalid_symbol.stderr
 
 
 def test_provider_health_formatter_reports_failure_status() -> None:

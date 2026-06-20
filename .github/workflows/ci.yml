@@ -41,6 +41,9 @@ jobs:
       - name: Test
         run: tox -e py
 
+      - name: CLI smoke test
+        run: tox -e smoke
+
   safety:
     name: Agent safety checks
     runs-on: ubuntu-latest
