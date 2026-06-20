@@ -11,6 +11,7 @@ from signaldesk_backend import (
     Symbol,
     average_true_range,
     calculate_fibonacci_retracement_levels,
+    derive_confirmation_invalidation_levels,
     detect_support_resistance_zones,
     detect_swing_highs,
     detect_swing_lows,
@@ -665,6 +666,50 @@ def test_detect_support_resistance_zones_returns_empty_result_for_insufficient_i
     assert detect_support_resistance_zones((), window=1).resistance == ()
     assert detect_support_resistance_zones(swing_points=()).support == ()
     assert detect_support_resistance_zones(swing_points=()).resistance == ()
+
+
+def test_derive_confirmation_invalidation_levels_from_nearest_zones() -> None:
+    candles = tuple(
+        make_ohlc_candle(
+            index,
+            open_=Decimal("10"),
+            high=Decimal(str(high)),
+            low=Decimal(str(low)),
+            close=Decimal(str(close)),
+        )
+        for index, high, low, close in (
+            (0, "10", "8.50", "9"),
+            (1, "12.05", "9", "12"),
+            (2, "11", "8", "8.50"),
+            (3, "12", "9", "11"),
+            (4, "10", "8.05", "9"),
+            (5, "11", "9", "10"),
+        )
+    )
+
+    levels = derive_confirmation_invalidation_levels(candles, window=1)
+
+    assert levels.confirmation is not None
+    assert levels.confirmation.kind == "confirmation"
+    assert levels.confirmation.price == Decimal("12.025")
+    assert levels.confirmation.source_rule == "nearest_resistance_above_latest_close"
+    assert levels.confirmation.source_level == "resistance_zone[12,12.05] touches=2"
+    assert "confirm" in levels.confirmation.reason
+    assert levels.invalidation is not None
+    assert levels.invalidation.kind == "invalidation"
+    assert levels.invalidation.price == Decimal("8.025")
+    assert levels.invalidation.source_rule == "nearest_support_below_latest_close"
+    assert levels.invalidation.source_level == "support_zone[8,8.05] touches=2"
+    assert "invalidate" in levels.invalidation.reason
+
+
+def test_derive_confirmation_invalidation_levels_reports_unavailable_sides_as_none() -> None:
+    candles = tuple(make_candle(index, "10") for index in range(5))
+
+    levels = derive_confirmation_invalidation_levels(candles, window=1)
+
+    assert levels.confirmation is None
+    assert levels.invalidation is None
 
 
 @pytest.mark.parametrize(
