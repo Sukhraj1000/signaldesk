@@ -2,10 +2,19 @@
 
 from collections.abc import Sequence
 from decimal import Decimal
+from typing import NamedTuple
 
 from signaldesk_backend.models import Candle
 
 PriceInput = Candle | Decimal | int | float | str
+
+
+class MacdResult(NamedTuple):
+    """Input-aligned MACD indicator series."""
+
+    macd_line: tuple[Decimal | None, ...]
+    signal_line: tuple[Decimal | None, ...]
+    histogram: tuple[Decimal | None, ...]
 
 
 def simple_moving_average(
@@ -107,9 +116,57 @@ def relative_strength_index(
     return tuple(rsi_values)
 
 
+def macd(
+    values: Sequence[PriceInput],
+    *,
+    fast_period: int = 12,
+    slow_period: int = 26,
+    signal_period: int = 9,
+) -> MacdResult:
+    """Return input-aligned MACD line, signal line, and histogram series.
+
+    MACD is calculated as ``EMA(fast_period) - EMA(slow_period)`` over close
+    prices. The signal line is an EMA of the computable MACD values, aligned
+    back to the original input. The histogram is ``MACD - signal``. Entries that
+    do not yet have enough source values are ``None``.
+    """
+
+    _validate_macd_periods(fast_period, slow_period, signal_period)
+
+    fast_ema = exponential_moving_average(values, period=fast_period)
+    slow_ema = exponential_moving_average(values, period=slow_period)
+    macd_line = tuple(
+        None if fast_value is None or slow_value is None else fast_value - slow_value
+        for fast_value, slow_value in zip(fast_ema, slow_ema, strict=True)
+    )
+
+    computable_macd_values = tuple(value for value in macd_line if value is not None)
+    signal_values = exponential_moving_average(computable_macd_values, period=signal_period)
+    signal_iterator = iter(signal_values)
+    signal_line = tuple(
+        None if macd_value is None else next(signal_iterator) for macd_value in macd_line
+    )
+    histogram = tuple(
+        None if macd_value is None or signal_value is None else macd_value - signal_value
+        for macd_value, signal_value in zip(macd_line, signal_line, strict=True)
+    )
+
+    return MacdResult(macd_line=macd_line, signal_line=signal_line, histogram=histogram)
+
+
 def _validate_period(period: int) -> None:
     if period <= 0:
         raise ValueError("period must be positive")
+
+
+def _validate_macd_periods(
+    fast_period: int, slow_period: int, signal_period: int
+) -> None:
+    _validate_period(fast_period)
+    _validate_period(slow_period)
+    _validate_period(signal_period)
+    if fast_period >= slow_period:
+        raise ValueError("fast_period must be less than slow_period")
 
 
 def _rsi_from_average_gain_loss(average_gain: Decimal, average_loss: Decimal) -> Decimal:
