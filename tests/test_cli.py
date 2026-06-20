@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from datetime import datetime
 
+import signaldesk_cli.main as cli_main
+from pytest import MonkeyPatch
 from signaldesk_backend import (
     Candle,
     ProviderCapability,
@@ -40,6 +42,14 @@ class ExplodingProvider:
 
     def health_check(self) -> ProviderResult[str]:
         raise RuntimeError("secret detail should not be shown")
+
+
+@dataclass(frozen=True)
+class ExplodingCapabilitiesProvider(ExplodingProvider):
+    name: str = "exploding-capabilities"
+
+    def capabilities(self) -> tuple[ProviderCapability, ...]:
+        raise RuntimeError("secret capability detail should not be shown")
 
 
 def test_health_command() -> None:
@@ -89,6 +99,21 @@ def test_provider_capability_formatter_reports_registry_capabilities() -> None:
     lines = _format_provider_capabilities(ProviderRegistry((ExplodingProvider(),)))
 
     assert lines == ("provider\trealtime\thistorical\tasset_classes", "exploding\tfalse\tfalse\t")
+
+
+def test_providers_list_continues_when_capabilities_raise(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        cli_main,
+        "default_provider_registry",
+        lambda: ProviderRegistry((ExplodingCapabilitiesProvider(), ExplodingProvider())),
+    )
+
+    result = CliRunner().invoke(app, ["providers", "list"])
+
+    assert result.exit_code == 0
+    assert "exploding-capabilities\tfalse\tfalse\t" in result.stdout
+    assert "exploding\tfalse\tfalse\t" in result.stdout
+    assert "secret capability detail" not in result.stdout
 
 
 def test_provider_health_checks_convert_exceptions_to_sanitized_failures() -> None:

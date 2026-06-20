@@ -243,19 +243,25 @@ class YFinanceProvider:
         try:
             ticker = module.Ticker(symbol.ticker)
             fast_info = getattr(ticker, "fast_info", {})
-            info = getattr(ticker, "info", {})
         except Exception:
             return ProviderResult.failure(provider=self.name, error="yfinance quote fetch failed")
 
         last = self._pick_decimal(fast_info, "last_price", "lastPrice", "regularMarketPrice")
-        if last is None:
-            last = self._pick_decimal(info, "regularMarketPrice", "currentPrice", "previousClose")
         bid = self._pick_decimal(fast_info, "bid", "bidPrice")
-        if bid is None:
-            bid = self._pick_decimal(info, "bid", "bidPrice")
         ask = self._pick_decimal(fast_info, "ask", "askPrice")
-        if ask is None:
-            ask = self._pick_decimal(info, "ask", "askPrice")
+        if last is None or bid is None or ask is None:
+            try:
+                info = getattr(ticker, "info", {})
+            except Exception:
+                info = {}
+            if last is None:
+                last = self._pick_decimal(
+                    info, "regularMarketPrice", "currentPrice", "previousClose"
+                )
+            if bid is None:
+                bid = self._pick_decimal(info, "bid", "bidPrice")
+            if ask is None:
+                ask = self._pick_decimal(info, "ask", "askPrice")
 
         if last is None and bid is None and ask is None:
             return ProviderResult.failure(
