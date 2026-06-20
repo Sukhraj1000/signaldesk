@@ -90,8 +90,33 @@ def technical_analysis(
         typer.echo(json.dumps(report, indent=2, sort_keys=True))
         return
 
-    for key, value in report.items():
-        typer.echo(f"{key}	{value}")
+    for key in _TABLE_REPORT_KEYS:
+        typer.echo(f"{key}	{report[key]}")
+
+
+_TABLE_REPORT_KEYS = (
+    "schema_version",
+    "symbol",
+    "provider",
+    "interval",
+    "candles",
+    "latest_timestamp",
+    "latest_close",
+    "sma_20",
+    "ema_20",
+    "rsi_14",
+    "macd",
+    "macd_signal",
+    "macd_histogram",
+    "atr_14",
+    "volume_average_20",
+    "relative_volume_20",
+    "latest_swing_high",
+    "latest_swing_low",
+    "confirmation_level",
+    "invalidation_level",
+    "llm",
+)
 
 
 def _technical_analysis_report(
@@ -110,13 +135,15 @@ def _technical_analysis_report(
     setup_levels = derive_confirmation_invalidation_levels(candles)
     latest_candle = candles[-1]
 
-    return {
+    facts = {
         "symbol": symbol.ticker,
         "provider": provider_name,
         "interval": interval,
         "candles": len(candles),
         "latest_timestamp": latest_candle.timestamp.isoformat(),
         "latest_close": _decimal_text(latest_candle.close),
+    }
+    indicators = {
         "sma_20": _decimal_text(sma_20),
         "ema_20": _decimal_text(ema_20),
         "rsi_14": _decimal_text(rsi_14),
@@ -126,11 +153,76 @@ def _technical_analysis_report(
         "atr_14": _decimal_text(atr_14),
         "volume_average_20": _decimal_text(volume_average_20),
         "relative_volume_20": _decimal_text(relative_volume_20),
+    }
+    swing_levels = {
         "latest_swing_high": latest_swing_high,
         "latest_swing_low": latest_swing_low,
+    }
+    setup = {
         "confirmation_level": _setup_level(setup_levels.confirmation),
         "invalidation_level": _setup_level(setup_levels.invalidation),
+    }
+
+    return {
+        "schema_version": "signaldesk.ta.v1",
+        "symbol": facts["symbol"],
+        "provider": facts["provider"],
+        "interval": facts["interval"],
+        "candles": facts["candles"],
+        "latest_timestamp": facts["latest_timestamp"],
+        "latest_close": facts["latest_close"],
+        "sma_20": indicators["sma_20"],
+        "ema_20": indicators["ema_20"],
+        "rsi_14": indicators["rsi_14"],
+        "macd": indicators["macd"],
+        "macd_signal": indicators["macd_signal"],
+        "macd_histogram": indicators["macd_histogram"],
+        "atr_14": indicators["atr_14"],
+        "volume_average_20": indicators["volume_average_20"],
+        "relative_volume_20": indicators["relative_volume_20"],
+        "latest_swing_high": swing_levels["latest_swing_high"],
+        "latest_swing_low": swing_levels["latest_swing_low"],
+        "confirmation_level": setup["confirmation_level"],
+        "invalidation_level": setup["invalidation_level"],
+        "facts": facts,
+        "deterministic_signals": {
+            "indicators": indicators,
+            "swing_levels": swing_levels,
+            "setup_levels": setup,
+        },
+        "risks": [
+            {
+                "kind": "scope_limit",
+                "severity": "info",
+                "message": (
+                    "This output contains deterministic technical analysis only; missing "
+                    "enhanced context is reported as unavailable context, not as no risk."
+                ),
+            }
+        ],
+        "provenance": [
+            {
+                "provider": provider_name,
+                "source": "historical_candles",
+                "timeframe": interval,
+                "inputs": [symbol.ticker],
+                "observations": len(candles),
+            }
+        ],
+        "unavailable_context": [
+            {
+                "context_type": "fundamentals",
+                "reason": "not available in the default technical-analysis CLI path",
+                "provider": provider_name,
+            },
+            {
+                "context_type": "llm_narrative",
+                "reason": "--llm none selected; narrative explanations are disabled",
+                "provider": None,
+            },
+        ],
         "llm": "none",
+        "narrative": None,
     }
 
 

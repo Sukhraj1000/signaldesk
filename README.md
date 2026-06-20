@@ -138,6 +138,8 @@ make fix PYTHON=.venv/bin/python
 make format PYTHON=.venv/bin/python
 ```
 
+The CLI TA JSON output is versioned and category-aware; see [CLI JSON contract](docs/cli-json-contract.md) for the current `signaldesk.ta.v1` sections and fixture-backed golden test expectations.
+
 Core runtime smoke commands:
 
 ```bash

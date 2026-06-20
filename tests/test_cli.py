@@ -223,6 +223,119 @@ def test_ta_command_runs_provider_to_indicator_bridge(monkeypatch: MonkeyPatch) 
     assert '"rsi_14"' in result.stdout
 
 
+def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        cli_main, "default_provider_registry", lambda: ProviderRegistry((WorkingProvider(),))
+    )
+
+    result = CliRunner().invoke(
+        app, ["ta", "AMD", "--provider", "working", "--llm", "none", "--output", "json"]
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+
+    expected = {
+        "schema_version": "signaldesk.ta.v1",
+        "symbol": "AMD",
+        "provider": "working",
+        "interval": "1d",
+        "candles": 40,
+        "latest_timestamp": "2024-02-09T00:00:00+00:00",
+        "latest_close": "49",
+        "sma_20": "39.5",
+        "ema_20": "39.50000000000000000000000000",
+        "rsi_14": "100",
+        "macd": "7.00000000000000000000000000",
+        "macd_signal": "7.000000000000000000000000000",
+        "macd_histogram": "0E-27",
+        "atr_14": "2",
+        "volume_average_20": "1029.5",
+        "relative_volume_20": "1.010209042294603791929995139",
+        "latest_swing_high": None,
+        "latest_swing_low": None,
+        "confirmation_level": None,
+        "invalidation_level": None,
+        "facts": {
+            "symbol": "AMD",
+            "provider": "working",
+            "interval": "1d",
+            "candles": 40,
+            "latest_timestamp": "2024-02-09T00:00:00+00:00",
+            "latest_close": "49",
+        },
+        "deterministic_signals": {
+            "indicators": {
+                "sma_20": "39.5",
+                "ema_20": "39.50000000000000000000000000",
+                "rsi_14": "100",
+                "macd": "7.00000000000000000000000000",
+                "macd_signal": "7.000000000000000000000000000",
+                "macd_histogram": "0E-27",
+                "atr_14": "2",
+                "volume_average_20": "1029.5",
+                "relative_volume_20": "1.010209042294603791929995139",
+            },
+            "swing_levels": {"latest_swing_high": None, "latest_swing_low": None},
+            "setup_levels": {"confirmation_level": None, "invalidation_level": None},
+        },
+        "risks": [
+            {
+                "kind": "scope_limit",
+                "severity": "info",
+                "message": (
+                    "This output contains deterministic technical analysis only; missing "
+                    "enhanced context is reported as unavailable context, not as no risk."
+                ),
+            }
+        ],
+        "provenance": [
+            {
+                "provider": "working",
+                "source": "historical_candles",
+                "timeframe": "1d",
+                "inputs": ["AMD"],
+                "observations": 40,
+            }
+        ],
+        "unavailable_context": [
+            {
+                "context_type": "fundamentals",
+                "reason": "not available in the default technical-analysis CLI path",
+                "provider": "working",
+            },
+            {
+                "context_type": "llm_narrative",
+                "reason": "--llm none selected; narrative explanations are disabled",
+                "provider": None,
+            },
+        ],
+        "llm": "none",
+        "narrative": None,
+    }
+    assert payload == expected
+
+
+def test_ta_table_output_stays_flat_when_json_contract_sections_are_added(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        cli_main, "default_provider_registry", lambda: ProviderRegistry((WorkingProvider(),))
+    )
+
+    result = CliRunner().invoke(app, ["ta", "AMD", "--provider", "working", "--llm", "none"])
+
+    assert result.exit_code == 0
+    assert "schema_version\tsignaldesk.ta.v1" in result.stdout
+    assert "symbol\tAMD" in result.stdout
+    assert "latest_close\t49" in result.stdout
+    assert "facts\t" not in result.stdout
+    assert "deterministic_signals\t" not in result.stdout
+    assert "unavailable_context\t" not in result.stdout
+
+
 def test_ta_command_includes_traceable_confirmation_and_invalidation_levels(
     monkeypatch: MonkeyPatch,
 ) -> None:
