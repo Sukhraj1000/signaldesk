@@ -9,6 +9,7 @@ import pytest
 import signaldesk_backend.providers as providers_module
 from signaldesk_backend import (
     Candle,
+    FallbackProvider,
     FmpProvider,
     LocalCsvProvider,
     PolygonProvider,
@@ -21,6 +22,7 @@ from signaldesk_backend import (
     TwelveDataProvider,
     YFinanceProvider,
     default_provider_registry,
+    fallback_provider_call,
     normalize_provider_name,
     provider_rate_limit_failure,
     redact_provider_diagnostic,
@@ -148,6 +150,47 @@ class FakeFmpUrlopen:
 class ExplodingFmpUrlopen:
     def __call__(self, request: object, *, timeout: float) -> FakeFmpResponse:
         raise TimeoutError("secret transport detail")
+
+
+class RecordingProvider(FakeProvider):
+    def __init__(self, name: str, *, fail: bool) -> None:
+        super().__init__(name)
+        self.fail = fail
+        self.quote_calls = 0
+        self.candle_calls = 0
+
+    def get_historical_candles(
+        self,
+        symbol: Symbol,
+        *,
+        start: datetime,
+        end: datetime,
+        interval: str,
+    ) -> ProviderResult[tuple[Candle, ...]]:
+        self.candle_calls += 1
+        if self.fail:
+            return ProviderResult.failure(provider=self.name, error=f"{self.name} unavailable")
+        return super().get_historical_candles(symbol, start=start, end=end, interval=interval)
+
+    def get_quote(self, symbol: Symbol) -> ProviderResult[Quote]:
+        self.quote_calls += 1
+        if self.fail:
+            return ProviderResult.failure(provider=self.name, error=f"{self.name} rate limited")
+        return super().get_quote(symbol)
+
+
+class RaisingQuoteProvider(FakeProvider):
+    exception: Exception
+    quote_calls: int
+
+    def __init__(self, name: str, exception: Exception) -> None:
+        super().__init__(name)
+        object.__setattr__(self, "exception", exception)
+        object.__setattr__(self, "quote_calls", 0)
+
+    def get_quote(self, symbol: Symbol) -> ProviderResult[Quote]:
+        object.__setattr__(self, "quote_calls", self.quote_calls + 1)
+        raise self.exception
 
 
 class FakeHistory:
@@ -322,6 +365,95 @@ def test_provider_registry_reports_missing_provider_with_normalized_name() -> No
 
     with pytest.raises(KeyError, match="missing"):
         registry.get("Missing")
+
+
+def test_fallback_provider_call_returns_first_success_after_failures() -> None:
+    result = fallback_provider_call(
+        (
+            lambda: ProviderResult.failure(provider="primary", error="primary unavailable"),
+            lambda: ProviderResult.success(provider="backup", data="quote data"),
+        )
+    )
+
+    assert result == ProviderResult.success(provider="backup", data="quote data")
+
+
+def test_fallback_provider_does_not_call_later_providers_after_success() -> None:
+    first = RecordingProvider("primary", fail=False)
+    second = RecordingProvider("backup", fail=False)
+    provider = FallbackProvider((first, second))
+
+    result = provider.get_quote(Symbol("amd"))
+
+    assert result.ok is True
+    assert result.provider == "primary"
+    assert first.quote_calls == 1
+    assert second.quote_calls == 0
+
+
+def test_fallback_provider_continues_after_raised_exception() -> None:
+    first = RaisingQuoteProvider("primary", TimeoutError("primary token=secret-token timed out"))
+    second = RecordingProvider("backup", fail=False)
+    provider = FallbackProvider((first, second))
+
+    result = provider.get_quote(Symbol("amd"))
+
+    assert result.ok is True
+    assert result.provider == "backup"
+    assert first.quote_calls == 1
+    assert second.quote_calls == 1
+
+
+def test_fallback_provider_reports_raised_exceptions_with_redacted_provenance() -> None:
+    first = RaisingQuoteProvider(
+        "primary", RuntimeError("GET https://example.test/quote?apikey=secret-key failed")
+    )
+    provider = FallbackProvider((first,), name="equity-fallback")
+
+    result = provider.get_quote(Symbol("amd"))
+
+    assert result.ok is False
+    assert result.provider == "equity-fallback"
+    assert result.error is not None
+    assert "secret-key" not in result.error
+    assert result.warnings == (
+        "primary: RuntimeError: GET https://example.test/quote?apikey=<redacted> failed",
+    )
+
+
+def test_fallback_provider_reports_all_failures_with_provenance() -> None:
+    first = RecordingProvider("primary", fail=True)
+    second = RecordingProvider("backup", fail=True)
+    provider = FallbackProvider((first, second), name="equity-fallback")
+
+    result = provider.get_quote(Symbol("amd"))
+
+    assert result == ProviderResult.failure(
+        provider="equity-fallback",
+        error="all providers failed: primary: primary rate limited; backup: backup rate limited",
+        warnings=("primary: primary rate limited", "backup: backup rate limited"),
+    )
+    assert first.quote_calls == 1
+    assert second.quote_calls == 1
+
+
+def test_fallback_provider_redacts_failure_provenance() -> None:
+    result: ProviderResult[str] = fallback_provider_call(
+        (
+            lambda: ProviderResult.failure(
+                provider="primary",
+                error="GET https://example.test/quote?apikey=secret-key token=secret-token",
+            ),
+        )
+    )
+
+    assert result.ok is False
+    assert result.error is not None
+    assert "secret-key" not in result.error
+    assert "secret-token" not in result.error
+    assert result.warnings == (
+        "primary: GET https://example.test/quote?apikey=<redacted> token=<redacted>",
+    )
 
 
 def test_fake_provider_satisfies_interface_result_shapes() -> None:

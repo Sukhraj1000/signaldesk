@@ -14,6 +14,7 @@ from signaldesk_backend.models import (
     TechnicalSnapshot,
 )
 from signaldesk_backend.providers import (
+    FallbackProvider,
     FmpProvider,
     LocalCsvProvider,
     LocalFixtureProvider,
@@ -25,6 +26,7 @@ from signaldesk_backend.providers import (
     TwelveDataProvider,
     YFinanceProvider,
     default_provider_registry,
+    fallback_provider_call,
     normalize_provider_name,
     provider_rate_limit_failure,
     redact_provider_diagnostic,
@@ -32,6 +34,7 @@ from signaldesk_backend.providers import (
 
 __all__ = [
     "Candle",
+    "FallbackProvider",
     "FmpProvider",
     "KeyLevels",
     "LocalCsvProvider",
@@ -53,6 +56,7 @@ __all__ = [
     "TwelveDataProvider",
     "YFinanceProvider",
     "default_provider_registry",
+    "fallback_provider_call",
     "normalize_provider_name",
     "provider_rate_limit_failure",
     "redact_provider_diagnostic",
