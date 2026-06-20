@@ -15,6 +15,7 @@ from signaldesk_backend import (
     Symbol,
     TechnicalEvent,
     TechnicalSnapshot,
+    UnavailableContext,
 )
 
 NOW = datetime(2026, 1, 15, 14, 30, tzinfo=UTC)
@@ -194,8 +195,40 @@ def test_analysis_models_construct_and_normalize_values() -> None:
     assert snapshot.indicators == {"rsi": Decimal("62.5")}
 
 
+def test_unavailable_context_normalizes_without_asserting_absence() -> None:
+    unavailable = UnavailableContext(
+        context_type=" Catalyst Data ",
+        reason="FMP_API_KEY is not configured",
+        provider=" fmp ",
+        details=" ",
+    )
+
+    assert unavailable.context_type == "catalyst_data"
+    assert unavailable.reason == "FMP_API_KEY is not configured"
+    assert unavailable.provider == "fmp"
+    assert unavailable.details is None
+
+
+def test_signal_card_defaults_to_no_unavailable_context() -> None:
+    card = SignalCard(
+        symbol=Symbol("AMD"),
+        generated_at=NOW,
+        timeframe="1d",
+        bias="neutral",
+        summary="Facts-only summary.",
+        confidence=Decimal("0.50"),
+    )
+
+    assert card.unavailable_context == ()
+
+
 def test_signal_card_references_analysis_facts_without_credentials() -> None:
     provenance, levels, event, snapshot = _analysis_fixture()
+    unavailable = UnavailableContext(
+        context_type="catalyst data",
+        reason="FMP_API_KEY is not configured",
+        provider="fmp",
+    )
 
     card = SignalCard(
         symbol=Symbol("AMD"),
@@ -208,6 +241,7 @@ def test_signal_card_references_analysis_facts_without_credentials() -> None:
         key_levels=levels,
         events=(event,),
         provenance=(provenance,),
+        unavailable_context=(unavailable,),
         tags=(" Breakout ", "Momentum"),
     )
 
@@ -216,11 +250,17 @@ def test_signal_card_references_analysis_facts_without_credentials() -> None:
     assert card.key_levels == levels
     assert card.events == (event,)
     assert card.provenance == (provenance,)
+    assert card.unavailable_context == (unavailable,)
     assert card.tags == ("breakout", "momentum")
 
 
 def test_analysis_models_serialize_with_dataclass_payloads() -> None:
     provenance, levels, event, snapshot = _analysis_fixture()
+    unavailable = UnavailableContext(
+        context_type="fundamentals",
+        reason="enhanced provider not configured",
+        provider="fmp",
+    )
     card = SignalCard(
         symbol=Symbol("AMD"),
         generated_at=NOW,
@@ -232,6 +272,7 @@ def test_analysis_models_serialize_with_dataclass_payloads() -> None:
         key_levels=levels,
         events=(event,),
         provenance=(provenance,),
+        unavailable_context=(unavailable,),
     )
 
     provenance_payload = asdict(provenance)
@@ -242,6 +283,8 @@ def test_analysis_models_serialize_with_dataclass_payloads() -> None:
     assert card_payload["symbol"]["ticker"] == "AMD"
     assert card_payload["snapshot"]["key_levels"]["confirmation"] == Decimal("111")
     assert card_payload["provenance"][0]["source"] == "unit-test-candles"
+    assert card_payload["unavailable_context"][0]["context_type"] == "fundamentals"
+    assert card_payload["unavailable_context"][0]["reason"] != "no fundamental risk"
 
 
 @pytest.mark.parametrize(
@@ -282,6 +325,14 @@ def test_analysis_models_serialize_with_dataclass_payloads() -> None:
                 indicators={"RSI": Decimal("60"), " rsi ": Decimal("61")},
             ),
             "indicator names collide",
+        ),
+        (
+            lambda: UnavailableContext(context_type=" ", reason="not configured"),
+            "context_type",
+        ),
+        (
+            lambda: UnavailableContext(context_type="catalyst", reason=" "),
+            "reason",
         ),
         (
             lambda: SignalCard(

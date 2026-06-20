@@ -51,6 +51,19 @@ User-facing contracts should keep these categories distinct:
 
 Unavailable context is not a negative fact. For example, missing catalyst data means `catalyst context unavailable`, not `no catalyst risk`.
 
+### Unavailable-context contract
+
+When a provider, optional mode, or data category cannot supply context, SignalDesk should carry an explicit unavailable-context entry instead of dropping the field or converting it into a reassuring statement.
+
+Each unavailable-context entry should identify:
+
+- **context type:** the missing category, such as `catalyst`, `fundamentals`, `earnings`, `provider_status`, or `llm_explanation`.
+- **reason:** the deterministic reason SignalDesk knows, such as `provider not configured`, `optional dependency unavailable`, `unsupported interval`, `provider returned no data`, or `live check skipped`.
+- **provider, when relevant:** the adapter associated with the unavailable context, for example `fmp`, `yfinance`, or `openrouter`.
+- **details, when safe:** redacted operational detail that helps users understand the limitation without exposing secrets or paid payloads.
+
+Consumers must not infer `no risk`, `no catalyst`, `no earnings event`, or `no fundamental concern` from unavailable context. They may only say that SignalDesk could not evaluate that category with the configured providers.
+
 ## Non-goals
 
 SignalDesk must not imply or implement these capabilities unless a future issue explicitly changes the product contract:

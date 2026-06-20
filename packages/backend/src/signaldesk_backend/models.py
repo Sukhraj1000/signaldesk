@@ -185,6 +185,34 @@ class Provenance:
 
 
 @dataclass(frozen=True, kw_only=True)
+class UnavailableContext:
+    """Market context that was unavailable and must not be treated as a false negative."""
+
+    context_type: str
+    reason: str
+    provider: str | None = None
+    details: str | None = None
+
+    def __post_init__(self) -> None:
+        context_type = self.context_type.strip().lower().replace(" ", "_")
+        reason = self.reason.strip()
+        provider = self.provider.strip() if self.provider is not None else None
+        details = self.details.strip() if self.details is not None else None
+        if not context_type:
+            raise ValueError("context_type is required")
+        if not reason:
+            raise ValueError("reason is required")
+        if provider == "":
+            provider = None
+        if details == "":
+            details = None
+        object.__setattr__(self, "context_type", context_type)
+        object.__setattr__(self, "reason", reason)
+        object.__setattr__(self, "provider", provider)
+        object.__setattr__(self, "details", details)
+
+
+@dataclass(frozen=True, kw_only=True)
 class KeyLevels:
     """Support, resistance, and trade-planning levels derived from analysis."""
 
@@ -308,6 +336,7 @@ class SignalCard:
     key_levels: KeyLevels | None = None
     events: tuple[TechnicalEvent, ...] = ()
     provenance: tuple[Provenance, ...] = ()
+    unavailable_context: tuple[UnavailableContext, ...] = ()
     tags: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
@@ -330,5 +359,6 @@ class SignalCard:
         object.__setattr__(self, "summary", summary)
         object.__setattr__(self, "events", tuple(self.events))
         object.__setattr__(self, "provenance", tuple(self.provenance))
+        object.__setattr__(self, "unavailable_context", tuple(self.unavailable_context))
         normalized_tags = tuple(tag.strip().lower() for tag in self.tags if tag.strip())
         object.__setattr__(self, "tags", normalized_tags)
