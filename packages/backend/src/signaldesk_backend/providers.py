@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, time
 from decimal import Decimal, InvalidOperation
 from importlib import import_module
+from pathlib import Path
 from typing import Any, Protocol, cast
 from urllib.error import URLError
 from urllib.parse import urlencode
@@ -152,6 +153,146 @@ class LocalFixtureProvider:
             provider=self.name,
             data="ready (no external credentials required)",
         )
+
+
+@dataclass(frozen=True)
+class LocalCsvProvider:
+    """Local deterministic CSV-backed historical candle provider.
+
+    Required CSV columns are: ``Date``, ``Open``, ``High``, ``Low``, ``Close``, and
+    ``Volume``. Dates use ``YYYY-MM-DD`` and filtering is inclusive against the UTC
+    candle timestamp derived from each date.
+    """
+
+    csv_path: str | Path
+    name: str = "local-csv"
+
+    def capabilities(self) -> tuple[ProviderCapability, ...]:
+        """Return local historical candle capabilities without reading the file."""
+
+        return (
+            ProviderCapability(
+                provider=self.name,
+                supports_realtime=False,
+                supports_historical=True,
+                supported_asset_classes=frozenset({"equity", "etf", "crypto", "index"}),
+            ),
+        )
+
+    def get_historical_candles(
+        self,
+        symbol: Symbol,
+        *,
+        start: datetime,
+        end: datetime,
+        interval: str,
+    ) -> ProviderResult[tuple[Candle, ...]]:
+        """Load historical daily candles from a local CSV file and filter by date."""
+
+        if start > end:
+            return ProviderResult.failure(provider=self.name, error="start must be before end")
+        if not self._supports_interval(interval):
+            return ProviderResult.failure(
+                provider=self.name,
+                error="local csv supports only daily historical intervals",
+            )
+
+        path = Path(self.csv_path).expanduser()
+        try:
+            with path.open(newline="", encoding="utf-8-sig") as csv_file:
+                reader = csv.DictReader(csv_file)
+                return self._parse_rows(symbol, reader, start=start, end=end)
+        except FileNotFoundError:
+            return ProviderResult.failure(provider=self.name, error="local csv file was not found")
+        except (OSError, UnicodeDecodeError, csv.Error):
+            return ProviderResult.failure(
+                provider=self.name, error="local csv historical data was invalid"
+            )
+
+    def get_quote(self, symbol: Symbol) -> ProviderResult[Quote]:
+        """Report that this adapter currently supports historical candles only."""
+
+        return ProviderResult.failure(
+            provider=self.name, error="local csv quote retrieval is not supported"
+        )
+
+    def health_check(self) -> ProviderResult[str]:
+        """Return a deterministic local file status without exposing path details."""
+
+        if not Path(self.csv_path).expanduser().is_file():
+            return ProviderResult.failure(provider=self.name, error="local csv file was not found")
+        return ProviderResult.success(
+            provider=self.name,
+            data="ready (local CSV file available; no external credentials required)",
+        )
+
+    def _parse_rows(
+        self,
+        symbol: Symbol,
+        reader: csv.DictReader[str],
+        *,
+        start: datetime,
+        end: datetime,
+    ) -> ProviderResult[tuple[Candle, ...]]:
+        required_columns = {"Date", "Open", "High", "Low", "Close", "Volume"}
+        if not reader.fieldnames or not required_columns.issubset(set(reader.fieldnames)):
+            return ProviderResult.failure(
+                provider=self.name, error="local csv missing required columns"
+            )
+
+        candles: list[Candle] = []
+        try:
+            for row in reader:
+                if not any(value and value.strip() for value in row.values()):
+                    continue
+                candle = self._row_to_candle(symbol, row)
+                if start <= candle.timestamp <= end:
+                    candles.append(candle)
+        except (TypeError, ValueError, InvalidOperation):
+            return ProviderResult.failure(
+                provider=self.name, error="local csv historical data was invalid"
+            )
+
+        if not candles:
+            return ProviderResult.failure(
+                provider=self.name, error=f"no historical data for {symbol.ticker} in local csv"
+            )
+        return ProviderResult.success(provider=self.name, data=tuple(candles))
+
+    def _row_to_candle(self, symbol: Symbol, row: dict[str, str]) -> Candle:
+        return Candle(
+            symbol=symbol,
+            timestamp=self._date_from_text(row.get("Date")),
+            open=self._decimal_from_text(row.get("Open")),
+            high=self._decimal_from_text(row.get("High")),
+            low=self._decimal_from_text(row.get("Low")),
+            close=self._decimal_from_text(row.get("Close")),
+            volume=self._volume_from_text(row.get("Volume")),
+        )
+
+    def _date_from_text(self, value: str | None) -> datetime:
+        if value is None or not value.strip():
+            raise ValueError("date is required")
+        return datetime.strptime(value.strip(), "%Y-%m-%d").replace(tzinfo=UTC)
+
+    def _decimal_from_text(self, value: str | None) -> Decimal:
+        if value is None or not value.strip():
+            raise ValueError("price is required")
+        decimal_value = Decimal(value.strip())
+        if not decimal_value.is_finite() or decimal_value <= Decimal("0"):
+            raise ValueError("price must be positive")
+        return decimal_value
+
+    def _volume_from_text(self, value: str | None) -> int:
+        if value is None or not value.strip():
+            raise ValueError("volume is required")
+        volume = Decimal(value.strip())
+        if not volume.is_finite() or volume < Decimal("0") or volume != volume.to_integral_value():
+            raise ValueError("volume must be a non-negative integer")
+        return int(volume)
+
+    def _supports_interval(self, interval: str) -> bool:
+        return interval.strip().lower() in {"d", "1d", "day", "daily"}
 
 
 @dataclass(frozen=True)

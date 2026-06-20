@@ -1,12 +1,14 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
+from pathlib import Path
 from typing import Any, cast
 
 import pytest
 import signaldesk_backend.providers as providers_module
 from signaldesk_backend import (
     Candle,
+    LocalCsvProvider,
     ProviderCapability,
     ProviderRegistry,
     ProviderResult,
@@ -238,6 +240,96 @@ def test_default_provider_registry_includes_safe_local_fixture_provider() -> Non
     assert health == ProviderResult.success(
         provider="local-fixture",
         data="ready (no external credentials required)",
+    )
+
+
+def test_local_csv_provider_loads_schema_and_filters_daily_candles(tmp_path: Path) -> None:
+    csv_path = tmp_path / "candles.csv"
+    csv_path.write_text(
+        "Date,Open,High,Low,Close,Volume\n"
+        "2026-01-13,99.00,101.00,98.00,100.00,1000\n"
+        "2026-01-14,100.00,102.50,99.75,101.25,123456\n"
+        "2026-01-15,101.25,103.00,100.50,102.75,2000\n",
+        encoding="utf-8",
+    )
+    provider = LocalCsvProvider(csv_path)
+    symbol = Symbol("amd")
+
+    result = provider.get_historical_candles(
+        symbol,
+        start=datetime(2026, 1, 14, tzinfo=UTC),
+        end=datetime(2026, 1, 14, 23, 59, tzinfo=UTC),
+        interval="daily",
+    )
+
+    assert result.ok is True
+    assert result.data == (
+        Candle(
+            symbol=symbol,
+            timestamp=datetime(2026, 1, 14, tzinfo=UTC),
+            open=Decimal("100.00"),
+            high=Decimal("102.50"),
+            low=Decimal("99.75"),
+            close=Decimal("101.25"),
+            volume=123456,
+        ),
+    )
+    assert provider.capabilities()[0].supports_historical is True
+    assert provider.health_check() == ProviderResult.success(
+        provider="local-csv",
+        data="ready (local CSV file available; no external credentials required)",
+    )
+
+
+def test_local_csv_provider_reports_safe_failures(tmp_path: Path) -> None:
+    missing_columns = tmp_path / "missing-columns.csv"
+    invalid_row = tmp_path / "invalid-row.csv"
+    empty_after_filter = tmp_path / "outside-window.csv"
+    missing_columns.write_text("Date,Open,Close\n2026-01-14,100,101\n", encoding="utf-8")
+    invalid_row.write_text(
+        "Date,Open,High,Low,Close,Volume\n2026-01-14,100,not-a-price,99,101,10\n",
+        encoding="utf-8",
+    )
+    empty_after_filter.write_text(
+        "Date,Open,High,Low,Close,Volume\n2026-01-10,100,101,99,100,10\n",
+        encoding="utf-8",
+    )
+    symbol = Symbol("missing")
+
+    missing_path_result = LocalCsvProvider(tmp_path / "does-not-exist.csv").get_historical_candles(
+        symbol, start=NOW, end=NOW, interval="1d"
+    )
+    missing_columns_result = LocalCsvProvider(missing_columns).get_historical_candles(
+        symbol, start=NOW, end=NOW, interval="1d"
+    )
+    invalid_row_result = LocalCsvProvider(invalid_row).get_historical_candles(
+        symbol, start=NOW, end=NOW, interval="1d"
+    )
+    empty_after_filter_result = LocalCsvProvider(empty_after_filter).get_historical_candles(
+        symbol, start=NOW, end=NOW, interval="1d"
+    )
+    unsupported_interval_result = LocalCsvProvider(empty_after_filter).get_historical_candles(
+        symbol, start=NOW, end=NOW, interval="5m"
+    )
+    quote_result = LocalCsvProvider(empty_after_filter).get_quote(symbol)
+
+    assert missing_path_result == ProviderResult.failure(
+        provider="local-csv", error="local csv file was not found"
+    )
+    assert missing_columns_result == ProviderResult.failure(
+        provider="local-csv", error="local csv missing required columns"
+    )
+    assert invalid_row_result == ProviderResult.failure(
+        provider="local-csv", error="local csv historical data was invalid"
+    )
+    assert empty_after_filter_result == ProviderResult.failure(
+        provider="local-csv", error="no historical data for MISSING in local csv"
+    )
+    assert unsupported_interval_result == ProviderResult.failure(
+        provider="local-csv", error="local csv supports only daily historical intervals"
+    )
+    assert quote_result == ProviderResult.failure(
+        provider="local-csv", error="local csv quote retrieval is not supported"
     )
 
 
