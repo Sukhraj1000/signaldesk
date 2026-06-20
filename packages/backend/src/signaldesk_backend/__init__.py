@@ -7,7 +7,9 @@ from signaldesk_backend.indicators import (
     exponential_moving_average,
     macd,
     relative_strength_index,
+    relative_volume,
     simple_moving_average,
+    volume_moving_average,
 )
 from signaldesk_backend.models import (
     Candle,
@@ -73,5 +75,7 @@ __all__ = [
     "provider_rate_limit_failure",
     "redact_provider_diagnostic",
     "relative_strength_index",
+    "relative_volume",
     "simple_moving_average",
+    "volume_moving_average",
 ]

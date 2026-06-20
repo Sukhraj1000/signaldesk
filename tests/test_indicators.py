@@ -10,7 +10,9 @@ from signaldesk_backend import (
     exponential_moving_average,
     macd,
     relative_strength_index,
+    relative_volume,
     simple_moving_average,
+    volume_moving_average,
 )
 
 Indicator = Callable[[tuple[Decimal, ...]], tuple[Decimal | None, ...]]
@@ -36,6 +38,18 @@ def make_ohlc_candle(
         low=low,
         close=close,
         volume=1000 + index,
+    )
+
+
+def make_volume_candle(index: int, volume: int) -> Candle:
+    return Candle(
+        symbol=SYMBOL,
+        timestamp=START + timedelta(days=index),
+        open=Decimal("10"),
+        high=Decimal("10"),
+        low=Decimal("10"),
+        close=Decimal("10"),
+        volume=volume,
     )
 
 
@@ -251,6 +265,51 @@ def test_average_true_range_uses_sma_seed_then_wilder_smoothing() -> None:
     )
 
 
+def test_volume_moving_average_returns_aligned_rolling_means() -> None:
+    candles = tuple(
+        make_volume_candle(index, volume)
+        for index, volume in enumerate((100, 200, 300, 600))
+    )
+
+    assert volume_moving_average(candles, period=3) == (
+        None,
+        None,
+        Decimal("200"),
+        Decimal("366.6666666666666666666666667"),
+    )
+
+
+def test_relative_volume_compares_volume_to_prior_trailing_average() -> None:
+    candles = tuple(
+        make_volume_candle(index, volume)
+        for index, volume in enumerate((100, 200, 300, 600))
+    )
+
+    assert relative_volume(candles, period=3) == (
+        None,
+        None,
+        None,
+        Decimal("3"),
+    )
+
+
+def test_volume_indicators_return_warmup_values_for_insufficient_input() -> None:
+    candles = tuple(
+        make_volume_candle(index, volume) for index, volume in enumerate((100, 200))
+    )
+
+    assert volume_moving_average(candles, period=3) == (None, None)
+    assert relative_volume(candles, period=3) == (None, None)
+
+
+def test_relative_volume_returns_none_for_zero_trailing_average() -> None:
+    candles = tuple(
+        make_volume_candle(index, volume) for index, volume in enumerate((0, 0, 0, 100))
+    )
+
+    assert relative_volume(candles, period=3) == (None, None, None, None)
+
+
 @pytest.mark.parametrize(
     "indicator",
     [
@@ -260,6 +319,20 @@ def test_average_true_range_uses_sma_seed_then_wilder_smoothing() -> None:
         lambda values: macd(values, fast_period=0),
         lambda values: macd(values, slow_period=0),
         lambda values: macd(values, signal_period=0),
+        lambda values: volume_moving_average(
+            tuple(
+                make_volume_candle(index, int(value))
+                for index, value in enumerate(values)
+            ),
+            period=0,
+        ),
+        lambda values: relative_volume(
+            tuple(
+                make_volume_candle(index, int(value))
+                for index, value in enumerate(values)
+            ),
+            period=0,
+        ),
         lambda values: average_true_range(
             tuple(
                 make_candle(index, str(value)) for index, value in enumerate(values)
@@ -280,6 +353,20 @@ def test_moving_averages_reject_non_positive_periods(indicator: Indicator) -> No
         lambda values: exponential_moving_average(values, period=3),
         lambda values: relative_strength_index(values, period=3),
         lambda values: macd(values, fast_period=2, slow_period=3, signal_period=2).macd_line,
+        lambda values: volume_moving_average(
+            tuple(
+                make_volume_candle(index, int(value))
+                for index, value in enumerate(values)
+            ),
+            period=3,
+        ),
+        lambda values: relative_volume(
+            tuple(
+                make_volume_candle(index, int(value))
+                for index, value in enumerate(values)
+            ),
+            period=3,
+        ),
     ],
 )
 def test_moving_averages_preserve_input_length_for_empty_and_insufficient_inputs(
