@@ -13,11 +13,18 @@ from signaldesk_backend.models import (
     TechnicalEvent,
     TechnicalSnapshot,
 )
+from signaldesk_backend.providers import (
+    MarketDataProvider,
+    ProviderRegistry,
+    normalize_provider_name,
+)
 
 __all__ = [
     "Candle",
     "KeyLevels",
+    "MarketDataProvider",
     "ProviderCapability",
+    "ProviderRegistry",
     "ProviderResult",
     "Provenance",
     "Quote",
@@ -26,4 +33,5 @@ __all__ = [
     "Symbol",
     "TechnicalEvent",
     "TechnicalSnapshot",
+    "normalize_provider_name",
 ]
