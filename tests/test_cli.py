@@ -196,6 +196,20 @@ def test_ta_command_rejects_llm_modes_until_guardrails_exist() -> None:
     assert "Only --llm none is currently supported." in result.stderr
 
 
+def test_ta_command_reports_validation_errors(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        cli_main, "default_provider_registry", lambda: ProviderRegistry((WorkingProvider(),))
+    )
+
+    unknown_provider = CliRunner().invoke(app, ["ta", "AMD", "--provider", "missing"])
+    invalid_symbol = CliRunner().invoke(app, ["ta", "bad symbol", "--provider", "working"])
+
+    assert unknown_provider.exit_code == 2
+    assert "provider not registered: missing" in unknown_provider.stderr
+    assert invalid_symbol.exit_code == 2
+    assert "ticker must not contain whitespace" in invalid_symbol.stderr
+
+
 def test_provider_health_formatter_reports_failure_status() -> None:
     line = _format_provider_health(
         "broken",

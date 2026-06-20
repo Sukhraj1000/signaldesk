@@ -62,15 +62,16 @@ def technical_analysis(
 
     registry = default_provider_registry()
     try:
+        requested_symbol = Symbol(symbol)
         market_data_provider = registry.get(provider)
-    except KeyError as exc:
+    except (KeyError, ValueError) as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(2) from exc
 
     end = datetime.now(UTC)
     start = end - timedelta(days=days)
     result = market_data_provider.get_historical_candles(
-        Symbol(symbol), start=start, end=end, interval=interval
+        requested_symbol, start=start, end=end, interval=interval
     )
     if not result.ok or not result.data:
         diagnostic = redact_provider_diagnostic(result.error or "provider returned no candles")
@@ -78,7 +79,7 @@ def technical_analysis(
         raise typer.Exit(1)
 
     report = _technical_analysis_report(
-        symbol=Symbol(symbol),
+        symbol=requested_symbol,
         provider_name=market_data_provider.name,
         candles=result.data,
         interval=interval,
