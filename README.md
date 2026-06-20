@@ -124,7 +124,7 @@ Run the full local gate:
 make check PYTHON=.venv/bin/python
 ```
 
-This mirrors CI and runs lint, typecheck, tests, and installed CLI smoke checks.
+This mirrors CI and runs lint, typecheck, tests, Markdown docs link checks, and installed CLI smoke checks.
 
 Individual checks:
 
@@ -132,6 +132,7 @@ Individual checks:
 make lint PYTHON=.venv/bin/python
 make typecheck PYTHON=.venv/bin/python
 make test PYTHON=.venv/bin/python
+make docs PYTHON=.venv/bin/python
 make smoke PYTHON=.venv/bin/python
 make fix PYTHON=.venv/bin/python
 make format PYTHON=.venv/bin/python
