@@ -135,11 +135,12 @@ Important models:
 - `ProviderResult`
 - `ProviderCapability`
 - `Provenance`
+- `UnavailableContext`
 - `TechnicalSnapshot`
 - `KeyLevels` / future `LevelSet`
 - `TechnicalEvent`
 - future `RiskAssessment`
-- future `SignalCard`
+- `SignalCard`
 - future `ReportArtifact`
 
 ## Deterministic analysis core
@@ -167,6 +168,7 @@ A mature signal card should contain:
 - levels: support, resistance, confirmation, invalidation
 - events: recent deterministic technical events
 - risk: risk flags and missing context
+- unavailable context: typed entries for provider failures, missing credentials, unsupported fields, disabled optional modes, or unevaluated catalyst/fundamental context
 - score: setup quality, risk, and data quality
 - provenance: source adapters, fallback status, warnings
 - optional explanation: schema-validated LLM narrative from structured facts only

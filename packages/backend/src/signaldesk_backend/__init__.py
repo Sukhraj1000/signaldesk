@@ -34,6 +34,7 @@ from signaldesk_backend.models import (
     Symbol,
     TechnicalEvent,
     TechnicalSnapshot,
+    UnavailableContext,
 )
 from signaldesk_backend.providers import (
     FallbackProvider,
@@ -83,6 +84,7 @@ __all__ = [
     "TechnicalEvent",
     "TechnicalSnapshot",
     "TwelveDataProvider",
+    "UnavailableContext",
     "YFinanceProvider",
     "average_true_range",
     "calculate_fibonacci_retracement_levels",
