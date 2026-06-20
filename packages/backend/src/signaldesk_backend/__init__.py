@@ -3,6 +3,7 @@
 from signaldesk_backend.config import Settings
 from signaldesk_backend.indicators import (
     MacdResult,
+    average_true_range,
     exponential_moving_average,
     macd,
     relative_strength_index,
@@ -63,6 +64,7 @@ __all__ = [
     "TechnicalSnapshot",
     "TwelveDataProvider",
     "YFinanceProvider",
+    "average_true_range",
     "default_provider_registry",
     "exponential_moving_average",
     "fallback_provider_call",
