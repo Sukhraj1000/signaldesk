@@ -41,6 +41,9 @@ jobs:
       - name: Test
         run: tox -e py
 
+      - name: Markdown docs link check
+        run: tox -e docs
+
       - name: CLI smoke test
         run: tox -e smoke
 

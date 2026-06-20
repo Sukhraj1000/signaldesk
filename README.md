@@ -124,7 +124,7 @@ Run the full local gate:
 make check PYTHON=.venv/bin/python
 ```
 
-This mirrors CI and runs lint, typecheck, tests, Markdown docs link checks, and installed CLI smoke checks.
+This mirrors the `Python checks (3.12)` and `Python checks (3.13)` CI jobs and runs lint, typecheck, tests, Markdown docs link checks, and installed CLI smoke checks. See [Local check parity with CI](docs/local-check-parity.md) for the exact tox-to-CI mapping, required GitHub check names, and common setup blockers.
 
 Individual checks:
 
