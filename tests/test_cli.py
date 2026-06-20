@@ -9,7 +9,12 @@ from signaldesk_backend import (
     Quote,
     Symbol,
 )
-from signaldesk_cli.main import _format_provider_health, _run_provider_health_checks, app
+from signaldesk_cli.main import (
+    _format_provider_capabilities,
+    _format_provider_health,
+    _run_provider_health_checks,
+    app,
+)
 from typer.testing import CliRunner
 
 
@@ -49,6 +54,16 @@ def test_providers_check_is_available_from_help() -> None:
 
     assert result.exit_code == 0
     assert "check" in result.stdout
+    assert "list" in result.stdout
+
+
+def test_providers_list_reports_yfinance_capabilities() -> None:
+    result = CliRunner().invoke(app, ["providers", "list"])
+
+    assert result.exit_code == 0
+    assert "provider\trealtime\thistorical\tasset_classes" in result.stdout
+    assert "local-fixture\tfalse\tfalse\tfixture" in result.stdout
+    assert "yfinance\ttrue\ttrue\tcrypto,equity,etf,index" in result.stdout
 
 
 def test_providers_check_reports_default_local_provider_without_secrets() -> None:
@@ -68,6 +83,12 @@ def test_provider_health_formatter_reports_failure_status() -> None:
     )
 
     assert line == "broken\tfailed\tunavailable without configured adapter"
+
+
+def test_provider_capability_formatter_reports_registry_capabilities() -> None:
+    lines = _format_provider_capabilities(ProviderRegistry((ExplodingProvider(),)))
+
+    assert lines == ("provider\trealtime\thistorical\tasset_classes", "exploding\tfalse\tfalse\t")
 
 
 def test_provider_health_checks_convert_exceptions_to_sanitized_failures() -> None:
