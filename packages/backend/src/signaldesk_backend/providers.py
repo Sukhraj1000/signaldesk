@@ -29,7 +29,7 @@ _CREDENTIAL_QUERY_KEYS = frozenset(
 )
 _URL_PATTERN = re.compile(r"\b[a-zA-Z][a-zA-Z0-9+.-]*://[^\s]+")
 _CREDENTIAL_SUBSTRING_PATTERN = re.compile(
-    r"\b(apikey|api_key|access_token|token|secret|password)\b(\s*[:=]\s*|\s+)([^\s&;,]+)",
+    r"\b(apikey|api_key|x-api-key|access_token|token|secret|password)\b(\s*[:=]\s*|\s+)([^\s&;,]+)",
     re.IGNORECASE,
 )
 
@@ -54,8 +54,17 @@ def _redact_url_match(match: re.Match[str]) -> str:
         url = url[:-1]
 
     parts = urlsplit(url)
+    safe_netloc = parts.netloc
+    if "@" in safe_netloc:
+        host = safe_netloc.rsplit("@", 1)[1]
+        safe_netloc = f"<redacted>@{host}"
     if not parts.query:
-        return match.group(0)
+        if safe_netloc == parts.netloc:
+            return match.group(0)
+        return (
+            f"{urlunsplit((parts.scheme, safe_netloc, parts.path, '', parts.fragment))}"
+            f"{trailing}"
+        )
 
     query = [
         (key, "<redacted>" if key.lower() in _CREDENTIAL_QUERY_KEYS else value)
@@ -64,7 +73,7 @@ def _redact_url_match(match: re.Match[str]) -> str:
     redacted_url = urlunsplit(
         (
             parts.scheme,
-            parts.netloc,
+            safe_netloc,
             parts.path,
             urlencode(query, safe="<>", doseq=True),
             parts.fragment,
@@ -75,6 +84,28 @@ def _redact_url_match(match: re.Match[str]) -> str:
 
 def _redact_credential_substring(match: re.Match[str]) -> str:
     return f"{match.group(1)}{match.group(2)}<redacted>"
+
+
+def provider_rate_limit_failure(
+    provider: str, diagnostic: object | None = None
+) -> ProviderResult[Any]:
+    """Return a stable, credential-safe failure for provider rate limits.
+
+    Adapters can pass provider-specific HTTP errors or throttling diagnostics to
+    preserve useful context. Credential-like values are redacted before the text
+    is exposed through ``ProviderResult.error``.
+    """
+
+    error = f"{provider} request was rate limited"
+    if diagnostic is not None:
+        safe_diagnostic = redact_provider_diagnostic(diagnostic).strip()
+        if safe_diagnostic:
+            error = f"{error}: {safe_diagnostic}"
+    return ProviderResult.failure(provider=provider, error=error)
+
+
+def _http_error_rate_limit_diagnostic(exc: HTTPError) -> str:
+    return f"{exc} {exc.url}"
 
 
 def normalize_provider_name(name: str) -> str:
@@ -620,6 +651,12 @@ class StooqProvider:
         try:
             with opener(request, timeout=self.timeout_seconds) as response:
                 body = response.read()
+        except HTTPError as exc:
+            if exc.code == 429:
+                return provider_rate_limit_failure(
+                    self.name, _http_error_rate_limit_diagnostic(exc)
+                )
+            return ProviderResult.failure(provider=self.name, error="stooq historical fetch failed")
         except (OSError, URLError, TimeoutError):
             return ProviderResult.failure(provider=self.name, error="stooq historical fetch failed")
 
@@ -860,16 +897,14 @@ class FmpProvider:
             with opener(request, timeout=self.timeout_seconds) as response:
                 status = int(getattr(response, "status", 200))
                 if status == 429:
-                    return ProviderResult.failure(
-                        provider=self.name, error="fmp request was rate limited"
-                    )
+                    return provider_rate_limit_failure(self.name)
                 if status >= 400:
                     return ProviderResult.failure(provider=self.name, error="fmp request failed")
                 body = response.read()
         except HTTPError as exc:
             if exc.code == 429:
-                return ProviderResult.failure(
-                    provider=self.name, error="fmp request was rate limited"
+                return provider_rate_limit_failure(
+                    self.name, _http_error_rate_limit_diagnostic(exc)
                 )
             return ProviderResult.failure(provider=self.name, error="fmp request failed")
         except (OSError, URLError, TimeoutError):

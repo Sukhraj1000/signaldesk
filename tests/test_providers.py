@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, cast
+from urllib.error import HTTPError
 
 import pytest
 import signaldesk_backend.providers as providers_module
@@ -21,6 +22,7 @@ from signaldesk_backend import (
     YFinanceProvider,
     default_provider_registry,
     normalize_provider_name,
+    provider_rate_limit_failure,
     redact_provider_diagnostic,
 )
 
@@ -102,6 +104,17 @@ class FakeStooqUrlopen:
 class ExplodingStooqUrlopen:
     def __call__(self, request: object, *, timeout: float) -> FakeStooqResponse:
         raise TimeoutError("network timeout detail")
+
+
+class RateLimitedStooqUrlopen:
+    def __call__(self, request: object, *, timeout: float) -> FakeStooqResponse:
+        raise HTTPError(
+            url=cast(Any, request).full_url,
+            code=429,
+            msg="Too Many Requests token=secret-token",
+            hdrs=cast(Any, None),
+            fp=None,
+        )
 
 
 class FakeFmpResponse:
@@ -247,6 +260,35 @@ def test_redact_provider_diagnostic_redacts_inline_token_substrings() -> None:
     assert "token=<redacted>" in redacted
     assert "api_key: <redacted>" in redacted
     assert "password <redacted>" in redacted
+
+
+def test_redact_provider_diagnostic_redacts_common_http_credential_forms() -> None:
+    diagnostic = (
+        "GET https://user:pass@example.test/path?symbol=AMD failed "
+        "with X-API-Key: header-secret"
+    )
+
+    redacted = redact_provider_diagnostic(diagnostic)
+
+    assert "user:pass" not in redacted
+    assert "header-secret" not in redacted
+    assert "https://<redacted>@example.test/path?symbol=AMD" in redacted
+    assert "X-API-Key: <redacted>" in redacted
+
+
+def test_provider_rate_limit_failure_uses_stable_redacted_diagnostic() -> None:
+    result = provider_rate_limit_failure(
+        "fmp",
+        "GET https://example.test/quote?apikey=abc123&symbol=AMD token=secret-token",
+    )
+
+    assert result.ok is False
+    assert result.error is not None
+    assert result.error.startswith("fmp request was rate limited")
+    assert "abc123" not in result.error
+    assert "secret-token" not in result.error
+    assert "apikey=<redacted>" in result.error
+    assert "token=<redacted>" in result.error
 
 
 def test_provider_registry_registers_lists_and_retrieves_by_normalized_name() -> None:
@@ -459,6 +501,30 @@ def test_fmp_provider_returns_safe_failures_for_errors() -> None:
     assert "secret transport" not in (result.error or "")
 
 
+def test_fmp_provider_redacts_rate_limited_http_error_diagnostic() -> None:
+    class RateLimitedFmpUrlopen:
+        def __call__(self, request: object, *, timeout: float) -> FakeFmpResponse:
+            raise HTTPError(
+                url=cast(Any, request).full_url,
+                code=429,
+                msg="Too Many Requests token=secret-token",
+                hdrs=cast(Any, None),
+                fp=None,
+            )
+
+    provider = FmpProvider(api_key="test-key", _urlopen=RateLimitedFmpUrlopen())
+
+    result = provider.get_quote(Symbol("amd"))
+
+    assert result.ok is False
+    assert result.error is not None
+    assert result.error.startswith("fmp request was rate limited")
+    assert "test-key" not in result.error
+    assert "secret-token" not in result.error
+    assert "apikey=<redacted>" in result.error
+    assert "token=<redacted>" in result.error
+
+
 def test_local_csv_provider_loads_schema_and_filters_daily_candles(tmp_path: Path) -> None:
     csv_path = tmp_path / "candles.csv"
     csv_path.write_text(
@@ -620,6 +686,18 @@ def test_stooq_provider_handles_unavailable_and_malformed_responses() -> None:
         provider="stooq", error="stooq historical fetch failed"
     )
     assert "network timeout" not in (exploding_result.error or "")
+
+
+def test_stooq_provider_classifies_rate_limited_http_errors() -> None:
+    provider = StooqProvider(_urlopen=RateLimitedStooqUrlopen())
+
+    result = provider.get_historical_candles(Symbol("amd"), start=NOW, end=NOW, interval="1d")
+
+    assert result.ok is False
+    assert result.error is not None
+    assert result.error.startswith("stooq request was rate limited")
+    assert "secret-token" not in result.error
+    assert "token=<redacted>" in result.error
 
 
 def test_stooq_provider_rejects_unsupported_intervals_before_network() -> None:

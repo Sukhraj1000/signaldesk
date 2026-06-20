@@ -26,6 +26,7 @@ from signaldesk_backend.providers import (
     YFinanceProvider,
     default_provider_registry,
     normalize_provider_name,
+    provider_rate_limit_failure,
     redact_provider_diagnostic,
 )
 
@@ -53,5 +54,6 @@ __all__ = [
     "YFinanceProvider",
     "default_provider_registry",
     "normalize_provider_name",
+    "provider_rate_limit_failure",
     "redact_provider_diagnostic",
 ]
