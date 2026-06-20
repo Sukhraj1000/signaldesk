@@ -11,6 +11,17 @@ PriceInput = Candle | Decimal | int | float | str
 CandleInput = Candle
 
 
+class FibonacciRetracementLevel(NamedTuple):
+    """A deterministic retracement level for a validated swing range."""
+
+    ratio: Decimal
+    percent: Decimal
+    price: Decimal
+    direction: Literal["up", "down"]
+    swing_start: Decimal
+    swing_end: Decimal
+
+
 class MacdResult(NamedTuple):
     """Input-aligned MACD indicator series."""
 
@@ -47,6 +58,51 @@ class SupportResistanceZones(NamedTuple):
 
     support: tuple[LevelZone, ...]
     resistance: tuple[LevelZone, ...]
+
+
+FIBONACCI_RETRACEMENT_RATIOS: tuple[Decimal, ...] = (
+    Decimal("0.236"),
+    Decimal("0.382"),
+    Decimal("0.5"),
+    Decimal("0.618"),
+    Decimal("0.786"),
+)
+
+
+def calculate_fibonacci_retracement_levels(
+    swing_start: PriceInput,
+    swing_end: PriceInput,
+) -> tuple[FibonacciRetracementLevel, ...]:
+    """Return common Fibonacci retracement levels for a swing range.
+
+    ``swing_start`` and ``swing_end`` are ordered swing endpoints. An upward
+    move starts at the swing low and ends at the swing high, so retracement
+    levels are below the high. A downward move starts at the swing high and ends
+    at the swing low, so retracement levels are above the low.
+    """
+
+    start = _coerce_price(swing_start)
+    end = _coerce_price(swing_end)
+    if start == end:
+        raise ValueError("swing range must not be zero-width")
+
+    direction: Literal["up", "down"] = "up" if start < end else "down"
+    swing_range = abs(end - start)
+    levels: list[FibonacciRetracementLevel] = []
+    for ratio in FIBONACCI_RETRACEMENT_RATIOS:
+        retracement_distance = swing_range * ratio
+        price = end - retracement_distance if direction == "up" else end + retracement_distance
+        levels.append(
+            FibonacciRetracementLevel(
+                ratio=ratio,
+                percent=ratio * Decimal("100"),
+                price=price,
+                direction=direction,
+                swing_start=start,
+                swing_end=end,
+            )
+        )
+    return tuple(levels)
 
 
 def simple_moving_average(
