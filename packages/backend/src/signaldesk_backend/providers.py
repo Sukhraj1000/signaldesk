@@ -1,11 +1,16 @@
 """Provider contracts, adapters, and registry for market-data providers."""
 
+import csv
+import io
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, time
 from decimal import Decimal, InvalidOperation
 from importlib import import_module
 from typing import Any, Protocol, cast
+from urllib.error import URLError
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
 from signaldesk_backend.models import Candle, ProviderCapability, ProviderResult, Quote, Symbol
 
@@ -367,7 +372,193 @@ class YFinanceProvider:
         return decimal_value
 
 
+@dataclass(frozen=True)
+class StooqProvider:
+    """No-key Stooq CSV-backed historical candle provider adapter."""
+
+    name: str = "stooq"
+    base_url: str = "https://stooq.com/q/d/l/"
+    timeout_seconds: float = 10.0
+    _urlopen: Any | None = field(default=None, repr=False, compare=False)
+
+    def capabilities(self) -> tuple[ProviderCapability, ...]:
+        """Return Stooq historical candle capabilities without performing network I/O."""
+
+        return (
+            ProviderCapability(
+                provider=self.name,
+                supports_realtime=False,
+                supports_historical=True,
+                supported_asset_classes=frozenset({"equity", "etf", "index"}),
+            ),
+        )
+
+    def get_historical_candles(
+        self,
+        symbol: Symbol,
+        *,
+        start: datetime,
+        end: datetime,
+        interval: str,
+    ) -> ProviderResult[tuple[Candle, ...]]:
+        """Fetch daily/weekly/monthly candles from Stooq CSV and normalize them."""
+
+        if start > end:
+            return ProviderResult.failure(provider=self.name, error="start must be before end")
+
+        stooq_interval = self._normalize_interval(interval)
+        if stooq_interval is None:
+            return ProviderResult.failure(
+                provider=self.name,
+                error="stooq supports only daily, weekly, and monthly historical intervals",
+            )
+
+        request = Request(self._historical_url(symbol, start, end, stooq_interval))
+        opener = self._urlopen or urlopen
+        try:
+            with opener(request, timeout=self.timeout_seconds) as response:
+                body = response.read()
+        except (OSError, URLError, TimeoutError):
+            return ProviderResult.failure(provider=self.name, error="stooq historical fetch failed")
+
+        try:
+            text = body.decode("utf-8-sig") if isinstance(body, bytes) else str(body)
+        except UnicodeDecodeError:
+            return ProviderResult.failure(
+                provider=self.name, error="stooq historical data was invalid"
+            )
+
+        return self._parse_csv(symbol, text)
+
+    def get_quote(self, symbol: Symbol) -> ProviderResult[Quote]:
+        """Report that this adapter currently supports historical candles only."""
+
+        return ProviderResult.failure(
+            provider=self.name, error="stooq quote retrieval is not supported"
+        )
+
+    def health_check(self) -> ProviderResult[str]:
+        """Return a deterministic no-secret status without calling Stooq."""
+
+        return ProviderResult.success(
+            provider=self.name,
+            data="ready (no external credentials required; network used only for candle fetches)",
+        )
+
+    def _historical_url(
+        self, symbol: Symbol, start: datetime, end: datetime, stooq_interval: str
+    ) -> str:
+        query = urlencode(
+            {
+                "s": self._stooq_symbol(symbol),
+                "d1": start.strftime("%Y%m%d"),
+                "d2": end.strftime("%Y%m%d"),
+                "i": stooq_interval,
+            }
+        )
+        return f"{self.base_url}?{query}"
+
+    def _stooq_symbol(self, symbol: Symbol) -> str:
+        ticker = symbol.ticker.lower().replace("/", "-")
+        if "." in ticker:
+            return ticker
+        if symbol.exchange is None or symbol.exchange in {"US", "NASDAQ", "NYSE", "AMEX"}:
+            return f"{ticker}.us"
+        return f"{ticker}.{symbol.exchange.lower()}"
+
+    def _normalize_interval(self, interval: str) -> str | None:
+        normalized = interval.strip().lower()
+        interval_map = {
+            "d": "d",
+            "1d": "d",
+            "day": "d",
+            "daily": "d",
+            "w": "w",
+            "1wk": "w",
+            "1w": "w",
+            "week": "w",
+            "weekly": "w",
+            "m": "m",
+            "1mo": "m",
+            "1m": "m",
+            "month": "m",
+            "monthly": "m",
+        }
+        return interval_map.get(normalized)
+
+    def _parse_csv(self, symbol: Symbol, text: str) -> ProviderResult[tuple[Candle, ...]]:
+        if not text.strip() or text.strip().lower() == "no data":
+            return ProviderResult.failure(
+                provider=self.name, error=f"no historical data for {symbol.ticker}"
+            )
+
+        reader = csv.DictReader(io.StringIO(text))
+        required_columns = {"Date", "Open", "High", "Low", "Close", "Volume"}
+        if not reader.fieldnames or not required_columns.issubset(set(reader.fieldnames)):
+            return ProviderResult.failure(
+                provider=self.name, error="stooq historical data was invalid"
+            )
+
+        candles: list[Candle] = []
+        try:
+            for row in reader:
+                candle = self._row_to_candle(symbol, row)
+                if candle is not None:
+                    candles.append(candle)
+        except (TypeError, ValueError, InvalidOperation):
+            return ProviderResult.failure(
+                provider=self.name, error="stooq historical data was invalid"
+            )
+
+        if not candles:
+            return ProviderResult.failure(
+                provider=self.name, error=f"no usable historical data for {symbol.ticker}"
+            )
+        return ProviderResult.success(provider=self.name, data=tuple(candles))
+
+    def _row_to_candle(self, symbol: Symbol, row: dict[str, str]) -> Candle | None:
+        if not any(value.strip() for value in row.values() if value is not None):
+            return None
+        open_price = self._decimal_from_text(row.get("Open"))
+        high = self._decimal_from_text(row.get("High"))
+        low = self._decimal_from_text(row.get("Low"))
+        close = self._decimal_from_text(row.get("Close"))
+        volume = self._volume_from_text(row.get("Volume"))
+        if open_price is None or high is None or low is None or close is None or volume is None:
+            return None
+        return Candle(
+            symbol=symbol,
+            timestamp=self._date_from_text(row.get("Date")),
+            open=open_price,
+            high=high,
+            low=low,
+            close=close,
+            volume=volume,
+        )
+
+    def _date_from_text(self, value: str | None) -> datetime:
+        if value is None:
+            raise ValueError("date is required")
+        return datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=UTC)
+
+    def _decimal_from_text(self, value: str | None) -> Decimal | None:
+        if value is None or not value.strip():
+            return None
+        decimal_value = Decimal(value.strip())
+        if not decimal_value.is_finite() or decimal_value <= Decimal("0"):
+            return None
+        return decimal_value
+
+    def _volume_from_text(self, value: str | None) -> int | None:
+        if value is None or not value.strip():
+            return 0
+        volume = Decimal(value.strip())
+        if not volume.is_finite() or volume < Decimal("0"):
+            return None
+        return int(volume)
+
+
 def default_provider_registry() -> ProviderRegistry:
     """Return the safe default provider registry for local CLI commands."""
 
-    return ProviderRegistry((LocalFixtureProvider(), YFinanceProvider()))
+    return ProviderRegistry((LocalFixtureProvider(), StooqProvider(), YFinanceProvider()))
