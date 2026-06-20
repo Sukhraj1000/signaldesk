@@ -1,21 +1,81 @@
 # SignalDesk
 
-SignalDesk is an open-source, TA-first market intelligence sandbox. It is intended to fetch market data, run deterministic technical analysis, and produce explainable signal cards. It is not a live trading bot.
+SignalDesk is an open-source, TA-first market intelligence workbench. It fetches market data, normalizes it into canonical domain models, runs deterministic technical analysis, and produces explainable signal cards and reports. It is not a live trading bot and it is not an LLM-first stock picker.
+
+The core product principle is:
+
+> Default mode must be useful with open data. Enhanced adapters add richer, more reliable context without becoming required for the core workflow.
+
+## What SignalDesk does
+
+SignalDesk answers practical market-analysis questions from a watchlist or ticker:
+
+- What is the current technical setup?
+- What levels matter?
+- What would confirm or invalidate the setup?
+- What risks or missing data should reduce confidence?
+- Which provider produced the data and how fresh is it?
+
+The deterministic backend calculates facts, indicators, levels, events, risk flags, and scores. LLMs, when enabled later, only explain structured facts and must never invent prices, levels, catalysts, or recommendations.
+
+## Provider modes
+
+### Default usable mode
+
+The default mode should work for open-source users with minimal setup.
+
+- Default price adapter: `yfinance`
+- Also useful locally: fixtures and CSV files
+- Purpose: historical candles, basic TA, watchlist scans, local demos, JSON/table/Markdown outputs
+- No paid credentials required
+
+Example:
+
+```bash
+signaldesk ta AMD --provider yfinance --llm none --output json
+```
+
+### Enhanced mode
+
+Enhanced adapters add richer and more polished data when users bring keys.
+
+- First enhanced adapter: FMP
+- Later: Polygon, Twelve Data, Alpha Vantage, selected news/fundamental providers
+- Purpose: richer company facts, earnings, fundamentals, catalysts, analyst context, more reliable paid data
+
+Enhanced context must remain separate from technical facts. Missing enhanced data is reported as unavailable, not silently ignored.
+
+## Architecture style
+
+SignalDesk follows a ports-and-adapters shape:
+
+```text
+providers -> canonical data -> deterministic analysis -> signal cards -> CLI/API/reports/dashboard
+```
+
+Rules:
+
+- Provider adapters fetch data but do not calculate trading logic.
+- The TA engine is pure domain code with no network, CLI, API, dashboard, or LLM dependency.
+- CLI/API/dashboard/reporting render the same canonical signal-card output.
+- LLMs consume structured facts only and are optional.
 
 ## Repository Layout
 
 ```text
 .
 ├── apps/
-│   └── web/                 # Future web app
+│   └── web/                 # Future web dashboard, fed by canonical API output
+├── docs/                    # Agent workflow, context packs, sandbox guidance
 ├── packages/
-│   ├── backend/             # Python backend/domain package
-│   └── cli/                 # Python CLI package
-├── tests/                   # Shared test suite
-├── architecture.md
-├── docker-compose.yml
-├── pyproject.toml
-└── roadmap.md
+│   ├── backend/             # Domain models, providers, TA, risk, signal-card assembly
+│   └── cli/                 # `signaldesk` command-line interface
+├── tests/                   # Unit, integration, and CLI smoke tests
+├── AGENTS.md                # AI-agent operating rules
+├── architecture.md          # System architecture and design principles
+├── docker-compose.yml       # Local services for later persistence/job milestones
+├── pyproject.toml           # Python package metadata and tool config
+└── roadmap.md               # Architecture-led delivery plan
 ```
 
 ## Local Setup
@@ -29,37 +89,65 @@ python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
 ```
 
-Run the checks:
+For the default live adapter:
 
 ```bash
-make check
+python -m pip install -e ".[dev,yfinance]"
+```
+
+## Checks
+
+Run the full local gate:
+
+```bash
+make check PYTHON=.venv/bin/python
+```
+
+This mirrors CI and runs lint, typecheck, tests, and installed CLI smoke checks.
+
+Individual checks:
+
+```bash
+make lint PYTHON=.venv/bin/python
+make typecheck PYTHON=.venv/bin/python
+make test PYTHON=.venv/bin/python
+make smoke PYTHON=.venv/bin/python
+make fix PYTHON=.venv/bin/python
+make format PYTHON=.venv/bin/python
+```
+
+Core runtime smoke commands:
+
+```bash
 signaldesk --help
 signaldesk health
 signaldesk providers list
 signaldesk providers check
 ```
 
-Individual checks are also available:
+Live default-mode TA check:
 
 ```bash
-make lint
-make typecheck
-make test
-make smoke
-make fix
-make format
-```
-
-Run a live no-LLM technical-analysis pass when an external provider is available:
-
-```bash
-python -m pip install -e ".[dev,yfinance]"
 signaldesk ta AMD --provider yfinance --llm none --output json
 ```
 
+## Quality gates
+
+Every PR should prove:
+
+- lint passes
+- typecheck passes
+- unit/integration tests pass
+- installed CLI smoke passes
+- risky paths are called out
+- provider/LLM/secrets behavior is safe
+- runtime bridges are tested, not only isolated functions
+
+Live network/provider checks are useful for dev confidence, but deterministic CI should not depend on external network or paid credentials unless explicitly designed.
+
 ## Local Services
 
-Postgres and Redis are included for later milestones:
+Postgres and Redis are included for later persistence/job milestones, not required for current CLI-first workflows.
 
 ```bash
 docker compose up -d
@@ -69,3 +157,12 @@ docker compose down
 ## Environment
 
 Copy `.env.example` to `.env` for local configuration. Keep `.env` out of git.
+
+```text
+APP_ENV=local
+LLM_PROVIDER=none
+FMP_API_KEY=
+POLYGON_API_KEY=
+```
+
+Secrets must never appear in logs, PRs, generated reports, fixtures, or committed data.
