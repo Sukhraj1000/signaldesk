@@ -117,6 +117,9 @@ def test_provider_capability_records_supported_features() -> None:
         supports_realtime=False,
         supports_historical=True,
         supported_asset_classes=frozenset({"equity", "etf"}),
+        supported_intervals=frozenset({"1D", " 1wk "}),
+        credential_state=" Not Required ",
+        live_check_suitable=True,
         max_history_days=3650,
         rate_limit_per_minute=None,
     )
@@ -124,6 +127,9 @@ def test_provider_capability_records_supported_features() -> None:
     assert capability.provider == "yfinance"
     assert capability.supports_historical is True
     assert "equity" in capability.supported_asset_classes
+    assert capability.supported_intervals == frozenset({"1d", "1wk"})
+    assert capability.credential_state == "not_required"
+    assert capability.live_check_suitable is True
 
 
 def test_provider_result_success_and_failure_shapes() -> None:

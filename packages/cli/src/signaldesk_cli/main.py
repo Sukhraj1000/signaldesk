@@ -263,23 +263,29 @@ def _format_provider_health(provider_name: str, result: ProviderResult[str]) -> 
 
 
 def _format_provider_capabilities(registry: ProviderRegistry) -> tuple[str, ...]:
-    lines = ["provider\trealtime\thistorical\tasset_classes"]
+    lines = [
+        "provider\trealtime\thistorical\tasset_classes\tintervals\tcredential_state\tlive_check"
+    ]
     for provider in registry.list():
         try:
             capabilities = provider.capabilities()
         except Exception:
-            lines.append(f"{provider.name}\tfalse\tfalse\t")
+            lines.append(f"{provider.name}\tfalse\tfalse\t\t\tunknown\tfalse")
             continue
         if not capabilities:
-            lines.append(f"{provider.name}\tfalse\tfalse\t")
+            lines.append(f"{provider.name}\tfalse\tfalse\t\t\tunknown\tfalse")
             continue
         for capability in capabilities:
             asset_classes = ",".join(sorted(capability.supported_asset_classes))
+            intervals = ",".join(sorted(capability.supported_intervals))
             lines.append(
                 f"{provider.name}\t"
                 f"{str(capability.supports_realtime).lower()}\t"
                 f"{str(capability.supports_historical).lower()}\t"
-                f"{asset_classes}"
+                f"{asset_classes}\t"
+                f"{intervals}\t"
+                f"{capability.credential_state}\t"
+                f"{str(capability.live_check_suitable).lower()}"
             )
     return tuple(lines)
 

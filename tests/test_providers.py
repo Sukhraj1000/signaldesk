@@ -515,6 +515,9 @@ def test_local_fixture_provider_returns_deterministic_daily_candles() -> None:
             supports_realtime=False,
             supports_historical=True,
             supported_asset_classes=frozenset({"equity", "fixture"}),
+            supported_intervals=frozenset({"1d"}),
+            credential_state="not_required",
+            live_check_suitable=True,
         ),
     )
     assert result.ok is True
@@ -592,6 +595,9 @@ def test_enhanced_provider_placeholders_are_offline_and_explicit(
             supports_realtime=True,
             supports_historical=True,
             supported_asset_classes=frozenset({"equity", "etf", "index"}),
+            supported_intervals=frozenset({"1d"}),
+            credential_state="placeholder",
+            live_check_suitable=False,
         ),
     )
     assert health == ProviderResult.success(
@@ -623,6 +629,9 @@ def test_fmp_provider_reports_capabilities_and_missing_key_safely(
     assert capabilities[0].provider == "fmp"
     assert capabilities[0].supports_realtime is True
     assert capabilities[0].supports_historical is True
+    assert capabilities[0].supported_intervals == frozenset({"1d"})
+    assert capabilities[0].credential_state == "required"
+    assert capabilities[0].live_check_suitable is False
     assert health == ProviderResult.success(
         provider="fmp", data="unavailable until FMP credentials are configured"
     )
@@ -758,7 +767,11 @@ def test_local_csv_provider_loads_schema_and_filters_daily_candles(tmp_path: Pat
             volume=123456,
         ),
     )
-    assert provider.capabilities()[0].supports_historical is True
+    capability = provider.capabilities()[0]
+    assert capability.supports_historical is True
+    assert capability.supported_intervals == frozenset({"1d"})
+    assert capability.credential_state == "not_required"
+    assert capability.live_check_suitable is True
     assert provider.health_check() == ProviderResult.success(
         provider="local-csv",
         data="ready (local CSV file available; no external credentials required)",
@@ -828,6 +841,9 @@ def test_stooq_provider_reports_historical_capabilities_without_network() -> Non
     assert capabilities[0].supports_realtime is False
     assert capabilities[0].supports_historical is True
     assert "equity" in capabilities[0].supported_asset_classes
+    assert capabilities[0].supported_intervals == frozenset({"1d", "1wk", "1mo"})
+    assert capabilities[0].credential_state == "not_required"
+    assert capabilities[0].live_check_suitable is False
     assert health == ProviderResult.success(
         provider="stooq",
         data="ready (no external credentials required; network used only for candle fetches)",
@@ -924,6 +940,9 @@ def test_yfinance_provider_reports_capabilities_without_importing_dependency() -
     assert capabilities[0].supports_realtime is True
     assert capabilities[0].supports_historical is True
     assert "equity" in capabilities[0].supported_asset_classes
+    assert {"1d", "1wk", "1mo"}.issubset(capabilities[0].supported_intervals)
+    assert capabilities[0].credential_state == "not_required"
+    assert capabilities[0].live_check_suitable is False
 
 
 def test_yfinance_provider_translates_history_and_quote_models() -> None:

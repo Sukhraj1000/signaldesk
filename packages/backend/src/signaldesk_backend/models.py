@@ -99,6 +99,9 @@ class ProviderCapability:
     supports_realtime: bool
     supports_historical: bool
     supported_asset_classes: frozenset[str] = field(default_factory=frozenset)
+    supported_intervals: frozenset[str] = field(default_factory=frozenset)
+    credential_state: str = "not_required"
+    live_check_suitable: bool = False
     max_history_days: int | None = None
     rate_limit_per_minute: int | None = None
 
@@ -113,6 +116,18 @@ class ProviderCapability:
             if asset_class.strip()
         )
         object.__setattr__(self, "supported_asset_classes", normalized_asset_classes)
+        normalized_intervals = frozenset(
+            interval.strip().lower()
+            for interval in self.supported_intervals
+            if interval.strip()
+        )
+        object.__setattr__(self, "supported_intervals", normalized_intervals)
+        credential_state = self.credential_state.strip().lower().replace(" ", "_")
+        if credential_state not in {"not_required", "optional", "required", "placeholder"}:
+            raise ValueError(
+                "credential_state must be not_required, optional, required, or placeholder"
+            )
+        object.__setattr__(self, "credential_state", credential_state)
         if self.max_history_days is not None and self.max_history_days <= 0:
             raise ValueError("max_history_days must be positive")
         if self.rate_limit_per_minute is not None and self.rate_limit_per_minute <= 0:

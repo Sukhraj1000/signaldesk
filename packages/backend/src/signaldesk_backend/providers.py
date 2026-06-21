@@ -344,6 +344,9 @@ class LocalFixtureProvider:
                 supports_realtime=False,
                 supports_historical=True,
                 supported_asset_classes=frozenset({"equity", "fixture"}),
+                supported_intervals=frozenset({"1d"}),
+                credential_state="not_required",
+                live_check_suitable=True,
             ),
         )
 
@@ -429,6 +432,9 @@ class LocalCsvProvider:
                 supports_realtime=False,
                 supports_historical=True,
                 supported_asset_classes=frozenset({"equity", "etf", "crypto", "index"}),
+                supported_intervals=frozenset({"1d"}),
+                credential_state="not_required",
+                live_check_suitable=True,
             ),
         )
 
@@ -564,6 +570,25 @@ class YFinanceProvider:
                 supports_realtime=True,
                 supports_historical=True,
                 supported_asset_classes=frozenset({"equity", "etf", "crypto", "index"}),
+                supported_intervals=frozenset(
+                    {
+                        "1m",
+                        "2m",
+                        "5m",
+                        "15m",
+                        "30m",
+                        "60m",
+                        "90m",
+                        "1h",
+                        "1d",
+                        "5d",
+                        "1wk",
+                        "1mo",
+                        "3mo",
+                    }
+                ),
+                credential_state="not_required",
+                live_check_suitable=False,
             ),
         )
 
@@ -784,6 +809,9 @@ class StooqProvider:
                 supports_realtime=False,
                 supports_historical=True,
                 supported_asset_classes=frozenset({"equity", "etf", "index"}),
+                supported_intervals=frozenset({"1d", "1wk", "1mo"}),
+                credential_state="not_required",
+                live_check_suitable=False,
             ),
         )
 
@@ -981,6 +1009,9 @@ class FmpProvider:
                 supports_realtime=True,
                 supports_historical=True,
                 supported_asset_classes=frozenset({"equity", "etf", "index"}),
+                supported_intervals=frozenset({"1d"}),
+                credential_state="required",
+                live_check_suitable=False,
             ),
         )
 
@@ -1202,6 +1233,9 @@ class PlaceholderEnhancedProvider:
                 supports_realtime=True,
                 supports_historical=True,
                 supported_asset_classes=self.supported_asset_classes,
+                supported_intervals=frozenset({"1d"}),
+                credential_state="placeholder",
+                live_check_suitable=False,
             ),
         )
 

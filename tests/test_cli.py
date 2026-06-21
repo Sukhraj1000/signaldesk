@@ -66,6 +66,9 @@ class WorkingProvider:
                 supports_realtime=False,
                 supports_historical=True,
                 supported_asset_classes=frozenset({"fixture"}),
+                supported_intervals=frozenset({"1d"}),
+                credential_state="not_required",
+                live_check_suitable=True,
             ),
         )
 
@@ -182,11 +185,15 @@ def test_providers_list_reports_yfinance_capabilities() -> None:
     result = CliRunner().invoke(app, ["providers", "list"])
 
     assert result.exit_code == 0
-    assert "provider\trealtime\thistorical\tasset_classes" in result.stdout
-    assert "local-fixture\tfalse\ttrue\tequity,fixture" in result.stdout
-    assert "polygon\ttrue\ttrue\tequity,etf,index" in result.stdout
-    assert "twelve-data\ttrue\ttrue\tequity,etf,index" in result.stdout
+    assert (
+        "provider\trealtime\thistorical\tasset_classes\tintervals\tcredential_state\tlive_check"
+        in result.stdout
+    )
+    assert "local-fixture\tfalse\ttrue\tequity,fixture\t1d\tnot_required\ttrue" in result.stdout
+    assert "polygon\ttrue\ttrue\tequity,etf,index\t1d\tplaceholder\tfalse" in result.stdout
+    assert "twelve-data\ttrue\ttrue\tequity,etf,index\t1d\tplaceholder\tfalse" in result.stdout
     assert "yfinance\ttrue\ttrue\tcrypto,equity,etf,index" in result.stdout
+    assert "not_required\tfalse" in result.stdout
 
 
 def test_providers_check_reports_default_local_provider_without_secrets() -> None:
@@ -467,7 +474,10 @@ def test_provider_health_formatter_redacts_credential_diagnostics() -> None:
 def test_provider_capability_formatter_reports_registry_capabilities() -> None:
     lines = _format_provider_capabilities(ProviderRegistry((ExplodingProvider(),)))
 
-    assert lines == ("provider\trealtime\thistorical\tasset_classes", "exploding\tfalse\tfalse\t")
+    assert lines == (
+        "provider\trealtime\thistorical\tasset_classes\tintervals\tcredential_state\tlive_check",
+        "exploding\tfalse\tfalse\t\t\tunknown\tfalse",
+    )
 
 
 def test_providers_list_continues_when_capabilities_raise(monkeypatch: MonkeyPatch) -> None:
@@ -480,8 +490,8 @@ def test_providers_list_continues_when_capabilities_raise(monkeypatch: MonkeyPat
     result = CliRunner().invoke(app, ["providers", "list"])
 
     assert result.exit_code == 0
-    assert "exploding-capabilities\tfalse\tfalse\t" in result.stdout
-    assert "exploding\tfalse\tfalse\t" in result.stdout
+    assert "exploding-capabilities\tfalse\tfalse\t\t\tunknown\tfalse" in result.stdout
+    assert "exploding\tfalse\tfalse\t\t\tunknown\tfalse" in result.stdout
     assert "secret capability detail" not in result.stdout
 
 
