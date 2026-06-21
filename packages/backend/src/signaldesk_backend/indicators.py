@@ -744,6 +744,85 @@ def detect_relative_volume_spike_events(
     )
 
 
+def detect_overextension_events(
+    candles: Sequence[CandleInput],
+    *,
+    ma_period: int = 20,
+    atr_period: int = 14,
+    atr_multiple: Decimal = Decimal("2"),
+) -> tuple[DeterministicTechnicalEvent, ...]:
+    """Detect latest-candle price overextension from SMA plus ATR distance.
+
+    The rule emits an upside event when the latest close is at least
+    ``atr_multiple`` ATR above the selected SMA, and a downside event when it is
+    at least that far below the SMA. Warmup periods, zero ATR, or prices inside
+    the band return no event rather than inferred context.
+    """
+
+    _validate_period(ma_period)
+    _validate_period(atr_period)
+    if atr_multiple <= Decimal("0"):
+        raise ValueError("atr_multiple must be positive")
+    if len(candles) < max(ma_period, atr_period):
+        return ()
+
+    closes = tuple(candle.close for candle in candles)
+    latest_sma = simple_moving_average(closes, period=ma_period)[-1]
+    latest_atr = average_true_range(candles, period=atr_period)[-1]
+    if latest_sma is None or latest_atr is None or latest_atr == 0:
+        return ()
+
+    latest_candle = candles[-1]
+    latest_close = latest_candle.close
+    allowed_distance = latest_atr * atr_multiple
+    upper_band = latest_sma + allowed_distance
+    lower_band = latest_sma - allowed_distance
+    source_indicators = (f"sma_{ma_period}", f"atr_{atr_period}")
+    multiple_text = str(atr_multiple)
+
+    if latest_close >= upper_band:
+        return (
+            DeterministicTechnicalEvent(
+                event_type="overextension_up",
+                timestamp=latest_candle.timestamp,
+                candle_index=len(candles) - 1,
+                severity="warning",
+                source_rule="latest_close_at_least_atr_multiple_above_sma",
+                source_indicators=source_indicators,
+                reason=(
+                    f"Latest close {latest_close} is at least {multiple_text}x ATR above "
+                    f"sma_{ma_period} {latest_sma}; latest ATR is {latest_atr}."
+                ),
+                price=latest_close,
+                invalidation_condition=(
+                    f"A close back within {multiple_text}x ATR of sma_{ma_period} "
+                    f"{latest_sma} would end the upside overextension condition."
+                ),
+            ),
+        )
+    if latest_close <= lower_band:
+        return (
+            DeterministicTechnicalEvent(
+                event_type="overextension_down",
+                timestamp=latest_candle.timestamp,
+                candle_index=len(candles) - 1,
+                severity="warning",
+                source_rule="latest_close_at_least_atr_multiple_below_sma",
+                source_indicators=source_indicators,
+                reason=(
+                    f"Latest close {latest_close} is at least {multiple_text}x ATR below "
+                    f"sma_{ma_period} {latest_sma}; latest ATR is {latest_atr}."
+                ),
+                price=latest_close,
+                invalidation_condition=(
+                    f"A close back within {multiple_text}x ATR of sma_{ma_period} "
+                    f"{latest_sma} would end the downside overextension condition."
+                ),
+            ),
+        )
+    return ()
+
+
 def detect_volatility_regime_events(
     candles: Sequence[CandleInput],
     *,

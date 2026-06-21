@@ -264,6 +264,34 @@ class RelativeVolumeSpikeProvider(WorkingProvider):
 
 
 @dataclass(frozen=True)
+class OverextensionProvider(WorkingProvider):
+    name: str = "overextension"
+
+    def get_historical_candles(
+        self,
+        symbol: Symbol,
+        *,
+        start: datetime,
+        end: datetime,
+        interval: str,
+    ) -> ProviderResult[tuple[Candle, ...]]:
+        closes = (*("10" for _ in range(18)), "14", "15")
+        candles = tuple(
+            Candle(
+                symbol=symbol,
+                timestamp=datetime(2024, 1, 1, tzinfo=UTC) + timedelta(days=index),
+                open=Decimal(close),
+                high=Decimal(close),
+                low=Decimal(close),
+                close=Decimal(close),
+                volume=1000 + index,
+            )
+            for index, close in enumerate(closes)
+        )
+        return ProviderResult.success(provider=self.name, data=candles)
+
+
+@dataclass(frozen=True)
 class FailingHistoricalProvider(WorkingProvider):
     name: str = "failing-history"
 
@@ -1039,6 +1067,42 @@ def test_ta_command_includes_traceable_relative_volume_spike_events(
             "invalidation_condition": (
                 "Relative volume below 1.5x the prior 20-candle average would end "
                 "the spike condition."
+            ),
+        }
+    ]
+    assert payload["deterministic_signals"]["events"] == payload["technical_events"]
+
+
+def test_ta_command_includes_traceable_overextension_events(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        cli_main,
+        "default_provider_registry",
+        lambda: ProviderRegistry((OverextensionProvider(),)),
+    )
+
+    result = CliRunner().invoke(
+        app,
+        ["ta", "AMD", "--provider", "overextension", "--llm", "none", "--output", "json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["technical_events"] == [
+        {
+            "event_type": "overextension_up",
+            "timestamp": "2024-01-20T00:00:00+00:00",
+            "candle_index": 19,
+            "severity": "warning",
+            "source_rule": "latest_close_at_least_atr_multiple_above_sma",
+            "source_indicators": ["sma_20", "atr_14"],
+            "reason": (
+                "Latest close 15 is at least 7x ATR above sma_20 10.45; latest ATR "
+                "is 0.3367346938775510204081632653."
+            ),
+            "price": "15",
+            "invalidation_condition": (
+                "A close back within 7x ATR of sma_20 10.45 would end the upside "
+                "overextension condition."
             ),
         }
     ]
