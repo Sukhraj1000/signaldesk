@@ -21,3 +21,16 @@ The current schema is `signaldesk.ta.v1`. It keeps backward-compatible top-level
 Default mode remains useful without paid keys. Enhanced provider or LLM fields must be optional, fixture-backed in tests, or reported as unavailable context rather than silently omitted.
 
 The golden CLI test in `tests/test_cli.py` protects the current `signaldesk.ta.v1` shape with fixture-backed data, so CI does not require live provider network or paid credentials.
+
+## Signal-card section aliases
+
+The v1 JSON keeps early flat and grouped fields for compatibility, then adds canonical signal-card sections so future CLI/API/dashboard/reporting renderers can share one object:
+
+- `identity`: symbol, timeframe, generated timestamp, and schema version.
+- `trend`: moving-average, momentum, and regime summaries from deterministic calculations.
+- `levels`: support, resistance, Fibonacci placeholder, confirmation, and invalidation fields.
+- `events`: deterministic event list; mirrors `technical_events`.
+- `risk`: deterministic flags and unavailable context together for card rendering.
+- `score`: deterministic score breakdowns for setup quality, risk, and data quality.
+
+The canonical aliases do not introduce new data sources or LLM-derived facts; they regroup already-computed deterministic output and unavailable-context metadata.
