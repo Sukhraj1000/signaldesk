@@ -20,6 +20,7 @@ def score_technical_analysis(
     stale_after: timedelta = timedelta(days=7),
     trend_regime: RegimeClassification,
     volatility_regime: RegimeClassification,
+    volume_regime: RegimeClassification,
     technical_events: Sequence[DeterministicTechnicalEvent],
     setup_levels: ConfirmationInvalidationLevels,
     fundamentals_unavailable: bool,
@@ -39,6 +40,7 @@ def score_technical_analysis(
     risk_score, risk_reasons = _risk_score(
         trend_regime=trend_regime,
         volatility_regime=volatility_regime,
+        volume_regime=volume_regime,
         technical_events=technical_events,
         setup_levels=setup_levels,
     )
@@ -49,6 +51,7 @@ def score_technical_analysis(
         stale_after=stale_after,
         trend_regime=trend_regime,
         volatility_regime=volatility_regime,
+        volume_regime=volume_regime,
         fundamentals_unavailable=fundamentals_unavailable,
     )
     return (
@@ -184,6 +187,7 @@ def _risk_score(
     *,
     trend_regime: RegimeClassification,
     volatility_regime: RegimeClassification,
+    volume_regime: RegimeClassification,
     technical_events: Sequence[DeterministicTechnicalEvent],
     setup_levels: ConfirmationInvalidationLevels,
 ) -> tuple[Decimal, list[ScoreReason]]:
@@ -199,6 +203,7 @@ def _risk_score(
     for regime_name, regime in (
         ("trend", trend_regime),
         ("volatility", volatility_regime),
+        ("volume", volume_regime),
     ):
         if regime.regime == "unknown":
             score += Decimal("15")
@@ -210,6 +215,16 @@ def _risk_score(
                     weight=Decimal("0.15"),
                 )
             )
+    if volume_regime.regime == "low_volume":
+        score += Decimal("10")
+        reasons.append(
+            ScoreReason(
+                code="liquidity_risk_low_volume",
+                message="Volume regime is low_volume, increasing liquidity risk.",
+                source=volume_regime.source_rule,
+                weight=Decimal("0.10"),
+            )
+        )
     if setup_levels.invalidation is None:
         score += Decimal("10")
         reasons.append(
@@ -242,6 +257,7 @@ def _data_quality_score(
     stale_after: timedelta,
     trend_regime: RegimeClassification,
     volatility_regime: RegimeClassification,
+    volume_regime: RegimeClassification,
     fundamentals_unavailable: bool,
 ) -> tuple[Decimal, list[ScoreReason]]:
     score = Decimal("100")
@@ -256,6 +272,7 @@ def _data_quality_score(
     for regime_name, regime in (
         ("trend", trend_regime),
         ("volatility", volatility_regime),
+        ("volume", volume_regime),
     ):
         if regime.regime == "unknown":
             score -= Decimal("15")

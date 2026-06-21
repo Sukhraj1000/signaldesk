@@ -25,6 +25,11 @@ def test_score_technical_analysis_returns_traceable_score_categories() -> None:
             source_rule="insufficient_history_for_volatility_regime",
             reason="Need at least 64 candles to classify volatility; received 40.",
         ),
+        volume_regime=RegimeClassification(
+            regime="unknown",
+            source_rule="insufficient_history_for_volume_regime",
+            reason="Need more than 20 candles to classify relative volume; received 20.",
+        ),
         technical_events=(),
         setup_levels=ConfirmationInvalidationLevels(confirmation=None, invalidation=None),
         fundamentals_unavailable=True,
@@ -37,13 +42,14 @@ def test_score_technical_analysis_returns_traceable_score_categories() -> None:
     )
     assert tuple(score.score for score in scores) == (
         Decimal("50"),
-        Decimal("60"),
-        Decimal("60"),
+        Decimal("75"),
+        Decimal("45"),
     )
     assert [reason.code for reason in scores[1].reasons] == [
         "technical_only_scope_limit",
         "unknown_trend_regime",
         "unknown_volatility_regime",
+        "unknown_volume_regime",
         "missing_invalidation_level",
     ]
     assert scores[2].reasons[-1].code == "fundamentals_unavailable"
@@ -64,6 +70,11 @@ def test_score_technical_analysis_reduces_data_quality_for_stale_price_history()
             regime="normal_volatility",
             source_rule="latest_atr_within_trailing_baseline_band",
             reason="Latest ATR is normal.",
+        ),
+        volume_regime=RegimeClassification(
+            regime="normal_volume",
+            source_rule="latest_volume_within_prior_average_band",
+            reason="Latest volume is normal.",
         ),
         technical_events=(),
         setup_levels=ConfirmationInvalidationLevels(
@@ -109,6 +120,11 @@ def test_score_technical_analysis_reduces_data_quality_for_unverifiable_naive_ti
             source_rule="latest_atr_within_trailing_baseline_band",
             reason="Latest ATR is normal.",
         ),
+        volume_regime=RegimeClassification(
+            regime="normal_volume",
+            source_rule="latest_volume_within_prior_average_band",
+            reason="Latest volume is normal.",
+        ),
         technical_events=(),
         setup_levels=ConfirmationInvalidationLevels(confirmation=None, invalidation=None),
         fundamentals_unavailable=False,
@@ -134,6 +150,11 @@ def test_score_technical_analysis_reduces_data_quality_for_unverifiable_naive_as
             regime="normal_volatility",
             source_rule="latest_atr_within_trailing_baseline_band",
             reason="Latest ATR is normal.",
+        ),
+        volume_regime=RegimeClassification(
+            regime="normal_volume",
+            source_rule="latest_volume_within_prior_average_band",
+            reason="Latest volume is normal.",
         ),
         technical_events=(),
         setup_levels=ConfirmationInvalidationLevels(confirmation=None, invalidation=None),
@@ -176,6 +197,11 @@ def test_score_technical_analysis_bounds_scores_and_uses_event_reasons() -> None
             source_rule="latest_atr_within_trailing_baseline_band",
             reason="Latest ATR is within its baseline band.",
         ),
+        volume_regime=RegimeClassification(
+            regime="normal_volume",
+            source_rule="latest_volume_within_prior_average_band",
+            reason="Latest volume is normal.",
+        ),
         technical_events=warning_events,
         setup_levels=ConfirmationInvalidationLevels(
             confirmation=ConfirmationInvalidationLevel(
@@ -201,3 +227,47 @@ def test_score_technical_analysis_bounds_scores_and_uses_event_reasons() -> None
     assert score_by_category["risk"].score == Decimal("40")
     assert score_by_category["data_quality"].score == Decimal("100")
     assert score_by_category["risk"].reasons[-1].code == "warning_technical_events"
+
+
+def test_score_technical_analysis_includes_low_volume_liquidity_risk_reason() -> None:
+    scores = score_technical_analysis(
+        candle_count=120,
+        trend_regime=RegimeClassification(
+            regime="uptrend",
+            source_rule="close_above_short_sma_above_long_sma",
+            reason="Latest close is above aligned moving averages.",
+        ),
+        volatility_regime=RegimeClassification(
+            regime="normal_volatility",
+            source_rule="latest_atr_within_trailing_baseline_band",
+            reason="Latest ATR is within its baseline band.",
+        ),
+        volume_regime=RegimeClassification(
+            regime="low_volume",
+            source_rule="latest_volume_at_most_0_75x_prior_average",
+            reason="Latest volume is at most 0.75x its prior trailing average.",
+        ),
+        technical_events=(),
+        setup_levels=ConfirmationInvalidationLevels(
+            confirmation=ConfirmationInvalidationLevel(
+                kind="confirmation",
+                price=Decimal("125"),
+                source_rule="nearest_resistance_above_latest_close",
+                source_level="resistance_zone[125,125] touches=1",
+                reason="Move through resistance confirms upside continuation.",
+            ),
+            invalidation=ConfirmationInvalidationLevel(
+                kind="invalidation",
+                price=Decimal("100"),
+                source_rule="nearest_support_below_latest_close",
+                source_level="support_zone[100,100] touches=1",
+                reason="Break below support invalidates the setup.",
+            ),
+        ),
+        fundamentals_unavailable=False,
+    )
+
+    risk = next(score for score in scores if score.category == "risk")
+    assert risk.score == Decimal("30")
+    assert risk.reasons[-1].code == "liquidity_risk_low_volume"
+    assert risk.reasons[-1].source == "latest_volume_at_most_0_75x_prior_average"

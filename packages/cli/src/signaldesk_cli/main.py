@@ -304,6 +304,7 @@ def _technical_analysis_report(
             as_of=as_of,
             trend_regime=trend_regime,
             volatility_regime=volatility_regime,
+            volume_regime=volume_regime,
             technical_events=technical_events,
             setup_levels=setup_levels,
             fundamentals_unavailable=fundamentals_unavailable,
