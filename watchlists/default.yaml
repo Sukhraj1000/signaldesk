@@ -1,0 +1,4 @@
+# Default deterministic watchlist for local CLI scan/report smoke tests.
+symbols:
+  - AMD
+  - MSFT
