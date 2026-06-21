@@ -226,11 +226,16 @@ def _fetch_ta_report(
 
 
 def _load_watchlist_symbols(path: Path) -> tuple[str, ...]:
-    if not path.exists():
+    if not path.is_file():
         raise ValueError(f"watchlist file not found: {path}")
+    try:
+        raw_lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        raise ValueError(f"watchlist file could not be read: {path}") from exc
+
     symbols: list[str] = []
     in_symbols = False
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
+    for raw_line in raw_lines:
         line_without_comment = raw_line.split("#", 1)[0].rstrip()
         stripped = line_without_comment.strip()
         if not stripped:
@@ -334,6 +339,13 @@ def scan_watchlist(
         raise typer.Exit(2) from exc
 
     registry = default_provider_registry()
+    explicit_provider_name = None
+    if provider is not None and provider.strip():
+        try:
+            explicit_provider_name = registry.get(provider.strip()).name
+        except (KeyError, ValueError) as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(2) from exc
     scanned_at = datetime.now(UTC)
     results: list[dict[str, Any]] = []
     exit_code = 0
@@ -364,7 +376,7 @@ def scan_watchlist(
         if provider is None
         else {
             "mode": "explicit",
-            "price_provider": provider.strip(),
+            "price_provider": explicit_provider_name,
             "fundamentals_provider": None,
             "catalyst_provider": None,
             "llm_provider": None,

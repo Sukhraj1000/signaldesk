@@ -457,13 +457,18 @@ def test_scan_command_runs_watchlist_against_fixture_provider(
     ]
 
 
-def test_scan_command_reports_table_output_and_watchlist_errors(tmp_path: Path) -> None:
+def test_scan_command_reports_watchlist_errors(tmp_path: Path) -> None:
     missing_result = CliRunner().invoke(
         app, ["scan", "--watchlist", str(tmp_path / "missing.yaml")]
     )
 
     assert missing_result.exit_code == 2
     assert "watchlist file not found" in missing_result.stderr
+
+    directory_result = CliRunner().invoke(app, ["scan", "--watchlist", str(tmp_path)])
+
+    assert directory_result.exit_code == 2
+    assert "watchlist file not found" in directory_result.stderr
 
 
 def test_config_inspect_helpers_redact_secrets_from_payload() -> None:
