@@ -2,6 +2,7 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from typing import Any
 
 import signaldesk_backend.providers as providers_module
 import signaldesk_cli.main as cli_main
@@ -842,7 +843,7 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
 
-    expected = {
+    expected: dict[str, Any] = {
         "schema_version": "signaldesk.ta.v1",
         "symbol": "AMD",
         "provider": "working",
@@ -1122,6 +1123,44 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
         ],
         "llm": "none",
         "narrative": None,
+    }
+    assert payload["identity"]["generated_at"]
+    expected["facts"]["data_start"] = "2024-01-01T00:00:00+00:00"
+    expected["facts"]["data_end"] = "2024-02-09T00:00:00+00:00"
+    expected["facts"]["latest_volume"] = 1039
+    expected["identity"] = {
+        "symbol": "AMD",
+        "timeframe": "1d",
+        "generated_at": payload["identity"]["generated_at"],
+        "schema_version": "signaldesk.ta.v1",
+    }
+    expected["trend"] = {
+        "moving_averages": {
+            "sma_20": expected["sma_20"],
+            "ema_20": expected["ema_20"],
+        },
+        "momentum": {
+            "rsi_14": expected["rsi_14"],
+            "macd": expected["macd"],
+            "macd_signal": expected["macd_signal"],
+            "macd_histogram": expected["macd_histogram"],
+        },
+        "regimes": expected["deterministic_signals"]["regimes"],
+    }
+    expected["levels"] = {
+        "support": None,
+        "resistance": None,
+        "fibonacci": [],
+        "confirmation": None,
+        "invalidation": None,
+    }
+    expected["events"] = expected["technical_events"]
+    expected["risk"] = {
+        "flags": expected["risks"],
+        "unavailable_context": expected["unavailable_context"],
+    }
+    expected["score"] = {
+        "breakdowns": expected["scores"],
     }
     assert payload == expected
 

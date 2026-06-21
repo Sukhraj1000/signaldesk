@@ -239,8 +239,11 @@ def _technical_analysis_report(
         "provider": provider_name,
         "interval": interval,
         "candles": len(candles),
+        "data_start": candles[0].timestamp.isoformat(),
+        "data_end": latest_candle.timestamp.isoformat(),
         "latest_timestamp": latest_candle.timestamp.isoformat(),
         "latest_close": _decimal_text(latest_candle.close),
+        "latest_volume": latest_candle.volume,
     }
     indicators = {
         "sma_20": _decimal_text(sma_20),
@@ -311,6 +314,33 @@ def _technical_analysis_report(
         )
     )
 
+    identity = {
+        "symbol": symbol.ticker,
+        "timeframe": interval,
+        "generated_at": as_of.isoformat(),
+        "schema_version": "signaldesk.ta.v1",
+    }
+    trend = {
+        "moving_averages": {
+            "sma_20": indicators["sma_20"],
+            "ema_20": indicators["ema_20"],
+        },
+        "momentum": {
+            "rsi_14": indicators["rsi_14"],
+            "macd": indicators["macd"],
+            "macd_signal": indicators["macd_signal"],
+            "macd_histogram": indicators["macd_histogram"],
+        },
+        "regimes": regimes,
+    }
+    levels: dict[str, Any] = {
+        "support": swing_levels["latest_swing_low"],
+        "resistance": swing_levels["latest_swing_high"],
+        "fibonacci": [],
+        "confirmation": setup["confirmation_level"],
+        "invalidation": setup["invalidation_level"],
+    }
+
     return {
         "schema_version": "signaldesk.ta.v1",
         "symbol": facts["symbol"],
@@ -337,7 +367,18 @@ def _technical_analysis_report(
         "latest_swing_low": swing_levels["latest_swing_low"],
         "confirmation_level": setup["confirmation_level"],
         "invalidation_level": setup["invalidation_level"],
+        "identity": identity,
         "facts": facts,
+        "trend": trend,
+        "levels": levels,
+        "events": events,
+        "risk": {
+            "flags": risks,
+            "unavailable_context": unavailable_context,
+        },
+        "score": {
+            "breakdowns": scores,
+        },
         "deterministic_signals": {
             "indicators": indicators,
             "regimes": regimes,
