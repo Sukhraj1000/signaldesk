@@ -626,12 +626,22 @@ def test_fmp_provider_reports_capabilities_and_missing_key_safely(
     quote = provider.get_quote(Symbol("amd"))
     candles = provider.get_historical_candles(Symbol("amd"), start=NOW, end=NOW, interval="1d")
 
-    assert capabilities[0].provider == "fmp"
+    assert tuple(capability.data_role for capability in capabilities) == (
+        "price",
+        "fundamentals",
+        "catalyst",
+    )
+    assert all(capability.provider == "fmp" for capability in capabilities)
     assert capabilities[0].supports_realtime is True
     assert capabilities[0].supports_historical is True
     assert capabilities[0].supported_intervals == frozenset({"1d"})
-    assert capabilities[0].credential_state == "not_configured"
-    assert capabilities[0].live_check_suitable is False
+    assert capabilities[1].supports_realtime is False
+    assert capabilities[1].supports_historical is False
+    assert capabilities[1].supported_intervals == frozenset()
+    assert all(
+        capability.credential_state == "not_configured" for capability in capabilities
+    )
+    assert all(capability.live_check_suitable is False for capability in capabilities)
     assert health == ProviderResult.success(
         provider="fmp", data="unavailable until FMP credentials are configured"
     )
@@ -648,8 +658,13 @@ def test_fmp_provider_reports_configured_credential_state() -> None:
 
     capabilities = provider.capabilities()
 
-    assert capabilities[0].provider == "fmp"
-    assert capabilities[0].credential_state == "configured"
+    assert tuple(capability.data_role for capability in capabilities) == (
+        "price",
+        "fundamentals",
+        "catalyst",
+    )
+    assert all(capability.provider == "fmp" for capability in capabilities)
+    assert all(capability.credential_state == "configured" for capability in capabilities)
 
 
 def test_fmp_provider_translates_mocked_quote_and_candles() -> None:
