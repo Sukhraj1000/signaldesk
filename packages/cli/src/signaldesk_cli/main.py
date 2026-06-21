@@ -67,7 +67,6 @@ def health() -> None:
     typer.echo(f"SignalDesk is configured for {settings.app_env}.")
 
 
-
 def _redact_url_secret(value: str) -> str:
     """Redact URL userinfo secrets while preserving operational context."""
 
@@ -127,6 +126,7 @@ def config_inspect(
 
     for line in _format_config_inspect(payload):
         typer.echo(line)
+
 
 @app.command("ta")
 def technical_analysis(
@@ -338,15 +338,55 @@ def scan_watchlist(
         typer.echo(str(exc), err=True)
         raise typer.Exit(2) from exc
 
+    try:
+        exit_code, payload = _scan_watchlist_payload(
+            symbols=symbols,
+            watchlist=watchlist,
+            provider=provider,
+            mode=mode,
+            interval=interval,
+            days=days,
+        )
+    except (KeyError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from exc
+    if output_format == "json":
+        typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+    else:
+        for line in _format_scan_table(payload):
+            typer.echo(line)
+    if exit_code:
+        raise typer.Exit(exit_code)
+
+
+def _explicit_provider_mode_payload(registry: ProviderRegistry, provider: str) -> dict[str, Any]:
+    provider_name = registry.get(provider.strip()).name
+    return {
+        "mode": "explicit",
+        "price_provider": provider_name,
+        "fundamentals_provider": None,
+        "catalyst_provider": None,
+        "llm_provider": None,
+        "unavailable_context": [],
+    }
+
+
+def _scan_watchlist_payload(
+    *,
+    symbols: tuple[str, ...],
+    watchlist: Path,
+    provider: str | None,
+    mode: str,
+    interval: str,
+    days: int,
+) -> tuple[int, dict[str, Any]]:
     registry = default_provider_registry()
-    explicit_provider_name = None
-    if provider is not None and provider.strip():
-        try:
-            explicit_provider_name = registry.get(provider.strip()).name
-        except (KeyError, ValueError) as exc:
-            typer.echo(str(exc), err=True)
-            raise typer.Exit(2) from exc
     scanned_at = datetime.now(UTC)
+    provider_mode = (
+        _provider_mode_payload(mode)
+        if provider is None or not provider.strip()
+        else _explicit_provider_mode_payload(registry, provider)
+    )
     results: list[dict[str, Any]] = []
     exit_code = 0
     for symbol in symbols:
@@ -360,36 +400,109 @@ def scan_watchlist(
                 days=days,
                 as_of=scanned_at,
             )
-        except (KeyError, ValueError) as exc:
-            typer.echo(str(exc), err=True)
-            raise typer.Exit(2) from exc
         except RuntimeError as exc:
             exit_code = 1
             results.append({"symbol": symbol, "status": "failed", "error": str(exc)})
             continue
         results.append({"symbol": symbol, "status": "ok", "summary": _scan_result_summary(report)})
 
-    payload = {
+    return exit_code, {
         "watchlist": str(watchlist),
         "scanned_at": scanned_at.isoformat(),
-        "provider_mode": _provider_mode_payload(mode)
-        if provider is None
-        else {
-            "mode": "explicit",
-            "price_provider": explicit_provider_name,
-            "fundamentals_provider": None,
-            "catalyst_provider": None,
-            "llm_provider": None,
-            "unavailable_context": [],
-        },
+        "provider_mode": provider_mode,
         "symbols": list(symbols),
         "results": results,
     }
-    if output_format == "json":
-        typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+
+
+def _format_report_markdown(payload: dict[str, Any]) -> str:
+    lines = [
+        "# SignalDesk watchlist report",
+        "",
+        f"- Watchlist: `{payload['watchlist']}`",
+        f"- Generated at: `{payload['scanned_at']}`",
+        f"- Provider mode: `{payload['provider_mode']['mode']}`",
+        f"- Price provider: `{payload['provider_mode']['price_provider']}`",
+    ]
+    if payload["provider_mode"].get("unavailable_context"):
+        lines.append("- Unavailable context:")
+        for item in payload["provider_mode"]["unavailable_context"]:
+            provider_name = item.get("provider") or "none"
+            lines.append(f"  - `{item['context_type']}` via `{provider_name}`: {item['reason']}")
     else:
-        for line in _format_scan_table(payload):
-            typer.echo(line)
+        lines.append("- Unavailable context: none")
+    lines.extend(
+        [
+            "",
+            "| Symbol | Status | Provider | Latest close | Trend | Setup | Risk |",
+            "| --- | --- | --- | ---: | --- | ---: | ---: |",
+        ]
+    )
+    for result in payload["results"]:
+        if result["status"] != "ok":
+            lines.append(f"| {result['symbol']} | failed |  |  |  |  | {result['error']} |")
+            continue
+        summary = result["summary"]
+        lines.append(
+            f"| {summary['symbol']} | ok | {summary['provider']} | "
+            f"{summary['latest_close']} | {summary['trend_regime']['regime']} | "
+            f"{summary['setup_quality_score']} | {summary['risk_score']} |"
+        )
+    lines.append("")
+    lines.append("## Provenance")
+    for result in payload["results"]:
+        if result["status"] != "ok":
+            continue
+        summary = result["summary"]
+        for provenance in summary["provenance"]:
+            lines.append(
+                "- {}: provider `{}`, source `{}`, timeframe `{}`, observations `{}`".format(
+                    summary["symbol"],
+                    provenance["provider"],
+                    provenance["source"],
+                    provenance["timeframe"],
+                    provenance["observations"],
+                )
+            )
+    return "\n".join(lines) + "\n"
+
+
+@app.command("report")
+def report_watchlist(
+    watchlist: Path = typer.Option(..., help="YAML watchlist containing a top-level symbols list."),  # noqa: B008
+    provider: str | None = typer.Option(
+        None,
+        help="Registered price provider to use for every symbol. When omitted, SignalDesk uses --mode role resolution.",  # noqa: E501
+    ),
+    mode: str = typer.Option("default", help="Provider role mode: default or enhanced."),
+    llm: str = typer.Option("none", help="LLM provider. Only 'none' is currently supported."),
+    interval: str = typer.Option("1d", help="Historical candle interval."),
+    days: int = typer.Option(120, min=1, help="Number of calendar days of history to request."),
+    format: str = typer.Option("markdown", help="Report format: markdown."),
+) -> None:
+    """Generate a deterministic Markdown report for a watchlist."""
+
+    if llm.strip().lower() != "none":
+        typer.echo("Only --llm none is currently supported.", err=True)
+        raise typer.Exit(2)
+    report_format = format.strip().lower()
+    if report_format not in {"markdown", "md"}:
+        typer.echo("--format must be 'markdown'.", err=True)
+        raise typer.Exit(2)
+    try:
+        symbols = _load_watchlist_symbols(watchlist)
+        exit_code, payload = _scan_watchlist_payload(
+            symbols=symbols,
+            watchlist=watchlist,
+            provider=provider,
+            mode=mode,
+            interval=interval,
+            days=days,
+        )
+    except (KeyError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from exc
+    typer.echo(_format_report_markdown(payload), nl=False)
     if exit_code:
         raise typer.Exit(exit_code)
 
