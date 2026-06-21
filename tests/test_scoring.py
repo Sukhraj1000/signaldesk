@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from signaldesk_backend import (
@@ -47,6 +47,76 @@ def test_score_technical_analysis_returns_traceable_score_categories() -> None:
         "missing_invalidation_level",
     ]
     assert scores[2].reasons[-1].code == "fundamentals_unavailable"
+
+
+def test_score_technical_analysis_reduces_data_quality_for_stale_price_history() -> None:
+    scores = score_technical_analysis(
+        candle_count=120,
+        latest_candle_timestamp=NOW - timedelta(days=12),
+        as_of=NOW,
+        stale_after=timedelta(days=7),
+        trend_regime=RegimeClassification(
+            regime="uptrend",
+            source_rule="close_above_short_sma_above_long_sma",
+            reason="Latest close is above aligned moving averages.",
+        ),
+        volatility_regime=RegimeClassification(
+            regime="normal_volatility",
+            source_rule="latest_atr_within_trailing_baseline_band",
+            reason="Latest ATR is normal.",
+        ),
+        technical_events=(),
+        setup_levels=ConfirmationInvalidationLevels(
+            confirmation=ConfirmationInvalidationLevel(
+                kind="confirmation",
+                price=Decimal("125"),
+                source_rule="nearest_resistance_above_latest_close",
+                source_level="resistance_zone[125,125] touches=1",
+                reason="Move through resistance confirms upside continuation.",
+            ),
+            invalidation=ConfirmationInvalidationLevel(
+                kind="invalidation",
+                price=Decimal("100"),
+                source_rule="nearest_support_below_latest_close",
+                source_level="support_zone[100,100] touches=1",
+                reason="Break below support invalidates the setup.",
+            ),
+        ),
+        fundamentals_unavailable=False,
+    )
+
+    data_quality = next(score for score in scores if score.category == "data_quality")
+    assert data_quality.score == Decimal("80")
+    assert data_quality.reasons[-1].code == "stale_price_history"
+    assert data_quality.reasons[-1].source == "historical_candles"
+    assert data_quality.reasons[-1].message == (
+        "Latest candle is older than the deterministic freshness threshold of 7 day(s)."
+    )
+
+
+def test_score_technical_analysis_reduces_data_quality_for_unverifiable_naive_timestamp() -> None:
+    scores = score_technical_analysis(
+        candle_count=120,
+        latest_candle_timestamp=datetime(2026, 1, 15),
+        as_of=NOW,
+        trend_regime=RegimeClassification(
+            regime="uptrend",
+            source_rule="close_above_short_sma_above_long_sma",
+            reason="Latest close is above aligned moving averages.",
+        ),
+        volatility_regime=RegimeClassification(
+            regime="normal_volatility",
+            source_rule="latest_atr_within_trailing_baseline_band",
+            reason="Latest ATR is normal.",
+        ),
+        technical_events=(),
+        setup_levels=ConfirmationInvalidationLevels(confirmation=None, invalidation=None),
+        fundamentals_unavailable=False,
+    )
+
+    data_quality = next(score for score in scores if score.category == "data_quality")
+    assert data_quality.score == Decimal("80")
+    assert data_quality.reasons[-1].code == "unverifiable_price_history_freshness"
 
 
 def test_score_technical_analysis_bounds_scores_and_uses_event_reasons() -> None:
