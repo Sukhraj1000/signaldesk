@@ -35,11 +35,11 @@ Enhanced mode, once richer FMP support is built:
 signaldesk ta AMD --provider fmp --llm none --output json
 ```
 
-`signaldesk providers list` includes each capability's provider tier, data role, and credential state. The default `yfinance`, local fixture, local CSV, and Stooq paths report tier `default` with credentials `not_required`; FMP, Polygon, and Twelve Data report tier `enhanced` and stay optional. FMP reports `not_configured` until `FMP_API_KEY` is present and `configured` after credentials are available. Default adapters advertise `price`; FMP also advertises enhanced `fundamentals` and `catalyst` capability rows so richer context can be surfaced separately from default TA facts without making paid data required for core workflows.
+`signaldesk providers list` includes each capability's provider tier, data role, and credential state. The default `yfinance`, local fixture, local CSV, and Stooq paths report tier `default` with credentials `not_required`; FMP, Polygon, and Twelve Data report tier `enhanced` and stay optional. FMP reports `not_configured` until `FMP_API_KEY` is present and `configured` after credentials are available. Default adapters advertise `price`; FMP also advertises enhanced `fundamentals` and `catalyst` capability rows so richer context can be surfaced separately from default TA facts without making paid data required for core workflows. Use `signaldesk providers list --tier default`, `signaldesk providers list --tier enhanced`, or `signaldesk providers list --role fundamentals --output json` to inspect provider roles without mixing default price capabilities with enhanced context capabilities.
 
 `signaldesk providers check` stays safe by avoiding live network probes for providers whose capabilities mark `live_check=false`. Stooq is no-key and default-tier, but its health row reports `not checked` because public endpoint availability is proven only when a candle fetch runs. Use `signaldesk providers check --output json` for machine-readable status rows shaped as `provider`, `status`, `result`, and `warnings`; diagnostic text is redacted before it is printed.
 
-Future role-specific provider flags may split price, catalyst, fundamentals, and LLM providers.
+Future provider configuration can build on these role and tier filters to split price, catalyst, fundamentals, and LLM providers.
 
 ## Runtime checks
 
