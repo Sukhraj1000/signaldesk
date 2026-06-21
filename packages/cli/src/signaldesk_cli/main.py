@@ -291,24 +291,35 @@ def _provider_capabilities_payload(
     *,
     role: str | None = None,
     tier: str | None = None,
+    credential_state: str | None = None,
+    live_check_only: bool = False,
 ) -> tuple[dict[str, Any], ...]:
     payload: list[dict[str, Any]] = []
     normalized_role = _normalize_optional_filter(role)
     normalized_tier = _normalize_optional_filter(tier)
+    normalized_credential_state = _normalize_optional_filter(credential_state)
     for provider in registry.list():
         try:
             capabilities = provider.capabilities()
         except Exception:
             unknown_payload = _unknown_provider_capability(provider.name)
             if _provider_capability_matches(
-                unknown_payload, role=normalized_role, tier=normalized_tier
+                unknown_payload,
+                role=normalized_role,
+                tier=normalized_tier,
+                credential_state=normalized_credential_state,
+                live_check_only=live_check_only,
             ):
                 payload.append(unknown_payload)
             continue
         if not capabilities:
             unknown_payload = _unknown_provider_capability(provider.name)
             if _provider_capability_matches(
-                unknown_payload, role=normalized_role, tier=normalized_tier
+                unknown_payload,
+                role=normalized_role,
+                tier=normalized_tier,
+                credential_state=normalized_credential_state,
+                live_check_only=live_check_only,
             ):
                 payload.append(unknown_payload)
             continue
@@ -325,7 +336,11 @@ def _provider_capabilities_payload(
                 "live_check": capability.live_check_suitable,
             }
             if _provider_capability_matches(
-                provider_capability, role=normalized_role, tier=normalized_tier
+                provider_capability,
+                role=normalized_role,
+                tier=normalized_tier,
+                credential_state=normalized_credential_state,
+                live_check_only=live_check_only,
             ):
                 payload.append(provider_capability)
     return tuple(payload)
@@ -339,11 +354,20 @@ def _normalize_optional_filter(value: str | None) -> str | None:
 
 
 def _provider_capability_matches(
-    capability: dict[str, Any], *, role: str | None, tier: str | None
+    capability: dict[str, Any],
+    *,
+    role: str | None,
+    tier: str | None,
+    credential_state: str | None,
+    live_check_only: bool,
 ) -> bool:
     if role is not None and capability["role"] != role:
         return False
     if tier is not None and capability["tier"] != tier:
+        return False
+    if credential_state is not None and capability["credential_state"] != credential_state:
+        return False
+    if live_check_only and not capability["live_check"]:
         return False
     return True
 
@@ -353,11 +377,19 @@ def _format_provider_capabilities(
     *,
     role: str | None = None,
     tier: str | None = None,
+    credential_state: str | None = None,
+    live_check_only: bool = False,
 ) -> tuple[str, ...]:
     lines = [
         "provider\ttier\trole\trealtime\thistorical\tasset_classes\tintervals\tcredential_state\tlive_check"
     ]
-    for capability in _provider_capabilities_payload(registry, role=role, tier=tier):
+    for capability in _provider_capabilities_payload(
+        registry,
+        role=role,
+        tier=tier,
+        credential_state=credential_state,
+        live_check_only=live_check_only,
+    ):
         asset_classes = ",".join(capability["asset_classes"])
         intervals = ",".join(capability["intervals"])
         lines.append(
@@ -464,6 +496,17 @@ def providers_list(
     tier: str | None = typer.Option(
         None, help="Only show capabilities for a provider tier: default or enhanced."
     ),
+    credential_state: str | None = typer.Option(
+        None,
+        help=(
+            "Only show capabilities with this credential state, such as "
+            "not_required or not_configured."
+        ),
+    ),
+    live_check_only: bool = typer.Option(
+        False,
+        help="Only show capabilities that are safe for provider health/live checks.",
+    ),
 ) -> None:
     """List registered market-data providers and declared capabilities."""
 
@@ -476,13 +519,27 @@ def providers_list(
     if output_format == "json":
         typer.echo(
             json.dumps(
-                {"providers": _provider_capabilities_payload(registry, role=role, tier=tier)},
+                {
+                    "providers": _provider_capabilities_payload(
+                        registry,
+                        role=role,
+                        tier=tier,
+                        credential_state=credential_state,
+                        live_check_only=live_check_only,
+                    )
+                },
                 indent=2,
             )
         )
         return
 
-    for line in _format_provider_capabilities(registry, role=role, tier=tier):
+    for line in _format_provider_capabilities(
+        registry,
+        role=role,
+        tier=tier,
+        credential_state=credential_state,
+        live_check_only=live_check_only,
+    ):
         typer.echo(line)
 
 

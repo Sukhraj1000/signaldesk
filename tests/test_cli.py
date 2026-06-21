@@ -361,6 +361,72 @@ def test_providers_list_json_filters_capabilities_by_default_tier(
     }
 
 
+def test_providers_list_filters_by_credential_state_and_live_check_safety(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("FMP_API_KEY", raising=False)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "providers",
+            "list",
+            "--credential-state",
+            "not required",
+            "--live-check-only",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert (
+        "provider\ttier\trole\trealtime\thistorical\tasset_classes\tintervals\tcredential_state\tlive_check"
+        in result.stdout
+    )
+    assert (
+        "local-csv\tdefault\tprice\tfalse\ttrue\tcrypto,equity,etf,index\t1d\tnot_required\ttrue"
+        not in result.stdout
+    )
+    assert (
+        "local-fixture\tdefault\tprice\tfalse\ttrue\tequity,fixture\t1d\tnot_required\ttrue"
+        in result.stdout
+    )
+    assert "stooq" not in result.stdout
+    assert "yfinance" not in result.stdout
+    assert "fmp" not in result.stdout
+
+
+def test_providers_list_json_filters_by_credential_state(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("FMP_API_KEY", raising=False)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "providers",
+            "list",
+            "--output",
+            "json",
+            "--credential-state",
+            "not_configured",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    capabilities = payload["providers"]
+    assert capabilities
+    assert all(
+        capability["credential_state"] == "not_configured" for capability in capabilities
+    )
+    assert {capability["provider"] for capability in capabilities} == {"fmp"}
+    assert {capability["role"] for capability in capabilities} == {
+        "price",
+        "fundamentals",
+        "catalyst",
+    }
+
+
 def test_providers_list_rejects_unknown_output_format() -> None:
     result = CliRunner().invoke(app, ["providers", "list", "--output", "xml"])
 
