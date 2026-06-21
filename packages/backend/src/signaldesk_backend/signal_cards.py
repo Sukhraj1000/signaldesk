@@ -178,6 +178,12 @@ def _validate_signal_card_identity_contract(
         raise ValueError("signal-card facts.interval must match identity.timeframe")
     if provider_mode.get("price_provider") != facts.get("provider"):
         raise ValueError("signal-card price_provider must match facts.provider")
+    if not isinstance(signal_card["risk"], Mapping):
+        raise ValueError("signal_card.risk must be a JSON object")
+    if signal_card["risk"].get("unavailable_context") != signal_card["unavailable_context"]:
+        raise ValueError(
+            "signal-card risk.unavailable_context must match unavailable_context"
+        )
 
 
 def _require_signal_card_sections(**sections: dict[str, Any]) -> None:

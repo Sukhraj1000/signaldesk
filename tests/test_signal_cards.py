@@ -120,6 +120,25 @@ def test_validate_ta_signal_card_report_rejects_provider_fact_drift() -> None:
     with pytest.raises(ValueError, match="price_provider"):
         validate_ta_signal_card_report(payload)
 
+def test_validate_ta_signal_card_report_rejects_risk_unavailable_context_drift() -> None:
+    sections = _base_sections()
+    payload = assemble_ta_signal_card_report(**sections)  # type: ignore[arg-type]
+    payload["risk"] = {
+        **payload["risk"],
+        "unavailable_context": [
+            {
+                "context_type": "catalysts",
+                "reason": "not evaluated",
+                "provider": None,
+            }
+        ],
+    }
+    payload["signal_card"] = {**payload["signal_card"], "risk": payload["risk"]}
+
+    with pytest.raises(ValueError, match="risk.unavailable_context"):
+        validate_ta_signal_card_report(payload)
+
+
 def test_validate_ta_signal_card_report_rejects_missing_card_sections() -> None:
     sections = _base_sections()
     payload = assemble_ta_signal_card_report(**sections)  # type: ignore[arg-type]
