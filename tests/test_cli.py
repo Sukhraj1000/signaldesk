@@ -69,6 +69,8 @@ class WorkingProvider:
                 supported_intervals=frozenset({"1d"}),
                 credential_state="not_required",
                 live_check_suitable=True,
+                max_history_days=365,
+                rate_limit_per_minute=60,
             ),
         )
 
@@ -208,7 +210,7 @@ def test_providers_list_reports_yfinance_capabilities(monkeypatch: MonkeyPatch) 
 
     assert result.exit_code == 0
     assert (
-        "provider\ttier\trole\trealtime\thistorical\tasset_classes\tintervals\tcredential_state\tlive_check"
+        "provider\ttier\trole\trealtime\thistorical\tasset_classes\tintervals\tcredential_state\tlive_check\tmax_history_days\trate_limit_per_minute"
         in result.stdout
     )
     assert (
@@ -295,6 +297,8 @@ def test_providers_list_json_reports_machine_readable_capabilities(
         "intervals": ["1d"],
         "credential_state": "not_required",
         "live_check": True,
+        "max_history_days": None,
+        "rate_limit_per_minute": None,
     } in capabilities
     assert {
         "provider": "fmp",
@@ -306,6 +310,8 @@ def test_providers_list_json_reports_machine_readable_capabilities(
         "intervals": [],
         "credential_state": "not_configured",
         "live_check": False,
+        "max_history_days": None,
+        "rate_limit_per_minute": None,
     } in capabilities
     assert any(
         capability["provider"] == "yfinance"
@@ -328,7 +334,7 @@ def test_providers_list_filters_capabilities_by_role_and_tier(
 
     assert result.exit_code == 0
     assert (
-        "provider\ttier\trole\trealtime\thistorical\tasset_classes\tintervals\tcredential_state\tlive_check"
+        "provider\ttier\trole\trealtime\thistorical\tasset_classes\tintervals\tcredential_state\tlive_check\tmax_history_days\trate_limit_per_minute"
         in result.stdout
     )
     assert (
@@ -379,7 +385,7 @@ def test_providers_list_filters_by_credential_state_and_live_check_safety(
 
     assert result.exit_code == 0
     assert (
-        "provider\ttier\trole\trealtime\thistorical\tasset_classes\tintervals\tcredential_state\tlive_check"
+        "provider\ttier\trole\trealtime\thistorical\tasset_classes\tintervals\tcredential_state\tlive_check\tmax_history_days\trate_limit_per_minute"
         in result.stdout
     )
     assert (
@@ -771,8 +777,8 @@ def test_provider_capability_formatter_reports_registry_capabilities() -> None:
     lines = _format_provider_capabilities(ProviderRegistry((ExplodingProvider(),)))
 
     assert lines == (
-        "provider\ttier\trole\trealtime\thistorical\tasset_classes\tintervals\tcredential_state\tlive_check",
-        "exploding\tunknown\tunknown\tfalse\tfalse\t\t\tunknown\tfalse",
+        "provider\ttier\trole\trealtime\thistorical\tasset_classes\tintervals\tcredential_state\tlive_check\tmax_history_days\trate_limit_per_minute",
+        "exploding\tunknown\tunknown\tfalse\tfalse\t\t\tunknown\tfalse\t\t",
     )
 
 
@@ -780,8 +786,17 @@ def test_provider_capability_formatter_uses_declared_data_role() -> None:
     lines = _format_provider_capabilities(ProviderRegistry((FundamentalsCapabilityProvider(),)))
 
     assert lines == (
-        "provider\ttier\trole\trealtime\thistorical\tasset_classes\tintervals\tcredential_state\tlive_check",
-        "fundamentals-provider\tdefault\tfundamentals\tfalse\ttrue\tequity\t1d\trequired\tfalse",
+        "provider\ttier\trole\trealtime\thistorical\tasset_classes\tintervals\tcredential_state\tlive_check\tmax_history_days\trate_limit_per_minute",
+        "fundamentals-provider\tdefault\tfundamentals\tfalse\ttrue\tequity\t1d\trequired\tfalse\t\t",
+    )
+
+
+def test_provider_capability_formatter_includes_limits_when_declared() -> None:
+    lines = _format_provider_capabilities(ProviderRegistry((WorkingProvider(),)))
+
+    assert lines == (
+        "provider\ttier\trole\trealtime\thistorical\tasset_classes\tintervals\tcredential_state\tlive_check\tmax_history_days\trate_limit_per_minute",
+        "working\tdefault\tprice\tfalse\ttrue\tfixture\t1d\tnot_required\ttrue\t365\t60",
     )
 
 
@@ -796,10 +811,10 @@ def test_providers_list_continues_when_capabilities_raise(monkeypatch: MonkeyPat
 
     assert result.exit_code == 0
     assert (
-        "exploding-capabilities\tunknown\tunknown\tfalse\tfalse\t\t\tunknown\tfalse"
+        "exploding-capabilities\tunknown\tunknown\tfalse\tfalse\t\t\tunknown\tfalse\t\t"
         in result.stdout
     )
-    assert "exploding\tunknown\tunknown\tfalse\tfalse\t\t\tunknown\tfalse" in result.stdout
+    assert "exploding\tunknown\tunknown\tfalse\tfalse\t\t\tunknown\tfalse\t\t" in result.stdout
     assert "secret capability detail" not in result.stdout
 
 

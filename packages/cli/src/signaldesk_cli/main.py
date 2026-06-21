@@ -283,6 +283,8 @@ def _unknown_provider_capability(provider_name: str) -> dict[str, Any]:
         "intervals": [],
         "credential_state": "unknown",
         "live_check": False,
+        "max_history_days": None,
+        "rate_limit_per_minute": None,
     }
 
 
@@ -334,6 +336,8 @@ def _provider_capabilities_payload(
                 "intervals": sorted(capability.supported_intervals),
                 "credential_state": capability.credential_state,
                 "live_check": capability.live_check_suitable,
+                "max_history_days": capability.max_history_days,
+                "rate_limit_per_minute": capability.rate_limit_per_minute,
             }
             if _provider_capability_matches(
                 provider_capability,
@@ -381,7 +385,7 @@ def _format_provider_capabilities(
     live_check_only: bool = False,
 ) -> tuple[str, ...]:
     lines = [
-        "provider\ttier\trole\trealtime\thistorical\tasset_classes\tintervals\tcredential_state\tlive_check"
+        "provider\ttier\trole\trealtime\thistorical\tasset_classes\tintervals\tcredential_state\tlive_check\tmax_history_days\trate_limit_per_minute"
     ]
     for capability in _provider_capabilities_payload(
         registry,
@@ -401,9 +405,17 @@ def _format_provider_capabilities(
             f"{asset_classes}\t"
             f"{intervals}\t"
             f"{capability['credential_state']}\t"
-            f"{str(capability['live_check']).lower()}"
+            f"{str(capability['live_check']).lower()}\t"
+            f"{_optional_int_text(capability['max_history_days'])}\t"
+            f"{_optional_int_text(capability['rate_limit_per_minute'])}"
         )
     return tuple(lines)
+
+
+def _optional_int_text(value: object) -> str:
+    if value is None:
+        return ""
+    return str(value)
 
 
 def _run_provider_health_checks(
