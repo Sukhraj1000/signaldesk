@@ -20,6 +20,7 @@ from signaldesk_backend import (
     derive_confirmation_invalidation_levels,
     detect_breakout_breakdown_events,
     detect_moving_average_cross_events,
+    detect_overextension_events,
     detect_relative_volume_spike_events,
     detect_support_resistance_zones,
     detect_swing_highs,
@@ -1063,6 +1064,68 @@ def test_detect_relative_volume_spike_events_returns_empty_without_spike_or_base
 def test_detect_relative_volume_spike_events_rejects_non_positive_threshold() -> None:
     with pytest.raises(ValueError, match="threshold must be positive"):
         detect_relative_volume_spike_events((make_volume_candle(0, 100),), threshold=Decimal("0"))
+
+
+def test_detect_overextension_events_reports_traceable_upside_and_downside_events() -> None:
+    upside = tuple(
+        make_candle(index, close)
+        for index, close in enumerate((*('10' for _ in range(18)), '14', '15'))
+    )
+    downside = tuple(
+        make_candle(index, close)
+        for index, close in enumerate((*('10' for _ in range(18)), '6', '5'))
+    )
+
+    assert detect_overextension_events(upside, ma_period=20, atr_period=14) == (
+        DeterministicTechnicalEvent(
+            event_type="overextension_up",
+            timestamp=upside[-1].timestamp,
+            candle_index=19,
+            severity="warning",
+            source_rule="latest_close_at_least_atr_multiple_above_sma",
+            source_indicators=("sma_20", "atr_14"),
+            reason=(
+                "Latest close 15 is at least 2x ATR above sma_20 10.45; "
+                "latest ATR is 0.3367346938775510204081632653."
+            ),
+            price=Decimal("15"),
+            invalidation_condition=(
+                "A close back within 2x ATR of sma_20 10.45 would end the upside "
+                "overextension condition."
+            ),
+        ),
+    )
+    assert detect_overextension_events(downside, ma_period=20, atr_period=14) == (
+        DeterministicTechnicalEvent(
+            event_type="overextension_down",
+            timestamp=downside[-1].timestamp,
+            candle_index=19,
+            severity="warning",
+            source_rule="latest_close_at_least_atr_multiple_below_sma",
+            source_indicators=("sma_20", "atr_14"),
+            reason=(
+                "Latest close 5 is at least 2x ATR below sma_20 9.55; "
+                "latest ATR is 0.3367346938775510204081632653."
+            ),
+            price=Decimal("5"),
+            invalidation_condition=(
+                "A close back within 2x ATR of sma_20 9.55 would end the downside "
+                "overextension condition."
+            ),
+        ),
+    )
+
+
+def test_detect_overextension_events_returns_empty_without_extension_or_history() -> None:
+    normal = tuple(make_candle(index, "10") for index in range(20))
+
+    assert detect_overextension_events(normal, ma_period=20, atr_period=14) == ()
+    assert detect_overextension_events(normal[:19], ma_period=20, atr_period=14) == ()
+
+
+def test_detect_overextension_events_rejects_non_positive_atr_multiple() -> None:
+    with pytest.raises(ValueError, match="atr_multiple must be positive"):
+        detect_overextension_events((make_candle(0, "10"),), atr_multiple=Decimal("0"))
 
 
 def test_detect_volatility_regime_events_reports_expansion_and_compression() -> None:
