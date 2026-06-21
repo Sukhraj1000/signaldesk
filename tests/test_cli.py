@@ -255,6 +255,10 @@ def test_providers_check_reports_default_local_provider_without_secrets() -> Non
         "twelve-data\tok\tunavailable until Twelve Data integration is implemented/configured"
         in result.stdout
     )
+    assert (
+        "stooq\tok\tnot checked (no external credentials required; "
+        "network availability is verified only during candle fetches)" in result.stdout
+    )
     assert "API_KEY" not in result.stdout
     assert "TOKEN" not in result.stdout
 

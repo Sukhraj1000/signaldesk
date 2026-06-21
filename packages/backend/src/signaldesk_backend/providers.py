@@ -866,11 +866,19 @@ class StooqProvider:
         )
 
     def health_check(self) -> ProviderResult[str]:
-        """Return a deterministic no-secret status without calling Stooq."""
+        """Return a deterministic no-secret status without calling Stooq.
+
+        Stooq is a no-key provider, but its runtime availability depends on the
+        public Stooq endpoint. Keep provider checks safe/offline and avoid
+        reporting a live-ready status that was not actually probed.
+        """
 
         return ProviderResult.success(
             provider=self.name,
-            data="ready (no external credentials required; network used only for candle fetches)",
+            data=(
+                "not checked (no external credentials required; "
+                "network availability is verified only during candle fetches)"
+            ),
         )
 
     def _historical_url(
