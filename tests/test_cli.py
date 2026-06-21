@@ -14,9 +14,12 @@ from signaldesk_backend import (
     ProviderRegistry,
     ProviderResult,
     Quote,
+    Settings,
     Symbol,
 )
 from signaldesk_cli.main import (
+    _config_inspect_payload,
+    _format_config_inspect,
     _format_provider_capabilities,
     _format_provider_health,
     _run_provider_health_checks,
@@ -345,6 +348,67 @@ def test_health_command() -> None:
     assert result.exit_code == 0
     assert "SignalDesk is configured for local." in result.stdout
 
+
+
+
+
+
+
+def test_config_inspect_reports_sanitized_table(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setenv("LOG_LEVEL", "debug")
+    monkeypatch.setenv(
+        "DATABASE_URL", "postgresql://signaldesk:dbpass@example.test:5432/signaldesk"
+    )
+    monkeypatch.setenv("REDIS_URL", "redis://:redispass@cache.test:6379/0")
+    monkeypatch.setenv("LLM_PROVIDER", "none")
+
+    result = CliRunner().invoke(app, ["config", "inspect"])
+
+    assert result.exit_code == 0
+    assert "setting\tvalue" in result.stdout
+    assert "app_env\ttest" in result.stdout
+    assert "log_level\tdebug" in result.stdout
+    assert "database_url\tpostgresql://<redacted>@example.test:5432/signaldesk" in result.stdout
+    assert "redis_url\tredis://<redacted>@cache.test:6379/0" in result.stdout
+    assert "dbpass" not in result.stdout
+    assert "redispass" not in result.stdout
+
+
+def test_config_inspect_reports_json_and_rejects_unknown_output(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setenv(
+        "DATABASE_URL", "postgresql://user:password@example.test/db?sslmode=require"
+    )
+    monkeypatch.setenv("REDIS_URL", "redis://redis.test:6379/0")
+
+    json_result = CliRunner().invoke(app, ["config", "inspect", "--output", "json"])
+    invalid_result = CliRunner().invoke(app, ["config", "inspect", "--output", "xml"])
+
+    assert json_result.exit_code == 0
+    payload = json.loads(json_result.stdout)
+    assert payload["database_url"] == "postgresql://<redacted>@example.test/db?sslmode=require"
+    assert payload["redis_url"] == "redis://redis.test:6379/0"
+    assert "password" not in json_result.stdout
+    assert invalid_result.exit_code == 2
+    assert "--output must be 'table' or 'json'." in invalid_result.stderr
+
+
+def test_config_inspect_helpers_redact_secrets_from_payload() -> None:
+    payload = _config_inspect_payload(
+        Settings(
+            app_env="ci",
+            log_level="warning",
+            database_url="postgresql://user:password@example.test/db",
+            redis_url="redis://:password@redis.test:6379/0",
+            llm_provider="none",
+        )
+    )
+    lines = _format_config_inspect(payload)
+
+    assert payload["database_url"] == "postgresql://<redacted>@example.test/db"
+    assert payload["redis_url"] == "redis://<redacted>@redis.test:6379/0"
+    assert "password" not in json.dumps(payload)
+    assert "password" not in "\n".join(lines)
 
 def test_providers_check_is_available_from_help() -> None:
     result = CliRunner().invoke(app, ["providers", "--help"])
