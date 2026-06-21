@@ -755,6 +755,21 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
         "atr_14": "2",
         "volume_average_20": "1029.5",
         "relative_volume_20": "1.010209042294603791929995139",
+        "trend_regime": {
+            "regime": "unknown",
+            "source_rule": "insufficient_history_for_trend_regime",
+            "reason": "Need at least 50 closes to classify trend; received 40.",
+        },
+        "volatility_regime": {
+            "regime": "unknown",
+            "source_rule": "insufficient_history_for_volatility_regime",
+            "reason": "Need at least 63 candles to classify volatility; received 40.",
+        },
+        "volume_regime": {
+            "regime": "normal_volume",
+            "source_rule": "latest_volume_within_prior_average_band",
+            "reason": "Latest volume is between 0.75x and 1.5x its prior trailing average.",
+        },
         "latest_swing_high": None,
         "latest_swing_low": None,
         "confirmation_level": None,
@@ -778,6 +793,25 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
                 "atr_14": "2",
                 "volume_average_20": "1029.5",
                 "relative_volume_20": "1.010209042294603791929995139",
+            },
+            "regimes": {
+                "trend": {
+                    "regime": "unknown",
+                    "source_rule": "insufficient_history_for_trend_regime",
+                    "reason": "Need at least 50 closes to classify trend; received 40.",
+                },
+                "volatility": {
+                    "regime": "unknown",
+                    "source_rule": "insufficient_history_for_volatility_regime",
+                    "reason": "Need at least 63 candles to classify volatility; received 40.",
+                },
+                "volume": {
+                    "regime": "normal_volume",
+                    "source_rule": "latest_volume_within_prior_average_band",
+                    "reason": (
+                        "Latest volume is between 0.75x and 1.5x its prior trailing average."
+                    ),
+                },
             },
             "swing_levels": {"latest_swing_high": None, "latest_swing_low": None},
             "setup_levels": {"confirmation_level": None, "invalidation_level": None},

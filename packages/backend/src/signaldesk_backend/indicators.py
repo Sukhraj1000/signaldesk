@@ -76,6 +76,15 @@ class ConfirmationInvalidationLevels(NamedTuple):
     confirmation: ConfirmationInvalidationLevel | None
     invalidation: ConfirmationInvalidationLevel | None
 
+
+class RegimeClassification(NamedTuple):
+    """A traceable deterministic market-regime label."""
+
+    regime: str
+    source_rule: str
+    reason: str
+
+
 FIBONACCI_RETRACEMENT_RATIOS: tuple[Decimal, ...] = (
     Decimal("0.236"),
     Decimal("0.382"),
@@ -283,9 +292,7 @@ def average_true_range(
     atr_values.append(previous_atr)
 
     for true_range in true_ranges[period:]:
-        previous_atr = (
-            (previous_atr * Decimal(period - 1)) + true_range
-        ) / decimal_period
+        previous_atr = ((previous_atr * Decimal(period - 1)) + true_range) / decimal_period
         atr_values.append(previous_atr)
 
     return tuple(atr_values)
@@ -337,13 +344,181 @@ def relative_volume(
             relative_values.append(None)
         else:
             trailing_average = rolling_sum / decimal_period
-            relative_values.append(
-                None if trailing_average == 0 else volume / trailing_average
-            )
+            relative_values.append(None if trailing_average == 0 else volume / trailing_average)
         rolling_sum += volume
         if index >= period:
             rolling_sum -= volumes[index - period]
     return tuple(relative_values)
+
+
+def classify_trend_regime(
+    values: Sequence[PriceInput], *, short_period: int = 20, long_period: int = 50
+) -> RegimeClassification:
+    """Classify trend from deterministic moving-average alignment.
+
+    The rule intentionally uses only canonical close prices: uptrend requires
+    close > short SMA > long SMA, downtrend requires close < short SMA < long
+    SMA, and ties/mixed states are sideways. Insufficient warmup returns
+    ``unknown`` with an explicit source rule rather than inventing context.
+    """
+
+    _validate_period(short_period)
+    _validate_period(long_period)
+    if short_period >= long_period:
+        raise ValueError("short_period must be less than long_period")
+
+    closes = _coerce_prices(values)
+    if len(closes) < long_period:
+        return RegimeClassification(
+            regime="unknown",
+            source_rule="insufficient_history_for_trend_regime",
+            reason=(
+                f"Need at least {long_period} closes to classify trend; received {len(closes)}."
+            ),
+        )
+
+    short_average = simple_moving_average(closes, period=short_period)[-1]
+    long_average = simple_moving_average(closes, period=long_period)[-1]
+    latest_close = closes[-1]
+    if short_average is None or long_average is None:
+        return RegimeClassification(
+            regime="unknown",
+            source_rule="unavailable_moving_average_for_trend_regime",
+            reason="Moving-average warmup did not produce a trend classification input.",
+        )
+    if latest_close > short_average > long_average:
+        return RegimeClassification(
+            regime="uptrend",
+            source_rule="close_above_short_sma_above_long_sma",
+            reason="Latest close is above the short SMA, and the short SMA is above the long SMA.",
+        )
+    if latest_close < short_average < long_average:
+        return RegimeClassification(
+            regime="downtrend",
+            source_rule="close_below_short_sma_below_long_sma",
+            reason="Latest close is below the short SMA, and the short SMA is below the long SMA.",
+        )
+    return RegimeClassification(
+        regime="sideways",
+        source_rule="mixed_or_tied_moving_average_alignment",
+        reason="Moving-average alignment is mixed or tied, so no directional trend is confirmed.",
+    )
+
+
+def classify_volatility_regime(
+    candles: Sequence[CandleInput], *, atr_period: int = 14, baseline_period: int = 50
+) -> RegimeClassification:
+    """Classify volatility from latest ATR versus its trailing baseline.
+
+    ``volatility_expansion`` means latest ATR is at least 1.5x the trailing ATR
+    baseline; ``volatility_compression`` means latest ATR is at most 0.75x that
+    baseline. Flat zero-range candles are classified as compression rather than
+    treated as an error.
+    """
+
+    _validate_period(atr_period)
+    _validate_period(baseline_period)
+    required_candles = atr_period + baseline_period - 1
+    if len(candles) < required_candles:
+        return RegimeClassification(
+            regime="unknown",
+            source_rule="insufficient_history_for_volatility_regime",
+            reason=(
+                f"Need at least {required_candles} candles to classify volatility; "
+                f"received {len(candles)}."
+            ),
+        )
+
+    atr_values = average_true_range(candles, period=atr_period)
+    computable_atr_values = tuple(value for value in atr_values if value is not None)
+    baseline_values = computable_atr_values[-baseline_period:]
+    if len(baseline_values) < baseline_period:
+        return RegimeClassification(
+            regime="unknown",
+            source_rule="unavailable_atr_baseline_for_volatility_regime",
+            reason="ATR warmup did not produce enough values for the volatility baseline.",
+        )
+    latest_atr = baseline_values[-1]
+    baseline_atr = sum(baseline_values, Decimal("0")) / Decimal(len(baseline_values))
+    if baseline_atr == 0:
+        if latest_atr == 0:
+            return RegimeClassification(
+                regime="volatility_compression",
+                source_rule="zero_latest_atr_and_zero_atr_baseline",
+                reason=(
+                    "Latest ATR and its trailing baseline are zero, indicating a flat "
+                    "volatility regime."
+                ),
+            )
+        return RegimeClassification(
+            regime="volatility_expansion",
+            source_rule="positive_latest_atr_against_zero_atr_baseline",
+            reason="Latest ATR is positive after a zero ATR baseline.",
+        )
+
+    relative_atr = latest_atr / baseline_atr
+    if relative_atr >= Decimal("1.5"):
+        return RegimeClassification(
+            regime="volatility_expansion",
+            source_rule="latest_atr_at_least_1_5x_trailing_baseline",
+            reason="Latest ATR is at least 1.5x its trailing baseline.",
+        )
+    if relative_atr <= Decimal("0.75"):
+        return RegimeClassification(
+            regime="volatility_compression",
+            source_rule="latest_atr_at_most_0_75x_trailing_baseline",
+            reason="Latest ATR is at most 0.75x its trailing baseline.",
+        )
+    return RegimeClassification(
+        regime="normal_volatility",
+        source_rule="latest_atr_within_trailing_baseline_band",
+        reason="Latest ATR is between 0.75x and 1.5x its trailing baseline.",
+    )
+
+
+def classify_volume_regime(
+    candles: Sequence[CandleInput], *, period: int = 20
+) -> RegimeClassification:
+    """Classify volume from latest volume versus prior trailing average volume."""
+
+    _validate_period(period)
+    if len(candles) <= period:
+        return RegimeClassification(
+            regime="unknown",
+            source_rule="insufficient_history_for_volume_regime",
+            reason=(
+                f"Need more than {period} candles to classify relative volume; "
+                f"received {len(candles)}."
+            ),
+        )
+
+    latest_relative_volume = relative_volume(candles, period=period)[-1]
+    if latest_relative_volume is None:
+        return RegimeClassification(
+            regime="unknown",
+            source_rule="unavailable_relative_volume_for_volume_regime",
+            reason=(
+                "Relative volume is unavailable, likely because the trailing volume "
+                "baseline is zero."
+            ),
+        )
+    if latest_relative_volume >= Decimal("1.5"):
+        return RegimeClassification(
+            regime="high_volume",
+            source_rule="latest_volume_at_least_1_5x_prior_average",
+            reason="Latest volume is at least 1.5x its prior trailing average.",
+        )
+    if latest_relative_volume <= Decimal("0.75"):
+        return RegimeClassification(
+            regime="low_volume",
+            source_rule="latest_volume_at_most_0_75x_prior_average",
+            reason="Latest volume is at most 0.75x its prior trailing average.",
+        )
+    return RegimeClassification(
+        regime="normal_volume",
+        source_rule="latest_volume_within_prior_average_band",
+        reason="Latest volume is between 0.75x and 1.5x its prior trailing average.",
+    )
 
 
 def detect_swing_highs(
@@ -461,9 +636,7 @@ def detect_support_resistance_zones(
         return SupportResistanceZones(support=(), resistance=())
 
     support_points = tuple(point for point in resolved_swing_points if point.kind == "low")
-    resistance_points = tuple(
-        point for point in resolved_swing_points if point.kind == "high"
-    )
+    resistance_points = tuple(point for point in resolved_swing_points if point.kind == "high")
     return SupportResistanceZones(
         support=_cluster_level_zones(
             support_points,
@@ -543,9 +716,7 @@ def derive_confirmation_invalidation_levels(
     )
 
 
-def _nearest_zone_above(
-    price: Decimal, zones: Sequence[LevelZone]
-) -> LevelZone | None:
+def _nearest_zone_above(price: Decimal, zones: Sequence[LevelZone]) -> LevelZone | None:
     candidates = tuple(zone for zone in zones if zone.representative_price > price)
     if not candidates:
         return None
@@ -555,9 +726,7 @@ def _nearest_zone_above(
     )
 
 
-def _nearest_zone_below(
-    price: Decimal, zones: Sequence[LevelZone]
-) -> LevelZone | None:
+def _nearest_zone_below(price: Decimal, zones: Sequence[LevelZone]) -> LevelZone | None:
     candidates = tuple(zone for zone in zones if zone.representative_price < price)
     if not candidates:
         return None
@@ -568,10 +737,7 @@ def _nearest_zone_below(
 
 
 def _zone_reference(zone: LevelZone) -> str:
-    return (
-        f"{zone.kind}_zone[{zone.lower_bound},{zone.upper_bound}]"
-        f" touches={zone.evidence_count}"
-    )
+    return f"{zone.kind}_zone[{zone.lower_bound},{zone.upper_bound}] touches={zone.evidence_count}"
 
 
 def _cluster_level_zones(
@@ -622,13 +788,9 @@ def _point_fits_cluster(
     upper_bound = max(prices)
     representative_price = sum(prices, Decimal("0")) / Decimal(len(prices))
     allowed_distance = (
-        tolerance
-        if tolerance_mode == "absolute"
-        else abs(representative_price) * tolerance
+        tolerance if tolerance_mode == "absolute" else abs(representative_price) * tolerance
     )
-    return (
-        lower_bound - allowed_distance <= point.price <= upper_bound + allowed_distance
-    )
+    return lower_bound - allowed_distance <= point.price <= upper_bound + allowed_distance
 
 
 def _zone_from_cluster(
@@ -721,9 +883,7 @@ def _detect_swings(
     return tuple(swings)
 
 
-def _validate_macd_periods(
-    fast_period: int, slow_period: int, signal_period: int
-) -> None:
+def _validate_macd_periods(fast_period: int, slow_period: int, signal_period: int) -> None:
     _validate_period(fast_period)
     _validate_period(slow_period)
     _validate_period(signal_period)
