@@ -543,6 +543,22 @@ def test_ta_command_runs_provider_to_indicator_bridge(monkeypatch: MonkeyPatch) 
     assert '"rsi_14"' in result.stdout
 
 
+def test_ta_command_defaults_to_yfinance_provider(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        cli_main,
+        "default_provider_registry",
+        lambda: ProviderRegistry((WorkingProvider(name="yfinance"),)),
+    )
+
+    result = CliRunner().invoke(app, ["ta", "AMD", "--llm", "none", "--output", "json"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["symbol"] == "AMD"
+    assert payload["provider"] == "yfinance"
+    assert payload["provenance"][0]["provider"] == "yfinance"
+
+
 def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
     monkeypatch: MonkeyPatch,
 ) -> None:

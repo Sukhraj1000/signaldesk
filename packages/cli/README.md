@@ -19,12 +19,18 @@ signaldesk health
 signaldesk providers list
 signaldesk providers mode
 signaldesk providers check
-signaldesk ta AMD --provider yfinance --llm none --output json
+signaldesk ta AMD --llm none --output json
 ```
 
 ## Provider modes
 
-Default mode:
+Default mode uses `yfinance` for price data when `--provider` is omitted:
+
+```bash
+signaldesk ta AMD --llm none --output json
+```
+
+The provider can still be passed explicitly for reproducible live checks:
 
 ```bash
 signaldesk ta AMD --provider yfinance --llm none --output json
