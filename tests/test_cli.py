@@ -220,6 +220,11 @@ def test_providers_list_reports_yfinance_capabilities(monkeypatch: MonkeyPatch) 
         in result.stdout
     )
     assert "fmp\tprice\ttrue\ttrue\tequity,etf,index\t1d\tnot_configured\tfalse" in result.stdout
+    assert (
+        "fmp\tfundamentals\tfalse\tfalse\tequity,etf,index\t\tnot_configured\tfalse"
+        in result.stdout
+    )
+    assert "fmp\tcatalyst\tfalse\tfalse\tequity,etf,index\t\tnot_configured\tfalse" in result.stdout
     assert "yfinance\tprice\ttrue\ttrue\tcrypto,equity,etf,index" in result.stdout
     assert "not_required\tfalse" in result.stdout
 

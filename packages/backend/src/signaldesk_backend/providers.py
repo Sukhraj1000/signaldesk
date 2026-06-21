@@ -1001,16 +1001,35 @@ class FmpProvider:
     _urlopen: Any | None = field(default=None, repr=False, compare=False)
 
     def capabilities(self) -> tuple[ProviderCapability, ...]:
-        """Return FMP quote and historical candle capabilities without network I/O."""
+        """Return FMP enhanced-data capabilities without network I/O."""
 
         credential_state = "configured" if self._api_key() is not None else "not_configured"
         return (
             ProviderCapability(
                 provider=self.name,
+                data_role="price",
                 supports_realtime=True,
                 supports_historical=True,
                 supported_asset_classes=frozenset({"equity", "etf", "index"}),
                 supported_intervals=frozenset({"1d"}),
+                credential_state=credential_state,
+                live_check_suitable=False,
+            ),
+            ProviderCapability(
+                provider=self.name,
+                data_role="fundamentals",
+                supports_realtime=False,
+                supports_historical=False,
+                supported_asset_classes=frozenset({"equity", "etf", "index"}),
+                credential_state=credential_state,
+                live_check_suitable=False,
+            ),
+            ProviderCapability(
+                provider=self.name,
+                data_role="catalyst",
+                supports_realtime=False,
+                supports_historical=False,
+                supported_asset_classes=frozenset({"equity", "etf", "index"}),
                 credential_state=credential_state,
                 live_check_suitable=False,
             ),
