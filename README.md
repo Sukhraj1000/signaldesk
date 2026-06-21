@@ -150,7 +150,13 @@ signaldesk providers list
 signaldesk providers check
 ```
 
-Live default-mode TA check:
+Live default-mode TA check (`yfinance` is the default price provider when `--provider` is omitted):
+
+```bash
+signaldesk ta AMD --llm none --output json
+```
+
+For explicit provider smoke evidence, keep using:
 
 ```bash
 signaldesk ta AMD --provider yfinance --llm none --output json
