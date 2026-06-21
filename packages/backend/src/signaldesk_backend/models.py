@@ -128,9 +128,17 @@ class ProviderCapability:
         )
         object.__setattr__(self, "supported_intervals", normalized_intervals)
         credential_state = self.credential_state.strip().lower().replace(" ", "_")
-        if credential_state not in {"not_required", "optional", "required", "placeholder"}:
+        if credential_state not in {
+            "not_required",
+            "optional",
+            "required",
+            "configured",
+            "not_configured",
+            "placeholder",
+        }:
             raise ValueError(
-                "credential_state must be not_required, optional, required, or placeholder"
+                "credential_state must be not_required, optional, required, "
+                "configured, not_configured, or placeholder"
             )
         object.__setattr__(self, "credential_state", credential_state)
         if self.max_history_days is not None and self.max_history_days <= 0:

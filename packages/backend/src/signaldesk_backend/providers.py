@@ -1003,6 +1003,7 @@ class FmpProvider:
     def capabilities(self) -> tuple[ProviderCapability, ...]:
         """Return FMP quote and historical candle capabilities without network I/O."""
 
+        credential_state = "configured" if self._api_key() is not None else "not_configured"
         return (
             ProviderCapability(
                 provider=self.name,
@@ -1010,7 +1011,7 @@ class FmpProvider:
                 supports_historical=True,
                 supported_asset_classes=frozenset({"equity", "etf", "index"}),
                 supported_intervals=frozenset({"1d"}),
-                credential_state="required",
+                credential_state=credential_state,
                 live_check_suitable=False,
             ),
         )

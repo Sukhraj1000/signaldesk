@@ -630,7 +630,7 @@ def test_fmp_provider_reports_capabilities_and_missing_key_safely(
     assert capabilities[0].supports_realtime is True
     assert capabilities[0].supports_historical is True
     assert capabilities[0].supported_intervals == frozenset({"1d"})
-    assert capabilities[0].credential_state == "required"
+    assert capabilities[0].credential_state == "not_configured"
     assert capabilities[0].live_check_suitable is False
     assert health == ProviderResult.success(
         provider="fmp", data="unavailable until FMP credentials are configured"
@@ -641,6 +641,15 @@ def test_fmp_provider_reports_capabilities_and_missing_key_safely(
     assert candles == ProviderResult.failure(
         provider="fmp", error="FMP credentials are not configured"
     )
+
+
+def test_fmp_provider_reports_configured_credential_state() -> None:
+    provider = FmpProvider(api_key="test-key")
+
+    capabilities = provider.capabilities()
+
+    assert capabilities[0].provider == "fmp"
+    assert capabilities[0].credential_state == "configured"
 
 
 def test_fmp_provider_translates_mocked_quote_and_candles() -> None:
