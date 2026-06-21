@@ -88,6 +88,38 @@ def test_validate_ta_signal_card_report_rejects_alias_drift() -> None:
         validate_ta_signal_card_report(payload)
 
 
+
+def test_validate_ta_signal_card_report_rejects_schema_identity_drift() -> None:
+    sections = _base_sections()
+    payload = assemble_ta_signal_card_report(**sections)  # type: ignore[arg-type]
+    payload["schema_version"] = "signaldesk.ta.v2"
+
+    with pytest.raises(ValueError, match="schema_version"):
+        validate_ta_signal_card_report(payload)
+
+
+def test_validate_ta_signal_card_report_rejects_identity_fact_drift() -> None:
+    sections = _base_sections()
+    payload = assemble_ta_signal_card_report(**sections)  # type: ignore[arg-type]
+    payload["facts"] = {**payload["facts"], "symbol": "NVDA"}
+    payload["signal_card"] = {**payload["signal_card"], "facts": payload["facts"]}
+
+    with pytest.raises(ValueError, match=r"facts\.symbol"):
+        validate_ta_signal_card_report(payload)
+
+
+def test_validate_ta_signal_card_report_rejects_provider_fact_drift() -> None:
+    sections = _base_sections()
+    payload = assemble_ta_signal_card_report(**sections)  # type: ignore[arg-type]
+    payload["provider_mode"] = {**payload["provider_mode"], "price_provider": "other"}
+    payload["signal_card"] = {
+        **payload["signal_card"],
+        "provider_mode": payload["provider_mode"],
+    }
+
+    with pytest.raises(ValueError, match="price_provider"):
+        validate_ta_signal_card_report(payload)
+
 def test_validate_ta_signal_card_report_rejects_missing_card_sections() -> None:
     sections = _base_sections()
     payload = assemble_ta_signal_card_report(**sections)  # type: ignore[arg-type]
