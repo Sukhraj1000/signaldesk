@@ -123,8 +123,51 @@ def technical_analysis(
         typer.echo(json.dumps(report, indent=2, sort_keys=True))
         return
 
-    for key in _TABLE_REPORT_KEYS:
-        typer.echo(f"{key}	{report[key]}")
+    for key, value in _ta_table_report_values(report).items():
+        typer.echo(f"{key}\t{value}")
+
+
+def _ta_table_report_values(report: dict[str, Any]) -> dict[str, Any]:
+    """Return the flat TA table view from the canonical signal-card object."""
+
+    card = report["signal_card"]
+    identity = card["identity"]
+    facts = card["facts"]
+    trend = card["trend"]
+    moving_averages = trend["moving_averages"]
+    momentum = trend["momentum"]
+    volatility = trend["volatility"]
+    volume = trend["volume"]
+    regimes = trend["regimes"]
+    levels = card["levels"]
+    values = {
+        "schema_version": identity["schema_version"],
+        "symbol": identity["symbol"],
+        "provider": facts["provider"],
+        "interval": facts["interval"],
+        "candles": facts["candles"],
+        "latest_timestamp": facts["latest_timestamp"],
+        "latest_close": facts["latest_close"],
+        "sma_20": moving_averages["sma_20"],
+        "ema_20": moving_averages["ema_20"],
+        "rsi_14": momentum["rsi_14"],
+        "macd": momentum["macd"],
+        "macd_signal": momentum["macd_signal"],
+        "macd_histogram": momentum["macd_histogram"],
+        "atr_14": volatility["atr_14"],
+        "volume_average_20": volume["volume_average_20"],
+        "relative_volume_20": volume["relative_volume_20"],
+        "trend_regime": regimes["trend"],
+        "volatility_regime": regimes["volatility"],
+        "volume_regime": regimes["volume"],
+        "technical_events": card["events"],
+        "latest_swing_high": levels["resistance"],
+        "latest_swing_low": levels["support"],
+        "confirmation_level": levels["confirmation"],
+        "invalidation_level": levels["invalidation"],
+        "llm": card["llm"],
+    }
+    return {key: values[key] for key in _TABLE_REPORT_KEYS}
 
 
 def _resolve_ta_provider(
@@ -330,6 +373,13 @@ def _technical_analysis_report(
             "macd": indicators["macd"],
             "macd_signal": indicators["macd_signal"],
             "macd_histogram": indicators["macd_histogram"],
+        },
+        "volatility": {
+            "atr_14": indicators["atr_14"],
+        },
+        "volume": {
+            "volume_average_20": indicators["volume_average_20"],
+            "relative_volume_20": indicators["relative_volume_20"],
         },
         "regimes": regimes,
     }

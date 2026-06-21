@@ -1148,6 +1148,13 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
             "macd_signal": expected["macd_signal"],
             "macd_histogram": expected["macd_histogram"],
         },
+        "volatility": {
+            "atr_14": expected["atr_14"],
+        },
+        "volume": {
+            "volume_average_20": expected["volume_average_20"],
+            "relative_volume_20": expected["relative_volume_20"],
+        },
         "regimes": expected["deterministic_signals"]["regimes"],
     }
     expected["levels"] = {

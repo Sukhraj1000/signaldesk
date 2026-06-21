@@ -285,11 +285,19 @@
         },
         "regimes": {
           "type": "object"
+        },
+        "volatility": {
+          "type": "object"
+        },
+        "volume": {
+          "type": "object"
         }
       },
       "required": [
         "moving_averages",
         "momentum",
+        "volatility",
+        "volume",
         "regimes"
       ],
       "type": "object"
