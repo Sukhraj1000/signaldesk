@@ -75,6 +75,7 @@ from signaldesk_backend.providers import (
     redact_provider_diagnostic,
     resolve_provider_mode,
 )
+from signaldesk_backend.scoring import score_technical_analysis
 
 __all__ = [
     "Candle",
@@ -144,6 +145,7 @@ __all__ = [
     "resolve_provider_mode",
     "relative_strength_index",
     "relative_volume",
+    "score_technical_analysis",
     "simple_moving_average",
     "volume_moving_average",
 ]
