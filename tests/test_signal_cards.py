@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 import pytest
 from signaldesk_backend import (
     assemble_ta_signal_card_report,
@@ -178,3 +181,35 @@ def test_extract_ta_signal_card_rejects_drift_before_rendering() -> None:
 
     with pytest.raises(ValueError, match="score"):
         extract_ta_signal_card(payload)
+
+
+def test_schema_required_sections_match_canonical_card_contract() -> None:
+    schema_path = (
+        Path(__file__).resolve().parents[1] / "docs/schemas/signaldesk.ta.v1.schema.json"
+    )
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+
+    expected_sections = [
+        "identity",
+        "provider_mode",
+        "facts",
+        "trend",
+        "levels",
+        "events",
+        "risk",
+        "score",
+        "provenance",
+        "unavailable_context",
+        "llm",
+        "narrative",
+    ]
+
+    assert schema["required"] == ["schema_version", *expected_sections, "signal_card"]
+    assert schema["properties"]["signal_card"]["required"] == expected_sections
+
+    sections = _base_sections()
+    payload = assemble_ta_signal_card_report(**sections)  # type: ignore[arg-type]
+
+    assert [section for section in expected_sections if section not in payload] == []
+    assert [section for section in expected_sections if section not in payload["signal_card"]] == []
+    assert all(payload["signal_card"][section] == payload[section] for section in expected_sections)
