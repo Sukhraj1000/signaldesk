@@ -184,7 +184,10 @@ def test_extract_ta_signal_card_rejects_drift_before_rendering() -> None:
 
 
 def test_schema_required_sections_match_canonical_card_contract() -> None:
-    schema = json.loads(Path("docs/schemas/signaldesk.ta.v1.schema.json").read_text())
+    schema_path = (
+        Path(__file__).resolve().parents[1] / "docs/schemas/signaldesk.ta.v1.schema.json"
+    )
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
 
     expected_sections = [
         "identity",
