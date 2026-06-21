@@ -35,7 +35,7 @@ Enhanced mode, once richer FMP support is built:
 signaldesk ta AMD --provider fmp --llm none --output json
 ```
 
-`signaldesk providers list` includes each capability's data role and credential state. The default `yfinance`, local fixture, local CSV, and Stooq paths report `not_required`; FMP reports `not_configured` until `FMP_API_KEY` is present and `configured` after credentials are available. Default adapters advertise `price`; FMP also advertises enhanced `fundamentals` and `catalyst` capability rows so richer context can be surfaced separately from default TA facts without making paid data required for default workflows.
+`signaldesk providers list` includes each capability's provider tier, data role, and credential state. The default `yfinance`, local fixture, local CSV, and Stooq paths report tier `default` with credentials `not_required`; FMP, Polygon, and Twelve Data report tier `enhanced` and stay optional. FMP reports `not_configured` until `FMP_API_KEY` is present and `configured` after credentials are available. Default adapters advertise `price`; FMP also advertises enhanced `fundamentals` and `catalyst` capability rows so richer context can be surfaced separately from default TA facts without making paid data required for core workflows.
 
 Future role-specific provider flags may split price, catalyst, fundamentals, and LLM providers.
 

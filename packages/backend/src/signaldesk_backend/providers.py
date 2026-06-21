@@ -1008,6 +1008,7 @@ class FmpProvider:
             ProviderCapability(
                 provider=self.name,
                 data_role="price",
+                provider_tier="enhanced",
                 supports_realtime=True,
                 supports_historical=True,
                 supported_asset_classes=frozenset({"equity", "etf", "index"}),
@@ -1018,6 +1019,7 @@ class FmpProvider:
             ProviderCapability(
                 provider=self.name,
                 data_role="fundamentals",
+                provider_tier="enhanced",
                 supports_realtime=False,
                 supports_historical=False,
                 supported_asset_classes=frozenset({"equity", "etf", "index"}),
@@ -1027,6 +1029,7 @@ class FmpProvider:
             ProviderCapability(
                 provider=self.name,
                 data_role="catalyst",
+                provider_tier="enhanced",
                 supports_realtime=False,
                 supports_historical=False,
                 supported_asset_classes=frozenset({"equity", "etf", "index"}),
@@ -1250,6 +1253,7 @@ class PlaceholderEnhancedProvider:
         return (
             ProviderCapability(
                 provider=self.name,
+                provider_tier="enhanced",
                 supports_realtime=True,
                 supports_historical=True,
                 supported_asset_classes=self.supported_asset_classes,

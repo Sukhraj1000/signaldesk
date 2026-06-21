@@ -592,6 +592,7 @@ def test_enhanced_provider_placeholders_are_offline_and_explicit(
     assert capabilities == (
         ProviderCapability(
             provider=provider_name,
+            provider_tier="enhanced",
             supports_realtime=True,
             supports_historical=True,
             supported_asset_classes=frozenset({"equity", "etf", "index"}),

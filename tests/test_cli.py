@@ -207,25 +207,34 @@ def test_providers_list_reports_yfinance_capabilities(monkeypatch: MonkeyPatch) 
 
     assert result.exit_code == 0
     assert (
-        "provider\trole\trealtime\thistorical\tasset_classes\tintervals\tcredential_state\tlive_check"
+        "provider\ttier\trole\trealtime\thistorical\tasset_classes\tintervals\tcredential_state\tlive_check"
         in result.stdout
     )
     assert (
-        "local-fixture\tprice\tfalse\ttrue\tequity,fixture\t1d\tnot_required\ttrue"
+        "local-fixture\tdefault\tprice\tfalse\ttrue\tequity,fixture\t1d\tnot_required\ttrue"
         in result.stdout
     )
-    assert "polygon\tprice\ttrue\ttrue\tequity,etf,index\t1d\tplaceholder\tfalse" in result.stdout
     assert (
-        "twelve-data\tprice\ttrue\ttrue\tequity,etf,index\t1d\tplaceholder\tfalse"
+        "polygon\tenhanced\tprice\ttrue\ttrue\tequity,etf,index\t1d\tplaceholder\tfalse"
         in result.stdout
     )
-    assert "fmp\tprice\ttrue\ttrue\tequity,etf,index\t1d\tnot_configured\tfalse" in result.stdout
     assert (
-        "fmp\tfundamentals\tfalse\tfalse\tequity,etf,index\t\tnot_configured\tfalse"
+        "twelve-data\tenhanced\tprice\ttrue\ttrue\tequity,etf,index\t1d\tplaceholder\tfalse"
         in result.stdout
     )
-    assert "fmp\tcatalyst\tfalse\tfalse\tequity,etf,index\t\tnot_configured\tfalse" in result.stdout
-    assert "yfinance\tprice\ttrue\ttrue\tcrypto,equity,etf,index" in result.stdout
+    assert (
+        "fmp\tenhanced\tprice\ttrue\ttrue\tequity,etf,index\t1d\tnot_configured\tfalse"
+        in result.stdout
+    )
+    assert (
+        "fmp\tenhanced\tfundamentals\tfalse\tfalse\tequity,etf,index\t\tnot_configured\tfalse"
+        in result.stdout
+    )
+    assert (
+        "fmp\tenhanced\tcatalyst\tfalse\tfalse\tequity,etf,index\t\tnot_configured\tfalse"
+        in result.stdout
+    )
+    assert "yfinance\tdefault\tprice\ttrue\ttrue\tcrypto,equity,etf,index" in result.stdout
     assert "not_required\tfalse" in result.stdout
 
 
@@ -508,8 +517,8 @@ def test_provider_capability_formatter_reports_registry_capabilities() -> None:
     lines = _format_provider_capabilities(ProviderRegistry((ExplodingProvider(),)))
 
     assert lines == (
-        "provider\trole\trealtime\thistorical\tasset_classes\tintervals\tcredential_state\tlive_check",
-        "exploding\tunknown\tfalse\tfalse\t\t\tunknown\tfalse",
+        "provider\ttier\trole\trealtime\thistorical\tasset_classes\tintervals\tcredential_state\tlive_check",
+        "exploding\tunknown\tunknown\tfalse\tfalse\t\t\tunknown\tfalse",
     )
 
 
@@ -517,8 +526,8 @@ def test_provider_capability_formatter_uses_declared_data_role() -> None:
     lines = _format_provider_capabilities(ProviderRegistry((FundamentalsCapabilityProvider(),)))
 
     assert lines == (
-        "provider\trole\trealtime\thistorical\tasset_classes\tintervals\tcredential_state\tlive_check",
-        "fundamentals-provider\tfundamentals\tfalse\ttrue\tequity\t1d\trequired\tfalse",
+        "provider\ttier\trole\trealtime\thistorical\tasset_classes\tintervals\tcredential_state\tlive_check",
+        "fundamentals-provider\tdefault\tfundamentals\tfalse\ttrue\tequity\t1d\trequired\tfalse",
     )
 
 
@@ -532,8 +541,11 @@ def test_providers_list_continues_when_capabilities_raise(monkeypatch: MonkeyPat
     result = CliRunner().invoke(app, ["providers", "list"])
 
     assert result.exit_code == 0
-    assert "exploding-capabilities\tunknown\tfalse\tfalse\t\t\tunknown\tfalse" in result.stdout
-    assert "exploding\tunknown\tfalse\tfalse\t\t\tunknown\tfalse" in result.stdout
+    assert (
+        "exploding-capabilities\tunknown\tunknown\tfalse\tfalse\t\t\tunknown\tfalse"
+        in result.stdout
+    )
+    assert "exploding\tunknown\tunknown\tfalse\tfalse\t\t\tunknown\tfalse" in result.stdout
     assert "secret capability detail" not in result.stdout
 
 

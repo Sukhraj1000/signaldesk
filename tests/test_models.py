@@ -115,6 +115,7 @@ def test_provider_capability_records_supported_features() -> None:
     capability = ProviderCapability(
         provider="yfinance",
         data_role=" Price ",
+        provider_tier=" Default ",
         supports_realtime=False,
         supports_historical=True,
         supported_asset_classes=frozenset({"equity", "etf"}),
@@ -127,6 +128,7 @@ def test_provider_capability_records_supported_features() -> None:
 
     assert capability.provider == "yfinance"
     assert capability.data_role == "price"
+    assert capability.provider_tier == "default"
     assert capability.supports_historical is True
     assert "equity" in capability.supported_asset_classes
     assert capability.supported_intervals == frozenset({"1d", "1wk"})
@@ -139,6 +141,16 @@ def test_provider_capability_validates_data_role() -> None:
         ProviderCapability(
             provider="fmp",
             data_role="news",
+            supports_realtime=True,
+            supports_historical=True,
+        )
+
+
+def test_provider_capability_validates_provider_tier() -> None:
+    with pytest.raises(ValueError, match="provider_tier"):
+        ProviderCapability(
+            provider="fmp",
+            provider_tier="paid",
             supports_realtime=True,
             supports_historical=True,
         )

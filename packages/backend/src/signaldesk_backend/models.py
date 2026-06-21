@@ -97,6 +97,7 @@ class ProviderCapability:
 
     provider: str
     data_role: str = "price"
+    provider_tier: str = "default"
     supports_realtime: bool
     supports_historical: bool
     supported_asset_classes: frozenset[str] = field(default_factory=frozenset)
@@ -115,6 +116,10 @@ class ProviderCapability:
         if data_role not in {"price", "catalyst", "fundamentals"}:
             raise ValueError("data_role must be price, catalyst, or fundamentals")
         object.__setattr__(self, "data_role", data_role)
+        provider_tier = self.provider_tier.strip().lower().replace(" ", "_")
+        if provider_tier not in {"default", "enhanced"}:
+            raise ValueError("provider_tier must be default or enhanced")
+        object.__setattr__(self, "provider_tier", provider_tier)
         normalized_asset_classes = frozenset(
             asset_class.strip().lower()
             for asset_class in self.supported_asset_classes
