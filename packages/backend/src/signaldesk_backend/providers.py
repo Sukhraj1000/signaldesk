@@ -334,69 +334,119 @@ class ProviderRegistry:
         return len(self._providers)
 
 
+@dataclass(frozen=True)
+class ProviderRoleConfig:
+    """Optional provider-role preferences used during mode resolution.
+
+    Blank values are ignored. Resolution remains capability-aware: a configured
+    provider must exist and advertise the requested data role before it is used.
+    """
+
+    default_price_provider: str | None = None
+    enhanced_price_provider: str | None = None
+    enhanced_fundamentals_provider: str | None = None
+    enhanced_catalyst_provider: str | None = None
+
+    def __post_init__(self) -> None:
+        for field_name in (
+            "default_price_provider",
+            "enhanced_price_provider",
+            "enhanced_fundamentals_provider",
+            "enhanced_catalyst_provider",
+        ):
+            value = getattr(self, field_name)
+            if value is None:
+                continue
+            normalized = normalize_provider_name(value) if value.strip() else None
+            object.__setattr__(self, field_name, normalized)
+
+
 def resolve_provider_mode(
     registry: ProviderRegistry,
     *,
     mode: str = "default",
+    role_config: ProviderRoleConfig | None = None,
 ) -> tuple[ProviderMode, tuple[UnavailableContext, ...]]:
     """Resolve role providers for a provider mode without network I/O.
 
-    Default mode keeps the open-data price path on yfinance. Enhanced mode uses
-    FMP for price/fundamentals/catalysts only when credentials are configured;
-    otherwise it keeps yfinance for price and reports enhanced context as
-    unavailable instead of crashing or silently pretending richer data exists.
+    Default mode keeps the open-data price path on yfinance unless a valid
+    configured default-price override is supplied. Enhanced mode uses configured
+    enhanced role preferences when available; otherwise it keeps the default price
+    path and reports enhanced context as unavailable instead of crashing or
+    silently pretending richer data exists.
     """
 
     normalized_mode = mode.strip().lower()
     if normalized_mode not in {"default", "enhanced"}:
         raise ValueError("mode must be default or enhanced")
 
+    config = role_config or ProviderRoleConfig()
     if normalized_mode == "default":
         return (
-            ProviderMode(mode="default", price_provider=_default_price_provider(registry)),
+            ProviderMode(mode="default", price_provider=_default_price_provider(registry, config)),
             (),
         )
 
-    fmp_configured = _provider_has_configured_role(registry, provider_name="fmp", role="price")
-    if fmp_configured:
-        return (
-            ProviderMode(
-                mode="enhanced",
-                price_provider="fmp",
-                fundamentals_provider="fmp",
-                catalyst_provider="fmp",
-            ),
-            (),
+    default_provider = _default_price_provider(registry, config)
+    enhanced_price_candidate = config.enhanced_price_provider or "fmp"
+    fundamentals_candidate = config.enhanced_fundamentals_provider or "fmp"
+    catalyst_candidate = config.enhanced_catalyst_provider or "fmp"
+
+    price_provider = default_provider
+    unavailable: list[UnavailableContext] = []
+    if _provider_has_usable_role(
+        registry, provider_name=enhanced_price_candidate, role="price", tier="enhanced"
+    ):
+        price_provider = enhanced_price_candidate
+    else:
+        unavailable.append(
+            _unavailable_role_context(
+                "enhanced_price",
+                enhanced_price_candidate,
+                f"using default {default_provider} price provider",
+            )
         )
 
-    default_provider = _default_price_provider(registry)
-    unavailable = (
-        UnavailableContext(
-            context_type="enhanced_price",
-            provider="fmp",
-            reason=(
-                "FMP credentials are not configured; "
-                f"using default {default_provider} price provider"
-            ),
-        ),
-        UnavailableContext(
-            context_type="fundamentals",
-            provider="fmp",
-            reason="FMP credentials are not configured",
-        ),
-        UnavailableContext(
-            context_type="catalyst",
-            provider="fmp",
-            reason="FMP credentials are not configured",
-        ),
-    )
+    fundamentals_provider = None
+    if _provider_has_usable_role(
+        registry,
+        provider_name=fundamentals_candidate,
+        role="fundamentals",
+        tier="enhanced",
+    ):
+        fundamentals_provider = fundamentals_candidate
+    else:
+        unavailable.append(_unavailable_role_context("fundamentals", fundamentals_candidate))
+
+    catalyst_provider = None
+    if _provider_has_usable_role(
+        registry, provider_name=catalyst_candidate, role="catalyst", tier="enhanced"
+    ):
+        catalyst_provider = catalyst_candidate
+    else:
+        unavailable.append(_unavailable_role_context("catalyst", catalyst_candidate))
+
     return (
-        ProviderMode(mode="enhanced", price_provider=default_provider),
-        unavailable,
+        ProviderMode(
+            mode="enhanced",
+            price_provider=price_provider,
+            fundamentals_provider=fundamentals_provider,
+            catalyst_provider=catalyst_provider,
+        ),
+        tuple(unavailable),
     )
 
 
-def _default_price_provider(registry: ProviderRegistry) -> str:
+def _default_price_provider(
+    registry: ProviderRegistry, role_config: ProviderRoleConfig | None = None
+) -> str:
+    configured_provider = (role_config or ProviderRoleConfig()).default_price_provider
+    if configured_provider is not None:
+        if _provider_has_usable_role(registry, provider_name=configured_provider, role="price"):
+            return configured_provider
+        raise ValueError(
+            f"default price provider is not usable for price role: {configured_provider}"
+        )
     if _provider_has_role(registry, provider_name="yfinance", role="price"):
         return "yfinance"
     if _provider_has_role(registry, provider_name="local-fixture", role="price"):
@@ -404,8 +454,24 @@ def _default_price_provider(registry: ProviderRegistry) -> str:
     raise ValueError("no default price provider is registered")
 
 
-def _provider_has_configured_role(
-    registry: ProviderRegistry, *, provider_name: str, role: str
+def _unavailable_role_context(
+    context_type: str, provider_name: str, suffix: str | None = None
+) -> UnavailableContext:
+    if provider_name == "fmp":
+        reason = "FMP credentials are not configured"
+    else:
+        reason = f"{provider_name} credentials are not configured or role is unavailable"
+    if suffix is not None:
+        reason = f"{reason}; {suffix}"
+    return UnavailableContext(
+        context_type=context_type,
+        provider=provider_name,
+        reason=reason,
+    )
+
+
+def _provider_has_usable_role(
+    registry: ProviderRegistry, *, provider_name: str, role: str, tier: str | None = None
 ) -> bool:
     try:
         provider = registry.get(provider_name)
@@ -416,7 +482,9 @@ def _provider_has_configured_role(
     except Exception:
         return False
     return any(
-        capability.data_role == role and capability.credential_state == "configured"
+        capability.data_role == role
+        and (tier is None or capability.provider_tier == tier)
+        and capability.credential_state in {"configured", "not_required"}
         for capability in capabilities
     )
 
@@ -1340,9 +1408,7 @@ class FmpProvider:
         self, symbol: Symbol, payload: Any
     ) -> ProviderResult[CatalystContext]:
         if not isinstance(payload, list):
-            return ProviderResult.failure(
-                provider=self.name, error="fmp catalyst data was invalid"
-            )
+            return ProviderResult.failure(provider=self.name, error="fmp catalyst data was invalid")
 
         events: list[CatalystEvent] = []
         try:
@@ -1353,9 +1419,7 @@ class FmpProvider:
                 if event is not None:
                     events.append(event)
         except (TypeError, ValueError):
-            return ProviderResult.failure(
-                provider=self.name, error="fmp catalyst data was invalid"
-            )
+            return ProviderResult.failure(provider=self.name, error="fmp catalyst data was invalid")
 
         if not events:
             return ProviderResult.failure(

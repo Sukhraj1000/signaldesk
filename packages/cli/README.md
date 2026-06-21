@@ -46,6 +46,15 @@ signaldesk ta AMD --provider fmp --llm none --output json
 
 `signaldesk providers mode` resolves the role-provider selection that higher-level signal cards can reuse without making network calls. Default mode selects `yfinance` for price data and leaves enhanced roles unavailable. `signaldesk providers mode --mode enhanced --output json` selects FMP roles only when credentials are configured; otherwise it keeps default yfinance price data and reports FMP fundamentals/catalysts as unavailable context.
 
+Provider role resolution can be configured with optional environment variables without changing the default open-data path:
+
+- `SIGNALDESK_DEFAULT_PRICE_PROVIDER`
+- `SIGNALDESK_ENHANCED_PRICE_PROVIDER`
+- `SIGNALDESK_ENHANCED_FUNDAMENTALS_PROVIDER`
+- `SIGNALDESK_ENHANCED_CATALYST_PROVIDER`
+
+Each configured provider must be registered, advertise the requested role, and be usable without missing credentials. Unusable default price preferences fail fast as configuration errors; unusable enhanced role preferences are reported as unavailable context and default price data still falls back to the configured default/yfinance path.
+
 `signaldesk providers check` stays safe by avoiding live network probes for providers whose capabilities mark `live_check=false`. Stooq is no-key and default-tier, but its health row reports `not checked` because public endpoint availability is proven only when a candle fetch runs. Use `signaldesk providers check --output json` for machine-readable status rows shaped as `provider`, `status`, `result`, and `warnings`; diagnostic text is redacted before it is printed.
 
 Future provider configuration can build on these resolved roles to split price, catalyst, fundamentals, and LLM providers.
