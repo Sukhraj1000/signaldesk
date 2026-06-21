@@ -285,39 +285,78 @@ def _unknown_provider_capability(provider_name: str) -> dict[str, Any]:
     }
 
 
-def _provider_capabilities_payload(registry: ProviderRegistry) -> tuple[dict[str, Any], ...]:
+def _provider_capabilities_payload(
+    registry: ProviderRegistry,
+    *,
+    role: str | None = None,
+    tier: str | None = None,
+) -> tuple[dict[str, Any], ...]:
     payload: list[dict[str, Any]] = []
+    normalized_role = _normalize_optional_filter(role)
+    normalized_tier = _normalize_optional_filter(tier)
     for provider in registry.list():
         try:
             capabilities = provider.capabilities()
         except Exception:
-            payload.append(_unknown_provider_capability(provider.name))
+            unknown_payload = _unknown_provider_capability(provider.name)
+            if _provider_capability_matches(
+                unknown_payload, role=normalized_role, tier=normalized_tier
+            ):
+                payload.append(unknown_payload)
             continue
         if not capabilities:
-            payload.append(_unknown_provider_capability(provider.name))
+            unknown_payload = _unknown_provider_capability(provider.name)
+            if _provider_capability_matches(
+                unknown_payload, role=normalized_role, tier=normalized_tier
+            ):
+                payload.append(unknown_payload)
             continue
         for capability in capabilities:
-            payload.append(
-                {
-                    "provider": provider.name,
-                    "tier": capability.provider_tier,
-                    "role": capability.data_role,
-                    "realtime": capability.supports_realtime,
-                    "historical": capability.supports_historical,
-                    "asset_classes": sorted(capability.supported_asset_classes),
-                    "intervals": sorted(capability.supported_intervals),
-                    "credential_state": capability.credential_state,
-                    "live_check": capability.live_check_suitable,
-                }
-            )
+            provider_capability = {
+                "provider": provider.name,
+                "tier": capability.provider_tier,
+                "role": capability.data_role,
+                "realtime": capability.supports_realtime,
+                "historical": capability.supports_historical,
+                "asset_classes": sorted(capability.supported_asset_classes),
+                "intervals": sorted(capability.supported_intervals),
+                "credential_state": capability.credential_state,
+                "live_check": capability.live_check_suitable,
+            }
+            if _provider_capability_matches(
+                provider_capability, role=normalized_role, tier=normalized_tier
+            ):
+                payload.append(provider_capability)
     return tuple(payload)
 
 
-def _format_provider_capabilities(registry: ProviderRegistry) -> tuple[str, ...]:
+def _normalize_optional_filter(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip().lower().replace(" ", "_")
+    return normalized or None
+
+
+def _provider_capability_matches(
+    capability: dict[str, Any], *, role: str | None, tier: str | None
+) -> bool:
+    if role is not None and capability["role"] != role:
+        return False
+    if tier is not None and capability["tier"] != tier:
+        return False
+    return True
+
+
+def _format_provider_capabilities(
+    registry: ProviderRegistry,
+    *,
+    role: str | None = None,
+    tier: str | None = None,
+) -> tuple[str, ...]:
     lines = [
         "provider\ttier\trole\trealtime\thistorical\tasset_classes\tintervals\tcredential_state\tlive_check"
     ]
-    for capability in _provider_capabilities_payload(registry):
+    for capability in _provider_capabilities_payload(registry, role=role, tier=tier):
         asset_classes = ",".join(capability["asset_classes"])
         intervals = ",".join(capability["intervals"])
         lines.append(
@@ -356,6 +395,13 @@ def _run_provider_health_checks(
 @providers_app.command("list")
 def providers_list(
     output: str = typer.Option("table", help="Output format: table or json."),
+    role: str | None = typer.Option(
+        None,
+        help="Only show capabilities for a data role such as price, fundamentals, or catalyst.",
+    ),
+    tier: str | None = typer.Option(
+        None, help="Only show capabilities for a provider tier: default or enhanced."
+    ),
 ) -> None:
     """List registered market-data providers and declared capabilities."""
 
@@ -366,10 +412,15 @@ def providers_list(
 
     registry = default_provider_registry()
     if output_format == "json":
-        typer.echo(json.dumps({"providers": _provider_capabilities_payload(registry)}, indent=2))
+        typer.echo(
+            json.dumps(
+                {"providers": _provider_capabilities_payload(registry, role=role, tier=tier)},
+                indent=2,
+            )
+        )
         return
 
-    for line in _format_provider_capabilities(registry):
+    for line in _format_provider_capabilities(registry, role=role, tier=tier):
         typer.echo(line)
 
 

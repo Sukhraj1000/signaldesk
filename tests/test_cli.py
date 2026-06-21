@@ -279,6 +279,51 @@ def test_providers_list_json_reports_machine_readable_capabilities(
     )
 
 
+def test_providers_list_filters_capabilities_by_role_and_tier(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("FMP_API_KEY", raising=False)
+
+    result = CliRunner().invoke(
+        app,
+        ["providers", "list", "--role", "fundamentals", "--tier", "enhanced"],
+    )
+
+    assert result.exit_code == 0
+    assert (
+        "provider\ttier\trole\trealtime\thistorical\tasset_classes\tintervals\tcredential_state\tlive_check"
+        in result.stdout
+    )
+    assert (
+        "fmp\tenhanced\tfundamentals\tfalse\tfalse\tequity,etf,index\t\tnot_configured\tfalse"
+        in result.stdout
+    )
+    assert "fmp\tenhanced\tprice" not in result.stdout
+    assert "local-fixture" not in result.stdout
+    assert "yfinance" not in result.stdout
+
+
+def test_providers_list_json_filters_capabilities_by_default_tier(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("FMP_API_KEY", raising=False)
+
+    result = CliRunner().invoke(
+        app, ["providers", "list", "--output", "json", "--tier", "default"]
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    capabilities = payload["providers"]
+    assert capabilities
+    assert all(capability["tier"] == "default" for capability in capabilities)
+    assert {capability["provider"] for capability in capabilities} == {
+        "local-fixture",
+        "stooq",
+        "yfinance",
+    }
+
+
 def test_providers_list_rejects_unknown_output_format() -> None:
     result = CliRunner().invoke(app, ["providers", "list", "--output", "xml"])
 
