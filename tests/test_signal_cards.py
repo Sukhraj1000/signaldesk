@@ -66,6 +66,15 @@ def test_assemble_ta_signal_card_report_rejects_missing_required_sections() -> N
         assemble_ta_signal_card_report(**sections)  # type: ignore[arg-type]
 
 
+
+def test_assemble_ta_signal_card_report_rejects_schema_version_drift() -> None:
+    sections = _base_sections()
+    sections["schema_version"] = "signaldesk.ta.v2"
+
+    with pytest.raises(ValueError, match="schema_version"):
+        assemble_ta_signal_card_report(**sections)  # type: ignore[arg-type]
+
+
 def test_validate_ta_signal_card_report_rejects_alias_drift() -> None:
     sections = _base_sections()
     payload = assemble_ta_signal_card_report(**sections)  # type: ignore[arg-type]
