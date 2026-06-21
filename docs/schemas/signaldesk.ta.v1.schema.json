@@ -52,6 +52,45 @@
       ],
       "type": "object"
     },
+    "fibonacci_level": {
+      "additionalProperties": false,
+      "properties": {
+        "direction": {
+          "enum": [
+            "up",
+            "down"
+          ]
+        },
+        "percent": {
+          "type": "string"
+        },
+        "price": {
+          "type": "string"
+        },
+        "ratio": {
+          "type": "string"
+        },
+        "source_rule": {
+          "const": "latest_swing_low_to_high_retracement"
+        },
+        "swing_end": {
+          "type": "string"
+        },
+        "swing_start": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "ratio",
+        "percent",
+        "price",
+        "direction",
+        "swing_start",
+        "swing_end",
+        "source_rule"
+      ],
+      "type": "object"
+    },
     "identity": {
       "additionalProperties": true,
       "properties": {
@@ -89,6 +128,9 @@
           ]
         },
         "fibonacci": {
+          "items": {
+            "$ref": "#/$defs/fibonacci_level"
+          },
           "type": "array"
         },
         "invalidation": {

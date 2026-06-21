@@ -8,6 +8,7 @@ import typer
 from signaldesk_backend import (
     Candle,
     ConfirmationInvalidationLevel,
+    FibonacciRetracementLevel,
     ProviderRegistry,
     ProviderResult,
     ProviderRoleConfig,
@@ -17,6 +18,7 @@ from signaldesk_backend import (
     Symbol,
     assess_technical_analysis_risks,
     average_true_range,
+    calculate_fibonacci_retracement_levels,
     classify_trend_regime,
     classify_volatility_regime,
     classify_volume_regime,
@@ -274,6 +276,9 @@ def _technical_analysis_report(
     )
     latest_swing_high = _latest_level(detect_swing_highs(candles))
     latest_swing_low = _latest_level(detect_swing_lows(candles))
+    fibonacci_levels = _fibonacci_level_payloads(
+        latest_swing_low=latest_swing_low, latest_swing_high=latest_swing_high
+    )
     setup_levels = derive_confirmation_invalidation_levels(candles)
     latest_candle = candles[-1]
 
@@ -386,7 +391,7 @@ def _technical_analysis_report(
     levels: dict[str, Any] = {
         "support": swing_levels["latest_swing_low"],
         "resistance": swing_levels["latest_swing_high"],
-        "fibonacci": [],
+        "fibonacci": fibonacci_levels,
         "confirmation": setup["confirmation_level"],
         "invalidation": setup["invalidation_level"],
     }
@@ -460,6 +465,7 @@ def _technical_analysis_report(
             "regimes": regimes,
             "events": events,
             "swing_levels": swing_levels,
+            "fibonacci_levels": fibonacci_levels,
             "setup_levels": setup,
         },
         "risks": risks,
@@ -468,6 +474,33 @@ def _technical_analysis_report(
         "unavailable_context": unavailable_context,
         "llm": "none",
         "narrative": None,
+    }
+
+
+def _fibonacci_level_payloads(
+    *, latest_swing_low: dict[str, Any] | None, latest_swing_high: dict[str, Any] | None
+) -> list[dict[str, Any]]:
+    if latest_swing_low is None or latest_swing_high is None:
+        return []
+
+    low = Decimal(latest_swing_low["price"])
+    high = Decimal(latest_swing_high["price"])
+    if low >= high:
+        return []
+
+    levels = calculate_fibonacci_retracement_levels(low, high)
+    return [_fibonacci_level_payload(level) for level in levels]
+
+
+def _fibonacci_level_payload(level: FibonacciRetracementLevel) -> dict[str, Any]:
+    return {
+        "ratio": _decimal_text(level.ratio),
+        "percent": _decimal_text(level.percent),
+        "price": _decimal_text(level.price),
+        "direction": level.direction,
+        "swing_start": _decimal_text(level.swing_start),
+        "swing_end": _decimal_text(level.swing_end),
+        "source_rule": "latest_swing_low_to_high_retracement",
     }
 
 
