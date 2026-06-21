@@ -5,6 +5,8 @@ from decimal import Decimal
 import pytest
 from signaldesk_backend import (
     Candle,
+    ConfirmationInvalidationLevel,
+    ConfirmationInvalidationLevels,
     DeterministicTechnicalEvent,
     FibonacciRetracementLevel,
     LevelZone,
@@ -16,6 +18,7 @@ from signaldesk_backend import (
     classify_volatility_regime,
     classify_volume_regime,
     derive_confirmation_invalidation_levels,
+    detect_breakout_breakdown_events,
     detect_moving_average_cross_events,
     detect_relative_volume_spike_events,
     detect_support_resistance_zones,
@@ -885,6 +888,140 @@ def test_detect_moving_average_cross_events_returns_empty_without_cross_or_histo
 
     assert detect_moving_average_cross_events(no_cross, period=3) == ()
     assert detect_moving_average_cross_events(no_cross[:3], period=3) == ()
+
+
+def test_detect_breakout_breakdown_events_reports_level_crosses() -> None:
+    breakout_candles = tuple(
+        make_candle(index, close) for index, close in enumerate(("10", "10.50", "12"))
+    )
+    breakdown_candles = tuple(
+        make_candle(index, close) for index, close in enumerate(("10", "9.50", "8"))
+    )
+    levels = ConfirmationInvalidationLevels(
+        confirmation=ConfirmationInvalidationLevel(
+            kind="confirmation",
+            price=Decimal("11"),
+            source_rule="nearest_resistance_above_latest_close",
+            source_level="resistance_zone[10.8,11.2] touches=2",
+            reason="fixture confirmation level",
+        ),
+        invalidation=ConfirmationInvalidationLevel(
+            kind="invalidation",
+            price=Decimal("9"),
+            source_rule="nearest_support_below_latest_close",
+            source_level="support_zone[8.8,9.2] touches=2",
+            reason="fixture invalidation level",
+        ),
+    )
+
+    assert detect_breakout_breakdown_events(breakout_candles, levels=levels) == (
+        DeterministicTechnicalEvent(
+            event_type="breakout",
+            timestamp=breakout_candles[-1].timestamp,
+            candle_index=2,
+            severity="bullish",
+            source_rule="latest_close_crossed_above_confirmation_level",
+            source_indicators=("resistance_zone[10.8,11.2] touches=2",),
+            reason=(
+                "Latest close 12 crossed above confirmation level 11 from "
+                "resistance_zone[10.8,11.2] touches=2."
+            ),
+            price=Decimal("12"),
+            invalidation_condition=(
+                "A close back below confirmation level 11 would invalidate the breakout event."
+            ),
+        ),
+    )
+    assert detect_breakout_breakdown_events(breakdown_candles, levels=levels) == (
+        DeterministicTechnicalEvent(
+            event_type="breakdown",
+            timestamp=breakdown_candles[-1].timestamp,
+            candle_index=2,
+            severity="bearish",
+            source_rule="latest_close_crossed_below_invalidation_level",
+            source_indicators=("support_zone[8.8,9.2] touches=2",),
+            reason=(
+                "Latest close 8 crossed below invalidation level 9 from "
+                "support_zone[8.8,9.2] touches=2."
+            ),
+            price=Decimal("8"),
+            invalidation_condition=(
+                "A close back above invalidation level 9 would invalidate the breakdown event."
+            ),
+        ),
+    )
+
+
+def test_detect_breakout_breakdown_events_derives_prior_setup_levels() -> None:
+    prior_candles = tuple(
+        make_ohlc_candle(
+            index,
+            open_=Decimal("10"),
+            high=Decimal(str(high)),
+            low=Decimal(str(low)),
+            close=Decimal(str(close)),
+        )
+        for index, high, low, close in (
+            (0, "10", "8.50", "9"),
+            (1, "12.05", "9", "12"),
+            (2, "11", "8", "8.50"),
+            (3, "12", "9", "11"),
+            (4, "10", "8.05", "9"),
+            (5, "11", "9", "10"),
+        )
+    )
+    breakout_candles = (
+        *prior_candles,
+        make_ohlc_candle(
+            6,
+            open_=Decimal("10"),
+            high=Decimal("13.50"),
+            low=Decimal("9.75"),
+            close=Decimal("13"),
+        ),
+    )
+    breakdown_candles = (
+        *prior_candles,
+        make_ohlc_candle(
+            6,
+            open_=Decimal("10"),
+            high=Decimal("10.25"),
+            low=Decimal("6.75"),
+            close=Decimal("7"),
+        ),
+    )
+
+    breakout_events = detect_breakout_breakdown_events(breakout_candles, window=1)
+    breakdown_events = detect_breakout_breakdown_events(breakdown_candles, window=1)
+
+    assert tuple(event.event_type for event in breakout_events) == ("breakout",)
+    assert breakout_events[0].source_rule == "latest_close_crossed_above_confirmation_level"
+    assert breakout_events[0].source_indicators == ("resistance_zone[12,12.05] touches=2",)
+    assert "confirmation level 12.025" in breakout_events[0].reason
+    assert tuple(event.event_type for event in breakdown_events) == ("breakdown",)
+    assert breakdown_events[0].source_rule == "latest_close_crossed_below_invalidation_level"
+    assert breakdown_events[0].source_indicators == ("support_zone[8,8.05] touches=2",)
+    assert "invalidation level 8.025" in breakdown_events[0].reason
+
+
+def test_detect_breakout_breakdown_events_returns_empty_without_cross_or_levels() -> None:
+    no_cross = tuple(
+        make_candle(index, close) for index, close in enumerate(("10", "10.50", "10.75"))
+    )
+    levels = ConfirmationInvalidationLevels(
+        confirmation=ConfirmationInvalidationLevel(
+            kind="confirmation",
+            price=Decimal("11"),
+            source_rule="nearest_resistance_above_latest_close",
+            source_level="resistance_zone[11,11] touches=1",
+            reason="fixture confirmation level",
+        ),
+        invalidation=None,
+    )
+
+    assert detect_breakout_breakdown_events(no_cross, levels=levels) == ()
+    assert detect_breakout_breakdown_events(no_cross[:1], levels=levels) == ()
+    assert detect_breakout_breakdown_events(no_cross) == ()
 
 
 def test_detect_relative_volume_spike_events_reports_traceable_spike() -> None:
