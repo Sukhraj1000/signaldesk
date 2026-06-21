@@ -237,6 +237,33 @@ class MovingAverageCrossProvider(WorkingProvider):
 
 
 @dataclass(frozen=True)
+class RelativeVolumeSpikeProvider(WorkingProvider):
+    name: str = "relative-volume-spike"
+
+    def get_historical_candles(
+        self,
+        symbol: Symbol,
+        *,
+        start: datetime,
+        end: datetime,
+        interval: str,
+    ) -> ProviderResult[tuple[Candle, ...]]:
+        candles = tuple(
+            Candle(
+                symbol=symbol,
+                timestamp=datetime(2024, 1, 1, tzinfo=UTC) + timedelta(days=index),
+                open=Decimal("10"),
+                high=Decimal("10"),
+                low=Decimal("10"),
+                close=Decimal("10"),
+                volume=200 if index == 20 else 100,
+            )
+            for index in range(21)
+        )
+        return ProviderResult.success(provider=self.name, data=candles)
+
+
+@dataclass(frozen=True)
 class FailingHistoricalProvider(WorkingProvider):
     name: str = "failing-history"
 
@@ -968,6 +995,50 @@ def test_ta_command_includes_traceable_moving_average_events(
             "price": "12",
             "invalidation_condition": (
                 "A close back below sma_20 10.05 would invalidate the reclaim event."
+            ),
+        }
+    ]
+    assert payload["deterministic_signals"]["events"] == payload["technical_events"]
+
+
+def test_ta_command_includes_traceable_relative_volume_spike_events(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        cli_main,
+        "default_provider_registry",
+        lambda: ProviderRegistry((RelativeVolumeSpikeProvider(),)),
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "ta",
+            "AMD",
+            "--provider",
+            "relative-volume-spike",
+            "--llm",
+            "none",
+            "--output",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["technical_events"] == [
+        {
+            "event_type": "relative_volume_spike",
+            "timestamp": "2024-01-21T00:00:00+00:00",
+            "candle_index": 20,
+            "severity": "info",
+            "source_rule": "latest_volume_at_least_threshold_x_prior_average",
+            "source_indicators": ["relative_volume_20"],
+            "reason": "Latest volume 200 is 2x its prior 20-candle average volume 100.",
+            "price": "10",
+            "invalidation_condition": (
+                "Relative volume below 1.5x the prior 20-candle average would end "
+                "the spike condition."
             ),
         }
     ]

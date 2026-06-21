@@ -20,6 +20,7 @@ from signaldesk_backend import (
     default_provider_registry,
     derive_confirmation_invalidation_levels,
     detect_moving_average_cross_events,
+    detect_relative_volume_spike_events,
     detect_swing_highs,
     detect_swing_lows,
     exponential_moving_average,
@@ -210,7 +211,10 @@ def _technical_analysis_report(
     trend_regime = classify_trend_regime(closes)
     volatility_regime = classify_volatility_regime(candles)
     volume_regime = classify_volume_regime(candles)
-    technical_events = detect_moving_average_cross_events(candles)
+    technical_events = (
+        *detect_moving_average_cross_events(candles),
+        *detect_relative_volume_spike_events(candles),
+    )
     latest_swing_high = _latest_level(detect_swing_highs(candles))
     latest_swing_low = _latest_level(detect_swing_lows(candles))
     setup_levels = derive_confirmation_invalidation_levels(candles)

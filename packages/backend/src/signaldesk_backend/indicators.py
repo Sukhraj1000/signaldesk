@@ -608,6 +608,55 @@ def detect_moving_average_cross_events(
     return ()
 
 
+def detect_relative_volume_spike_events(
+    candles: Sequence[CandleInput], *, period: int = 20, threshold: Decimal = Decimal("1.5")
+) -> tuple[DeterministicTechnicalEvent, ...]:
+    """Detect a latest-candle relative volume spike from a prior trailing baseline.
+
+    The event is emitted only when the latest candle volume is at least
+    ``threshold`` times its prior trailing average volume. The rule uses the same
+    prior-baseline relative volume calculation as ``classify_volume_regime`` so
+    it does not silently include the latest candle in its own comparison window.
+    Warmup periods, zero baselines, or non-spike values return no event.
+    """
+
+    _validate_period(period)
+    if threshold <= Decimal("0"):
+        raise ValueError("threshold must be positive")
+    if len(candles) <= period:
+        return ()
+
+    latest_relative_volume = relative_volume(candles, period=period)[-1]
+    if latest_relative_volume is None or latest_relative_volume < threshold:
+        return ()
+
+    latest_candle = candles[-1]
+    average_volume = volume_moving_average(candles[:-1], period=period)[-1]
+    if average_volume is None:
+        return ()
+
+    relative_volume_indicator = f"relative_volume_{period}"
+    return (
+        DeterministicTechnicalEvent(
+            event_type="relative_volume_spike",
+            timestamp=latest_candle.timestamp,
+            candle_index=len(candles) - 1,
+            severity="info",
+            source_rule="latest_volume_at_least_threshold_x_prior_average",
+            source_indicators=(relative_volume_indicator,),
+            reason=(
+                f"Latest volume {latest_candle.volume} is {latest_relative_volume}x its "
+                f"prior {period}-candle average volume {average_volume}."
+            ),
+            price=latest_candle.close,
+            invalidation_condition=(
+                f"Relative volume below {threshold}x the prior {period}-candle average "
+                "would end the spike condition."
+            ),
+        ),
+    )
+
+
 def detect_swing_highs(
     candles: Sequence[CandleInput],
     *,
