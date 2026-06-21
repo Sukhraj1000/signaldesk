@@ -97,6 +97,23 @@ def assemble_ta_signal_card_report(
     return report
 
 
+def extract_ta_signal_card(report: Mapping[str, Any]) -> dict[str, Any]:
+    """Return the validated canonical signal card for renderers.
+
+    CLI, API, dashboard, and reporting adapters should call this helper before
+    rendering from a TA report. It keeps the boundary boring: deterministic
+    assembly remains the source of truth, aliases are validated for drift, and
+    consumers receive only the nested signal_card object instead of
+    re-selecting facts, levels, risk, score, provenance, or unavailable context.
+    """
+
+    validate_ta_signal_card_report(report)
+    signal_card = report["signal_card"]
+    if not isinstance(signal_card, dict):
+        raise ValueError("signal_card must be a JSON object")
+    return signal_card
+
+
 def validate_ta_signal_card_report(report: Mapping[str, Any]) -> None:
     """Validate renderer-facing signal-card alias consistency.
 
