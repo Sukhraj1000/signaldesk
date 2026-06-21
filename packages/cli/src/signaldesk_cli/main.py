@@ -3,6 +3,7 @@ import os
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 import typer
 from signaldesk_backend import (
@@ -48,7 +49,9 @@ from signaldesk_backend import (
 
 app = typer.Typer(help="SignalDesk command-line interface.")
 providers_app = typer.Typer(help="Inspect configured market-data providers.")
+config_app = typer.Typer(help="Inspect local SignalDesk configuration without exposing secrets.")
 app.add_typer(providers_app, name="providers")
+app.add_typer(config_app, name="config")
 
 
 @app.callback()
@@ -62,6 +65,67 @@ def health() -> None:
     settings = Settings.from_env()
     typer.echo(f"SignalDesk is configured for {settings.app_env}.")
 
+
+
+def _redact_url_secret(value: str) -> str:
+    """Redact URL userinfo secrets while preserving operational context."""
+
+    try:
+        parts = urlsplit(value)
+    except ValueError:
+        return redact_provider_diagnostic(value)
+    if not parts.scheme or not parts.netloc:
+        return redact_provider_diagnostic(value)
+    host = parts.hostname or ""
+    if not host:
+        return redact_provider_diagnostic(value)
+    netloc = host
+    if parts.port is not None:
+        netloc = f"{netloc}:{parts.port}"
+    if parts.username is not None:
+        username = parts.username
+        netloc = f"{username}:<redacted>@{netloc}"
+    return redact_provider_diagnostic(
+        urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+    )
+
+
+def _config_inspect_payload(settings: Settings) -> dict[str, str]:
+    """Return configuration fields safe for terminal or JSON output."""
+
+    return {
+        "app_env": settings.app_env,
+        "log_level": settings.log_level,
+        "database_url": _redact_url_secret(settings.database_url),
+        "redis_url": _redact_url_secret(settings.redis_url),
+        "llm_provider": settings.llm_provider,
+    }
+
+
+def _format_config_inspect(payload: dict[str, str]) -> tuple[str, ...]:
+    lines = ["setting\tvalue"]
+    lines.extend(f"{key}\t{value}" for key, value in payload.items())
+    return tuple(lines)
+
+
+@config_app.command("inspect")
+def config_inspect(
+    output: str = typer.Option("table", help="Output format: table or json."),
+) -> None:
+    """Print sanitized local configuration values without checking external services."""
+
+    output_format = output.strip().lower()
+    if output_format not in {"table", "json"}:
+        typer.echo("--output must be 'table' or 'json'.", err=True)
+        raise typer.Exit(2)
+
+    payload = _config_inspect_payload(Settings.from_env())
+    if output_format == "json":
+        typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+        return
+
+    for line in _format_config_inspect(payload):
+        typer.echo(line)
 
 @app.command("ta")
 def technical_analysis(
