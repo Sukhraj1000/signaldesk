@@ -58,6 +58,7 @@ class ExplodingCapabilitiesProvider(ExplodingProvider):
 @dataclass(frozen=True)
 class WorkingProvider:
     name: str = "working"
+    credential_state: str = "not_required"
 
     def capabilities(self) -> tuple[ProviderCapability, ...]:
         return (
@@ -67,7 +68,7 @@ class WorkingProvider:
                 supports_historical=True,
                 supported_asset_classes=frozenset({"fixture"}),
                 supported_intervals=frozenset({"1d"}),
-                credential_state="not_required",
+                credential_state=self.credential_state,
                 live_check_suitable=True,
                 max_history_days=365,
                 rate_limit_per_minute=60,
@@ -562,7 +563,87 @@ def test_ta_command_defaults_to_yfinance_provider(monkeypatch: MonkeyPatch) -> N
     payload = json.loads(result.stdout)
     assert payload["symbol"] == "AMD"
     assert payload["provider"] == "yfinance"
+    assert payload["provider_mode"] == {
+        "mode": "default",
+        "price_provider": "yfinance",
+        "fundamentals_provider": None,
+        "catalyst_provider": None,
+        "llm_provider": None,
+    }
     assert payload["provenance"][0]["provider"] == "yfinance"
+
+
+def test_ta_command_resolves_enhanced_mode_price_provider(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        cli_main,
+        "default_provider_registry",
+        lambda: ProviderRegistry(
+            (
+                WorkingProvider(name="yfinance"),
+                WorkingProvider(name="fmp", credential_state="configured"),
+            )
+        ),
+    )
+
+    result = CliRunner().invoke(
+        app, ["ta", "AMD", "--mode", "enhanced", "--llm", "none", "--output", "json"]
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["provider"] == "fmp"
+    assert payload["provider_mode"] == {
+        "mode": "enhanced",
+        "price_provider": "fmp",
+        "fundamentals_provider": "fmp",
+        "catalyst_provider": "fmp",
+        "llm_provider": None,
+    }
+
+
+def test_ta_command_reports_enhanced_mode_unavailable_context_when_fmp_key_missing(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        cli_main,
+        "default_provider_registry",
+        lambda: ProviderRegistry(
+            (
+                WorkingProvider(name="yfinance"),
+                WorkingProvider(name="fmp", credential_state="not_configured"),
+            )
+        ),
+    )
+
+    result = CliRunner().invoke(
+        app, ["ta", "AMD", "--mode", "enhanced", "--llm", "none", "--output", "json"]
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["provider"] == "yfinance"
+    assert payload["provider_mode"]["mode"] == "enhanced"
+    assert payload["provider_mode"]["price_provider"] == "yfinance"
+    assert payload["unavailable_context"][:3] == [
+        {
+            "context_type": "enhanced_price",
+            "reason": "FMP credentials are not configured; using default yfinance price provider",
+            "provider": "fmp",
+            "details": None,
+        },
+        {
+            "context_type": "fundamentals",
+            "reason": "FMP credentials are not configured",
+            "provider": "fmp",
+            "details": None,
+        },
+        {
+            "context_type": "catalyst",
+            "reason": "FMP credentials are not configured",
+            "provider": "fmp",
+            "details": None,
+        },
+    ]
 
 
 def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
@@ -583,6 +664,13 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
         "schema_version": "signaldesk.ta.v1",
         "symbol": "AMD",
         "provider": "working",
+        "provider_mode": {
+            "mode": "explicit",
+            "price_provider": "working",
+            "fundamentals_provider": None,
+            "catalyst_provider": None,
+            "llm_provider": None,
+        },
         "interval": "1d",
         "candles": 40,
         "latest_timestamp": "2024-02-09T00:00:00+00:00",

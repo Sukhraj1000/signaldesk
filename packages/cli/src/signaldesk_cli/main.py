@@ -46,7 +46,17 @@ def health() -> None:
 @app.command("ta")
 def technical_analysis(
     symbol: str,
-    provider: str = typer.Option("yfinance", help="Registered market-data provider to use."),
+    provider: str | None = typer.Option(
+        None,
+        help=(
+            "Registered market-data provider to use. When omitted, SignalDesk "
+            "uses --mode role resolution."
+        ),
+    ),
+    mode: str = typer.Option(
+        "default",
+        help="Provider role mode to resolve when --provider is omitted: default or enhanced.",
+    ),
     llm: str = typer.Option("none", help="LLM provider. Only 'none' is currently supported."),
     interval: str = typer.Option("1d", help="Historical candle interval."),
     days: int = typer.Option(120, min=1, help="Number of calendar days of history to request."),
@@ -66,7 +76,11 @@ def technical_analysis(
     registry = default_provider_registry()
     try:
         requested_symbol = Symbol(symbol)
-        market_data_provider = registry.get(provider)
+        (
+            market_data_provider,
+            provider_mode_payload,
+            mode_unavailable_context,
+        ) = _resolve_ta_provider(registry, provider=provider, mode=mode)
     except (KeyError, ValueError) as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(2) from exc
@@ -86,6 +100,8 @@ def technical_analysis(
         provider_name=market_data_provider.name,
         candles=result.data,
         interval=interval,
+        provider_mode=provider_mode_payload,
+        mode_unavailable_context=mode_unavailable_context,
     )
     if output_format == "json":
         typer.echo(json.dumps(report, indent=2, sort_keys=True))
@@ -93,6 +109,48 @@ def technical_analysis(
 
     for key in _TABLE_REPORT_KEYS:
         typer.echo(f"{key}	{report[key]}")
+
+
+def _resolve_ta_provider(
+    registry: ProviderRegistry, *, provider: str | None, mode: str
+) -> tuple[Any, dict[str, Any], tuple[dict[str, Any], ...]]:
+    """Resolve the TA price provider and role metadata without network I/O."""
+
+    explicit_provider = provider.strip() if provider is not None else ""
+    if explicit_provider:
+        market_data_provider = registry.get(explicit_provider)
+        return (
+            market_data_provider,
+            {
+                "mode": "explicit",
+                "price_provider": market_data_provider.name,
+                "fundamentals_provider": None,
+                "catalyst_provider": None,
+                "llm_provider": None,
+            },
+            (),
+        )
+
+    provider_mode, unavailable_context = resolve_provider_mode(registry, mode=mode)
+    return (
+        registry.get(provider_mode.price_provider),
+        {
+            "mode": provider_mode.mode,
+            "price_provider": provider_mode.price_provider,
+            "fundamentals_provider": provider_mode.fundamentals_provider,
+            "catalyst_provider": provider_mode.catalyst_provider,
+            "llm_provider": provider_mode.llm_provider,
+        },
+        tuple(
+            {
+                "context_type": item.context_type,
+                "reason": item.reason,
+                "provider": item.provider,
+                "details": item.details,
+            }
+            for item in unavailable_context
+        ),
+    )
 
 
 _TABLE_REPORT_KEYS = (
@@ -121,7 +179,13 @@ _TABLE_REPORT_KEYS = (
 
 
 def _technical_analysis_report(
-    *, symbol: Symbol, provider_name: str, candles: tuple[Candle, ...], interval: str
+    *,
+    symbol: Symbol,
+    provider_name: str,
+    candles: tuple[Candle, ...],
+    interval: str,
+    provider_mode: dict[str, Any],
+    mode_unavailable_context: tuple[dict[str, Any], ...] = (),
 ) -> dict[str, Any]:
     closes = tuple(candle.close for candle in candles)
     sma_20 = simple_moving_average(closes, period=20)[-1]
@@ -164,10 +228,25 @@ def _technical_analysis_report(
         "invalidation_level": _setup_level(setup_levels.invalidation),
     }
 
+    unavailable_context = [
+        *mode_unavailable_context,
+        {
+            "context_type": "fundamentals",
+            "reason": "not available in the default technical-analysis CLI path",
+            "provider": provider_name,
+        },
+        {
+            "context_type": "llm_narrative",
+            "reason": "--llm none selected; narrative explanations are disabled",
+            "provider": None,
+        },
+    ]
+
     return {
         "schema_version": "signaldesk.ta.v1",
         "symbol": facts["symbol"],
         "provider": facts["provider"],
+        "provider_mode": provider_mode,
         "interval": facts["interval"],
         "candles": facts["candles"],
         "latest_timestamp": facts["latest_timestamp"],
@@ -210,18 +289,7 @@ def _technical_analysis_report(
                 "observations": len(candles),
             }
         ],
-        "unavailable_context": [
-            {
-                "context_type": "fundamentals",
-                "reason": "not available in the default technical-analysis CLI path",
-                "provider": provider_name,
-            },
-            {
-                "context_type": "llm_narrative",
-                "reason": "--llm none selected; narrative explanations are disabled",
-                "provider": None,
-            },
-        ],
+        "unavailable_context": unavailable_context,
         "llm": "none",
         "narrative": None,
     }

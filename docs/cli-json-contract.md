@@ -1,6 +1,6 @@
 # CLI JSON contract
 
-`signaldesk ta <SYMBOL> --provider <provider> --llm none --output json` emits a versioned JSON object for deterministic technical analysis.
+`signaldesk ta <SYMBOL> --llm none --output json` emits a versioned JSON object for deterministic technical analysis. When `--provider` is omitted, the command resolves the price provider from `--mode default|enhanced`; an explicit `--provider <provider>` still overrides role-mode resolution for targeted smoke checks.
 
 The current schema is `signaldesk.ta.v1`. It keeps backward-compatible top-level fields for early CLI consumers, but the durable contract is grouped by category so downstream tools do not confuse facts, deterministic signals, risk framing, provenance, unavailable context, or optional narrative.
 
@@ -8,6 +8,7 @@ The current schema is `signaldesk.ta.v1`. It keeps backward-compatible top-level
 
 - `schema_version`: schema identifier for the CLI TA JSON object.
 - `facts`: directly observed or request-scoped facts, such as symbol, provider, interval, candle count, latest timestamp, and latest close.
+- `provider_mode`: resolved provider-role metadata for the run, including mode, price provider, optional fundamentals provider, optional catalyst provider, and optional LLM provider.
 - `deterministic_signals`: values calculated by SignalDesk deterministic code from the candle series. This currently includes indicators, swing levels, confirmation level, and invalidation level.
 - `risks`: deterministic risk or scope notes. Missing enhanced data must not be interpreted as no risk.
 - `provenance`: provider/source/timeframe/input metadata for the data used to compute the output.
