@@ -285,6 +285,7 @@ def _technical_analysis_report(
     risks = _risk_payloads(
         assess_technical_analysis_risks(
             candle_count=len(candles),
+            latest_candle_timestamp=latest_candle.timestamp,
             trend_regime=trend_regime,
             volatility_regime=volatility_regime,
             volume_regime=volume_regime,
