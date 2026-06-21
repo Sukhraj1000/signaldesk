@@ -55,7 +55,7 @@ def assemble_ta_signal_card_report(
     }
 
     return {
-        "schema_version": schema_version,
+        "schema_version": identity["schema_version"],
         **flat_fields,
         "provider_mode": provider_mode,
         "identity": identity,

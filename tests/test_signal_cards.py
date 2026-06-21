@@ -48,18 +48,18 @@ def test_assemble_ta_signal_card_report_uses_single_canonical_card_object() -> N
 
     assert payload["schema_version"] == "signaldesk.ta.v1"
     assert payload["symbol"] == "AMD"
-    assert payload["signal_card"]["identity"] == payload["identity"]
-    assert payload["signal_card"]["provider_mode"] == payload["provider_mode"]
-    assert payload["signal_card"]["facts"] == payload["facts"]
-    assert payload["signal_card"]["trend"] == payload["trend"]
-    assert payload["signal_card"]["levels"] == payload["levels"]
-    assert payload["signal_card"]["events"] == payload["events"]
-    assert payload["signal_card"]["risk"] == payload["risk"]
-    assert payload["signal_card"]["score"] == payload["score"]
-    assert payload["signal_card"]["provenance"] == payload["provenance"]
-    assert payload["signal_card"]["unavailable_context"] == payload["unavailable_context"]
-    assert payload["risks"] == payload["risk"]["flags"]
-    assert payload["scores"] == payload["score"]["breakdowns"]
+    assert payload["signal_card"]["identity"] is payload["identity"]
+    assert payload["signal_card"]["provider_mode"] is payload["provider_mode"]
+    assert payload["signal_card"]["facts"] is payload["facts"]
+    assert payload["signal_card"]["trend"] is payload["trend"]
+    assert payload["signal_card"]["levels"] is payload["levels"]
+    assert payload["signal_card"]["events"] is payload["events"]
+    assert payload["signal_card"]["risk"] is payload["risk"]
+    assert payload["signal_card"]["score"] is payload["score"]
+    assert payload["signal_card"]["provenance"] is payload["provenance"]
+    assert payload["signal_card"]["unavailable_context"] is payload["unavailable_context"]
+    assert payload["risks"] is payload["risk"]["flags"]
+    assert payload["scores"] is payload["score"]["breakdowns"]
 
 
 def test_assemble_ta_signal_card_report_rejects_missing_required_sections() -> None:
