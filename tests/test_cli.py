@@ -602,11 +602,56 @@ def test_providers_list_continues_when_capabilities_raise(monkeypatch: MonkeyPat
 
 
 def test_provider_health_checks_convert_exceptions_to_sanitized_failures() -> None:
-    exit_code, lines = _run_provider_health_checks(ProviderRegistry((ExplodingProvider(),)))
+    exit_code, provider_statuses = _run_provider_health_checks(
+        ProviderRegistry((ExplodingProvider(),))
+    )
 
     assert exit_code == 1
-    assert lines == (
-        "provider\tstatus\tresult",
-        "exploding\tfailed\thealth check raised an exception",
+    assert provider_statuses == (
+        {
+            "provider": "exploding",
+            "status": "failed",
+            "result": "health check raised an exception",
+            "warnings": (),
+        },
     )
-    assert "secret detail" not in "\n".join(lines)
+    assert "secret detail" not in json.dumps(provider_statuses)
+
+
+def test_providers_check_json_reports_sanitized_machine_readable_status(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        cli_main,
+        "default_provider_registry",
+        lambda: ProviderRegistry((WorkingProvider(), ExplodingProvider())),
+    )
+
+    result = CliRunner().invoke(app, ["providers", "check", "--output", "json"])
+
+    assert result.exit_code == 1
+    payload = json.loads(result.stdout)
+    assert payload == {
+        "providers": [
+            {
+                "provider": "exploding",
+                "status": "failed",
+                "result": "health check raised an exception",
+                "warnings": [],
+            },
+            {
+                "provider": "working",
+                "status": "ok",
+                "result": "healthy",
+                "warnings": [],
+            },
+        ]
+    }
+    assert "secret detail" not in result.stdout
+
+
+def test_providers_check_rejects_unknown_output_format() -> None:
+    result = CliRunner().invoke(app, ["providers", "check", "--output", "xml"])
+
+    assert result.exit_code == 2
+    assert "--output must be 'table' or 'json'." in result.stderr

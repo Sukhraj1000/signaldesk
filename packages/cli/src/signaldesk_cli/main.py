@@ -255,11 +255,20 @@ def _decimal_text(value: Decimal | None) -> str | None:
     return str(value)
 
 
-def _format_provider_health(provider_name: str, result: ProviderResult[str]) -> str:
+def _provider_health_payload(provider_name: str, result: ProviderResult[str]) -> dict[str, Any]:
     status = "ok" if result.ok else "failed"
     detail = result.data if result.ok else result.error
-    detail = redact_provider_diagnostic(detail or "")
-    return f"{provider_name}\t{status}\t{detail}"
+    return {
+        "provider": provider_name,
+        "status": status,
+        "result": redact_provider_diagnostic(detail or ""),
+        "warnings": tuple(redact_provider_diagnostic(warning) for warning in result.warnings),
+    }
+
+
+def _format_provider_health(provider_name: str, result: ProviderResult[str]) -> str:
+    payload = _provider_health_payload(provider_name, result)
+    return f"{payload['provider']}\t{payload['status']}\t{payload['result']}"
 
 
 def _unknown_provider_capability(provider_name: str) -> dict[str, Any]:
@@ -325,8 +334,10 @@ def _format_provider_capabilities(registry: ProviderRegistry) -> tuple[str, ...]
     return tuple(lines)
 
 
-def _run_provider_health_checks(registry: ProviderRegistry) -> tuple[int, tuple[str, ...]]:
-    lines = ["provider\tstatus\tresult"]
+def _run_provider_health_checks(
+    registry: ProviderRegistry,
+) -> tuple[int, tuple[dict[str, Any], ...]]:
+    payload: list[dict[str, Any]] = []
     exit_code = 0
     for provider in registry.list():
         try:
@@ -336,10 +347,10 @@ def _run_provider_health_checks(registry: ProviderRegistry) -> tuple[int, tuple[
                 provider=provider.name,
                 error="health check raised an exception",
             )
-        lines.append(_format_provider_health(provider.name, result))
+        payload.append(_provider_health_payload(provider.name, result))
         if not result.ok:
             exit_code = 1
-    return exit_code, tuple(lines)
+    return exit_code, tuple(payload)
 
 
 @providers_app.command("list")
@@ -363,12 +374,27 @@ def providers_list(
 
 
 @providers_app.command("check")
-def providers_check() -> None:
+def providers_check(
+    output: str = typer.Option("table", help="Output format: table or json."),
+) -> None:
     """Run safe local health checks for registered market-data providers."""
 
-    exit_code, lines = _run_provider_health_checks(default_provider_registry())
-    for line in lines:
-        typer.echo(line)
+    output_format = output.strip().lower()
+    if output_format not in {"table", "json"}:
+        typer.echo("--output must be 'table' or 'json'.", err=True)
+        raise typer.Exit(2)
+
+    exit_code, provider_statuses = _run_provider_health_checks(default_provider_registry())
+    if output_format == "json":
+        typer.echo(json.dumps({"providers": provider_statuses}, indent=2))
+    else:
+        typer.echo("provider\tstatus\tresult")
+        for provider_status in provider_statuses:
+            typer.echo(
+                f"{provider_status['provider']}\t"
+                f"{provider_status['status']}\t"
+                f"{provider_status['result']}"
+            )
     if exit_code:
         raise typer.Exit(exit_code)
 
