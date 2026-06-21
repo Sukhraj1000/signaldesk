@@ -135,7 +135,17 @@ def test_validate_ta_signal_card_report_rejects_risk_unavailable_context_drift()
     }
     payload["signal_card"] = {**payload["signal_card"], "risk": payload["risk"]}
 
-    with pytest.raises(ValueError, match="risk.unavailable_context"):
+    with pytest.raises(ValueError, match=r"risk\.unavailable_context"):
+        validate_ta_signal_card_report(payload)
+
+
+def test_validate_ta_signal_card_report_rejects_non_object_risk() -> None:
+    sections = _base_sections()
+    payload = assemble_ta_signal_card_report(**sections)  # type: ignore[arg-type]
+    payload["risk"] = []
+    payload["signal_card"] = {**payload["signal_card"], "risk": payload["risk"]}
+
+    with pytest.raises(ValueError, match=r"signal_card\.risk"):
         validate_ta_signal_card_report(payload)
 
 
