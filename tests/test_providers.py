@@ -11,6 +11,7 @@ from signaldesk_backend import (
     Candle,
     FallbackProvider,
     FmpProvider,
+    FundamentalContext,
     LocalCsvProvider,
     LocalFixtureProvider,
     PolygonProvider,
@@ -785,6 +786,53 @@ def test_fmp_provider_translates_mocked_quote_and_candles() -> None:
             close=Decimal("101.25"),
             volume=123456,
         ),
+    )
+
+
+def test_fmp_provider_translates_mocked_fundamental_context() -> None:
+    opener = FakeFmpUrlopen(
+        b'[{"symbol":"AMD","companyName":"Advanced Micro Devices, Inc.",'
+        b'"exchangeShortName":"NASDAQ","industry":"Semiconductors",'
+        b'"sector":"Technology","mktCap":289000000000,'
+        b'"currency":"USD","website":"https://www.amd.com"}]'
+    )
+    provider = FmpProvider(api_key="test-key", _urlopen=opener, timeout_seconds=2.5)
+    symbol = Symbol("amd")
+
+    result = provider.get_fundamental_context(symbol)
+
+    assert result.ok is True
+    assert result.data is not None
+    assert result.data == FundamentalContext(
+        symbol=symbol,
+        provider="fmp",
+        generated_at=result.data.generated_at,
+        company_name="Advanced Micro Devices, Inc.",
+        exchange="NASDAQ",
+        industry="Semiconductors",
+        sector="Technology",
+        market_cap=289000000000,
+        currency="USD",
+        source_url="https://www.amd.com",
+    )
+    assert opener.request_url is not None
+    assert "profile/AMD" in opener.request_url
+    assert "apikey=test-key" in opener.request_url
+
+
+def test_fmp_provider_reports_missing_or_invalid_fundamental_context_safely() -> None:
+    missing_key = FmpProvider(api_key=None)
+    empty = FmpProvider(api_key="test-key", _urlopen=FakeFmpUrlopen(b"[]"))
+    invalid = FmpProvider(api_key="test-key", _urlopen=FakeFmpUrlopen(b'[{"mktCap":-1}]'))
+
+    assert missing_key.get_fundamental_context(Symbol("amd")) == ProviderResult.failure(
+        provider="fmp", error="FMP credentials are not configured"
+    )
+    assert empty.get_fundamental_context(Symbol("amd")) == ProviderResult.failure(
+        provider="fmp", error="no fundamental context for AMD"
+    )
+    assert invalid.get_fundamental_context(Symbol("amd")) == ProviderResult.failure(
+        provider="fmp", error="fmp fundamental data was invalid"
     )
 
 

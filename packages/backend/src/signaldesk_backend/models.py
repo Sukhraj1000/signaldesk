@@ -218,6 +218,44 @@ class Provenance:
 
 
 @dataclass(frozen=True, kw_only=True)
+class FundamentalContext:
+    """Structured provider-sourced company facts kept separate from TA signals."""
+
+    symbol: Symbol
+    provider: str
+    generated_at: datetime
+    company_name: str | None = None
+    exchange: str | None = None
+    industry: str | None = None
+    sector: str | None = None
+    market_cap: int | None = None
+    currency: str | None = None
+    source_url: str | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.symbol, Symbol):
+            raise TypeError("symbol must be a Symbol")
+        _require_timezone_aware(self.generated_at)
+        provider = self.provider.strip().lower()
+        if not provider:
+            raise ValueError("provider is required")
+        object.__setattr__(self, "provider", provider)
+        for field_name in (
+            "company_name",
+            "exchange",
+            "industry",
+            "sector",
+            "currency",
+            "source_url",
+        ):
+            value = getattr(self, field_name)
+            normalized = value.strip() if isinstance(value, str) else None
+            object.__setattr__(self, field_name, normalized or None)
+        if self.market_cap is not None and self.market_cap < 0:
+            raise ValueError("market_cap must be non-negative")
+
+
+@dataclass(frozen=True, kw_only=True)
 class UnavailableContext:
     """Market context that was unavailable and must not be treated as a false negative."""
 

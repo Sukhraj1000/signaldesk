@@ -25,6 +25,7 @@ from signaldesk_backend.indicators import (
 )
 from signaldesk_backend.models import (
     Candle,
+    FundamentalContext,
     KeyLevels,
     Provenance,
     ProviderCapability,
@@ -66,6 +67,7 @@ __all__ = [
     "FallbackProvider",
     "FibonacciRetracementLevel",
     "FmpProvider",
+    "FundamentalContext",
     "KeyLevels",
     "LevelZone",
     "LocalCsvProvider",

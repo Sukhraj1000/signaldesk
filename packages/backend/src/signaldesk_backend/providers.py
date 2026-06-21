@@ -19,6 +19,7 @@ from urllib.request import Request, urlopen
 
 from signaldesk_backend.models import (
     Candle,
+    FundamentalContext,
     ProviderCapability,
     ProviderMode,
     ProviderResult,
@@ -1194,6 +1195,21 @@ class FmpProvider:
             )
         return self._parse_quote(symbol, response.data)
 
+    def get_fundamental_context(
+        self, symbol: Symbol
+    ) -> ProviderResult[FundamentalContext]:
+        """Fetch structured company facts from FMP without mixing them into TA signals."""
+
+        api_key = self._api_key()
+        if api_key is None:
+            return self._missing_key_failure()
+        response = self._fetch_json(f"profile/{symbol.ticker}", {"apikey": api_key})
+        if not response.ok:
+            return ProviderResult.failure(
+                provider=self.name, error=response.error or "fmp request failed"
+            )
+        return self._parse_fundamental_context(symbol, response.data)
+
     def health_check(self) -> ProviderResult[str]:
         """Report FMP credential readiness without making a live API call."""
 
@@ -1265,6 +1281,35 @@ class FmpProvider:
         except ValueError:
             return ProviderResult.failure(provider=self.name, error="fmp quote data was invalid")
 
+    def _parse_fundamental_context(
+        self, symbol: Symbol, payload: Any
+    ) -> ProviderResult[FundamentalContext]:
+        if not isinstance(payload, list) or not payload or not isinstance(payload[0], dict):
+            return ProviderResult.failure(
+                provider=self.name, error=f"no fundamental context for {symbol.ticker}"
+            )
+        row = payload[0]
+        try:
+            return ProviderResult.success(
+                provider=self.name,
+                data=FundamentalContext(
+                    symbol=symbol,
+                    provider=self.name,
+                    generated_at=datetime.now(UTC),
+                    company_name=self._optional_text(row.get("companyName")),
+                    exchange=self._optional_text(row.get("exchangeShortName")),
+                    industry=self._optional_text(row.get("industry")),
+                    sector=self._optional_text(row.get("sector")),
+                    market_cap=self._non_negative_int(row.get("mktCap")),
+                    currency=self._optional_text(row.get("currency")),
+                    source_url=self._optional_text(row.get("website")),
+                ),
+            )
+        except (TypeError, ValueError, InvalidOperation):
+            return ProviderResult.failure(
+                provider=self.name, error="fmp fundamental data was invalid"
+            )
+
     def _parse_candles(self, symbol: Symbol, payload: Any) -> ProviderResult[tuple[Candle, ...]]:
         if not isinstance(payload, dict):
             return ProviderResult.failure(
@@ -1321,6 +1366,20 @@ class FmpProvider:
         if isinstance(value, int | float):
             return datetime.fromtimestamp(value, tz=UTC)
         return datetime.now(UTC)
+
+    def _optional_text(self, value: object) -> str | None:
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text or None
+
+    def _non_negative_int(self, value: object) -> int | None:
+        if value is None or value == "":
+            return None
+        numeric = Decimal(str(value))
+        if not numeric.is_finite() or numeric < Decimal("0"):
+            raise ValueError("value must be non-negative")
+        return int(numeric)
 
     def _decimal_from_value(self, value: object) -> Decimal | None:
         if value is None or value == "":

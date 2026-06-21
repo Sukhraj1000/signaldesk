@@ -6,6 +6,7 @@ from decimal import Decimal
 import pytest
 from signaldesk_backend import (
     Candle,
+    FundamentalContext,
     KeyLevels,
     Provenance,
     ProviderCapability,
@@ -226,6 +227,42 @@ def test_analysis_models_construct_and_normalize_values() -> None:
     assert snapshot.symbol.ticker == "AMD"
     assert snapshot.trend == "up"
     assert snapshot.indicators == {"rsi": Decimal("62.5")}
+
+
+def test_fundamental_context_normalizes_provider_facts_without_ta_signals() -> None:
+    context = FundamentalContext(
+        symbol=Symbol("amd"),
+        provider=" FMP ",
+        generated_at=NOW,
+        company_name=" Advanced Micro Devices, Inc. ",
+        exchange=" NASDAQ ",
+        industry=" Semiconductors ",
+        sector=" Technology ",
+        market_cap=289_000_000_000,
+        currency=" USD ",
+        source_url=" https://www.amd.com ",
+    )
+
+    assert context.symbol.ticker == "AMD"
+    assert context.provider == "fmp"
+    assert context.company_name == "Advanced Micro Devices, Inc."
+    assert context.exchange == "NASDAQ"
+    assert context.industry == "Semiconductors"
+    assert context.sector == "Technology"
+    assert context.market_cap == 289_000_000_000
+    assert context.currency == "USD"
+    assert context.source_url == "https://www.amd.com"
+
+
+@pytest.mark.parametrize("market_cap", [-1, -100])
+def test_fundamental_context_rejects_negative_market_cap(market_cap: int) -> None:
+    with pytest.raises(ValueError, match="market_cap"):
+        FundamentalContext(
+            symbol=Symbol("amd"),
+            provider="fmp",
+            generated_at=NOW,
+            market_cap=market_cap,
+        )
 
 
 def test_unavailable_context_normalizes_without_asserting_absence() -> None:
