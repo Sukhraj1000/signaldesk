@@ -213,6 +213,35 @@ class UnavailableContext:
 
 
 @dataclass(frozen=True, kw_only=True)
+class ProviderMode:
+    """Provider tier and selected data/LLM sources for an assembled artifact."""
+
+    mode: str = "default"
+    price_provider: str = "yfinance"
+    catalyst_provider: str | None = None
+    fundamentals_provider: str | None = None
+    llm_provider: str | None = None
+
+    def __post_init__(self) -> None:
+        mode = self.mode.strip().lower()
+        if mode not in {"default", "enhanced"}:
+            raise ValueError("mode must be default or enhanced")
+        price_provider = self.price_provider.strip().lower()
+        if not price_provider:
+            raise ValueError("price_provider is required")
+        object.__setattr__(self, "mode", mode)
+        object.__setattr__(self, "price_provider", price_provider)
+        for field_name in (
+            "catalyst_provider",
+            "fundamentals_provider",
+            "llm_provider",
+        ):
+            provider = getattr(self, field_name)
+            normalized_provider = provider.strip().lower() if provider is not None else None
+            object.__setattr__(self, field_name, normalized_provider or None)
+
+
+@dataclass(frozen=True, kw_only=True)
 class KeyLevels:
     """Support, resistance, and trade-planning levels derived from analysis."""
 
@@ -335,6 +364,7 @@ class SignalCard:
     snapshot: TechnicalSnapshot | None = None
     key_levels: KeyLevels | None = None
     events: tuple[TechnicalEvent, ...] = ()
+    provider_mode: ProviderMode | None = None
     provenance: tuple[Provenance, ...] = ()
     unavailable_context: tuple[UnavailableContext, ...] = ()
     tags: tuple[str, ...] = ()
@@ -358,6 +388,8 @@ class SignalCard:
         object.__setattr__(self, "bias", bias)
         object.__setattr__(self, "summary", summary)
         object.__setattr__(self, "events", tuple(self.events))
+        if self.provider_mode is not None and not isinstance(self.provider_mode, ProviderMode):
+            raise TypeError("provider_mode must be ProviderMode")
         object.__setattr__(self, "provenance", tuple(self.provenance))
         unavailable_context = tuple(self.unavailable_context)
         if any(not isinstance(entry, UnavailableContext) for entry in unavailable_context):
