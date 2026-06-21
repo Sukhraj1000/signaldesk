@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
-from typing import Self
+from typing import ClassVar, Self
 
 
 def _require_timezone_aware(timestamp: datetime) -> None:
@@ -352,6 +352,74 @@ class TechnicalSnapshot:
 
 
 @dataclass(frozen=True, kw_only=True)
+class RiskFlag:
+    """A typed deterministic risk attached to an analysis artifact."""
+
+    kind: str
+    severity: str
+    message: str
+    source: str | None = None
+
+    ALLOWED_SEVERITIES: ClassVar[tuple[str, ...]] = ("info", "warning", "critical")
+
+    def __post_init__(self) -> None:
+        kind = self.kind.strip().lower().replace(" ", "_")
+        severity = self.severity.strip().lower()
+        message = self.message.strip()
+        source = (
+            self.source.strip().lower().replace(" ", "_")
+            if self.source is not None
+            else None
+        )
+        if not kind:
+            raise ValueError("kind is required")
+        if severity not in self.ALLOWED_SEVERITIES:
+            raise ValueError("severity must be info, warning, or critical")
+        if not message:
+            raise ValueError("message is required")
+        object.__setattr__(self, "kind", kind)
+        object.__setattr__(self, "severity", severity)
+        object.__setattr__(self, "message", message)
+        object.__setattr__(self, "source", source or None)
+
+
+@dataclass(frozen=True, kw_only=True)
+class RiskAssessment:
+    """A canonical risk container with typed flags and an overall severity."""
+
+    flags: tuple[RiskFlag, ...]
+    overall_severity: str | None = None
+
+    _SEVERITY_RANK: ClassVar[dict[str, int]] = {"info": 0, "warning": 1, "critical": 2}
+
+    def __post_init__(self) -> None:
+        flags = tuple(self.flags)
+        if not flags:
+            raise ValueError("risk assessment must include at least one flag")
+        if any(not isinstance(flag, RiskFlag) for flag in flags):
+            raise TypeError("risk assessment flags must be RiskFlag")
+        highest_flag = max(
+            flags,
+            key=lambda flag: self._SEVERITY_RANK[flag.severity],
+        )
+        if self.overall_severity is None:
+            overall_severity = highest_flag.severity
+        else:
+            overall_severity = self.overall_severity.strip().lower()
+            if overall_severity not in self._SEVERITY_RANK:
+                raise ValueError("overall_severity must be info, warning, or critical")
+            if (
+                self._SEVERITY_RANK[overall_severity]
+                < self._SEVERITY_RANK[highest_flag.severity]
+            ):
+                raise ValueError(
+                    "overall_severity must not be lower than highest flag severity"
+                )
+        object.__setattr__(self, "flags", flags)
+        object.__setattr__(self, "overall_severity", overall_severity)
+
+
+@dataclass(frozen=True, kw_only=True)
 class SignalCard:
     """A compact provider-agnostic signal summary assembled from analysis facts."""
 
@@ -367,6 +435,7 @@ class SignalCard:
     provider_mode: ProviderMode | None = None
     provenance: tuple[Provenance, ...] = ()
     unavailable_context: tuple[UnavailableContext, ...] = ()
+    risk_assessment: RiskAssessment | None = None
     tags: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
@@ -395,5 +464,9 @@ class SignalCard:
         if any(not isinstance(entry, UnavailableContext) for entry in unavailable_context):
             raise TypeError("unavailable_context entries must be UnavailableContext")
         object.__setattr__(self, "unavailable_context", unavailable_context)
+        if self.risk_assessment is not None and not isinstance(
+            self.risk_assessment, RiskAssessment
+        ):
+            raise TypeError("risk_assessment must be RiskAssessment")
         normalized_tags = tuple(tag.strip().lower() for tag in self.tags if tag.strip())
         object.__setattr__(self, "tags", normalized_tags)
