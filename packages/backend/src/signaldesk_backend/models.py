@@ -96,6 +96,7 @@ class ProviderCapability:
     """Declared capabilities for a market-data provider."""
 
     provider: str
+    data_role: str = "price"
     supports_realtime: bool
     supports_historical: bool
     supported_asset_classes: frozenset[str] = field(default_factory=frozenset)
@@ -110,6 +111,10 @@ class ProviderCapability:
         if not provider:
             raise ValueError("provider is required")
         object.__setattr__(self, "provider", provider)
+        data_role = self.data_role.strip().lower().replace(" ", "_")
+        if data_role not in {"price", "catalyst", "fundamentals"}:
+            raise ValueError("data_role must be price, catalyst, or fundamentals")
+        object.__setattr__(self, "data_role", data_role)
         normalized_asset_classes = frozenset(
             asset_class.strip().lower()
             for asset_class in self.supported_asset_classes
