@@ -85,6 +85,20 @@ class RegimeClassification(NamedTuple):
     reason: str
 
 
+class DeterministicTechnicalEvent(NamedTuple):
+    """A traceable technical event emitted by a deterministic rule."""
+
+    event_type: str
+    timestamp: datetime
+    candle_index: int
+    severity: Literal["info", "bullish", "bearish", "warning"]
+    source_rule: str
+    source_indicators: tuple[str, ...]
+    reason: str
+    price: Decimal
+    invalidation_condition: str | None = None
+
+
 FIBONACCI_RETRACEMENT_RATIOS: tuple[Decimal, ...] = (
     Decimal("0.236"),
     Decimal("0.382"),
@@ -522,6 +536,76 @@ def classify_volume_regime(
         source_rule="latest_volume_within_prior_average_band",
         reason="Latest volume is between 0.75x and 1.5x its prior trailing average.",
     )
+
+
+def detect_moving_average_cross_events(
+    candles: Sequence[CandleInput], *, period: int = 20
+) -> tuple[DeterministicTechnicalEvent, ...]:
+    """Detect close-price reclaim/loss events around a moving average.
+
+    A ``reclaimed_moving_average`` event is emitted when the prior close is at or
+    below the prior SMA and the latest close is above the latest SMA. A
+    ``lost_moving_average`` event is emitted for the inverse transition. Warmup
+    periods return no events rather than inferred context.
+    """
+
+    _validate_period(period)
+    if len(candles) < period + 1:
+        return ()
+
+    closes = tuple(candle.close for candle in candles)
+    averages = simple_moving_average(closes, period=period)
+    previous_average = averages[-2]
+    latest_average = averages[-1]
+    if previous_average is None or latest_average is None:
+        return ()
+
+    previous_close = closes[-2]
+    latest_candle = candles[-1]
+    latest_close = latest_candle.close
+    indicator_name = f"sma_{period}"
+
+    if previous_close <= previous_average and latest_close > latest_average:
+        return (
+            DeterministicTechnicalEvent(
+                event_type="reclaimed_moving_average",
+                timestamp=latest_candle.timestamp,
+                candle_index=len(candles) - 1,
+                severity="bullish",
+                source_rule="close_crossed_above_sma",
+                source_indicators=(indicator_name,),
+                reason=(
+                    f"Latest close {latest_close} moved above {indicator_name} "
+                    f"{latest_average} after the prior close was not above its SMA."
+                ),
+                price=latest_close,
+                invalidation_condition=(
+                    f"A close back below {indicator_name} {latest_average} would invalidate "
+                    "the reclaim event."
+                ),
+            ),
+        )
+    if previous_close >= previous_average and latest_close < latest_average:
+        return (
+            DeterministicTechnicalEvent(
+                event_type="lost_moving_average",
+                timestamp=latest_candle.timestamp,
+                candle_index=len(candles) - 1,
+                severity="bearish",
+                source_rule="close_crossed_below_sma",
+                source_indicators=(indicator_name,),
+                reason=(
+                    f"Latest close {latest_close} moved below {indicator_name} "
+                    f"{latest_average} after the prior close was not below its SMA."
+                ),
+                price=latest_close,
+                invalidation_condition=(
+                    f"A close back above {indicator_name} {latest_average} would invalidate "
+                    "the loss event."
+                ),
+            ),
+        )
+    return ()
 
 
 def detect_swing_highs(
