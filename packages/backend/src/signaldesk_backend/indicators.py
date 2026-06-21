@@ -608,6 +608,93 @@ def detect_moving_average_cross_events(
     return ()
 
 
+def detect_breakout_breakdown_events(
+    candles: Sequence[CandleInput],
+    *,
+    levels: ConfirmationInvalidationLevels | None = None,
+    window: int = 2,
+    lookback: int | None = None,
+    lookahead: int | None = None,
+) -> tuple[DeterministicTechnicalEvent, ...]:
+    """Detect latest-candle breakout or breakdown through setup levels.
+
+    Breakouts are emitted when the latest close crosses above the prior
+    deterministic confirmation level derived from resistance. Breakdowns are
+    emitted when the latest close crosses below the prior deterministic
+    invalidation level derived from support. Missing levels, insufficient
+    history, or closes already beyond the level on the prior candle return no
+    event rather than inferred context.
+    """
+
+    if len(candles) < 2:
+        return ()
+
+    resolved_levels = levels or derive_confirmation_invalidation_levels(
+        candles[:-1],
+        window=window,
+        lookback=lookback,
+        lookahead=lookahead,
+    )
+    previous_close = candles[-2].close
+    latest_candle = candles[-1]
+    latest_close = latest_candle.close
+    events: list[DeterministicTechnicalEvent] = []
+
+    confirmation = resolved_levels.confirmation
+    if (
+        confirmation is not None
+        and previous_close <= confirmation.price
+        and latest_close > confirmation.price
+    ):
+        events.append(
+            DeterministicTechnicalEvent(
+                event_type="breakout",
+                timestamp=latest_candle.timestamp,
+                candle_index=len(candles) - 1,
+                severity="bullish",
+                source_rule="latest_close_crossed_above_confirmation_level",
+                source_indicators=(confirmation.source_level,),
+                reason=(
+                    f"Latest close {latest_close} crossed above confirmation level "
+                    f"{confirmation.price} from {confirmation.source_level}."
+                ),
+                price=latest_close,
+                invalidation_condition=(
+                    f"A close back below confirmation level {confirmation.price} would "
+                    "invalidate the breakout event."
+                ),
+            )
+        )
+
+    invalidation = resolved_levels.invalidation
+    if (
+        invalidation is not None
+        and previous_close >= invalidation.price
+        and latest_close < invalidation.price
+    ):
+        events.append(
+            DeterministicTechnicalEvent(
+                event_type="breakdown",
+                timestamp=latest_candle.timestamp,
+                candle_index=len(candles) - 1,
+                severity="bearish",
+                source_rule="latest_close_crossed_below_invalidation_level",
+                source_indicators=(invalidation.source_level,),
+                reason=(
+                    f"Latest close {latest_close} crossed below invalidation level "
+                    f"{invalidation.price} from {invalidation.source_level}."
+                ),
+                price=latest_close,
+                invalidation_condition=(
+                    f"A close back above invalidation level {invalidation.price} would "
+                    "invalidate the breakdown event."
+                ),
+            )
+        )
+
+    return tuple(events)
+
+
 def detect_relative_volume_spike_events(
     candles: Sequence[CandleInput], *, period: int = 20, threshold: Decimal = Decimal("1.5")
 ) -> tuple[DeterministicTechnicalEvent, ...]:

@@ -19,6 +19,7 @@ from signaldesk_backend import (
     classify_volume_regime,
     default_provider_registry,
     derive_confirmation_invalidation_levels,
+    detect_breakout_breakdown_events,
     detect_moving_average_cross_events,
     detect_relative_volume_spike_events,
     detect_swing_highs,
@@ -214,6 +215,7 @@ def _technical_analysis_report(
     volume_regime = classify_volume_regime(candles)
     technical_events = (
         *detect_moving_average_cross_events(candles),
+        *detect_breakout_breakdown_events(candles),
         *detect_relative_volume_spike_events(candles),
         *detect_volatility_regime_events(candles),
     )
