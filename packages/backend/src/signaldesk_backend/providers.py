@@ -19,6 +19,8 @@ from urllib.request import Request, urlopen
 
 from signaldesk_backend.models import (
     Candle,
+    CatalystContext,
+    CatalystEvent,
     FundamentalContext,
     ProviderCapability,
     ProviderMode,
@@ -1210,6 +1212,26 @@ class FmpProvider:
             )
         return self._parse_fundamental_context(symbol, response.data)
 
+    def get_catalyst_context(self, symbol: Symbol) -> ProviderResult[CatalystContext]:
+        """Fetch structured news catalysts from FMP without treating them as TA facts."""
+
+        api_key = self._api_key()
+        if api_key is None:
+            return self._missing_key_failure()
+        response = self._fetch_json(
+            "stock_news",
+            {
+                "tickers": symbol.ticker,
+                "limit": "10",
+                "apikey": api_key,
+            },
+        )
+        if not response.ok:
+            return ProviderResult.failure(
+                provider=self.name, error=response.error or "fmp request failed"
+            )
+        return self._parse_catalyst_context(symbol, response.data)
+
     def health_check(self) -> ProviderResult[str]:
         """Report FMP credential readiness without making a live API call."""
 
@@ -1310,6 +1332,57 @@ class FmpProvider:
                 provider=self.name, error="fmp fundamental data was invalid"
             )
 
+    def _parse_catalyst_context(
+        self, symbol: Symbol, payload: Any
+    ) -> ProviderResult[CatalystContext]:
+        if not isinstance(payload, list):
+            return ProviderResult.failure(
+                provider=self.name, error="fmp catalyst data was invalid"
+            )
+
+        events: list[CatalystEvent] = []
+        try:
+            for row in payload:
+                if not isinstance(row, dict):
+                    continue
+                event = self._row_to_catalyst_event(row)
+                if event is not None:
+                    events.append(event)
+        except (TypeError, ValueError):
+            return ProviderResult.failure(
+                provider=self.name, error="fmp catalyst data was invalid"
+            )
+
+        if not events:
+            return ProviderResult.failure(
+                provider=self.name, error=f"no catalyst context for {symbol.ticker}"
+            )
+        return ProviderResult.success(
+            provider=self.name,
+            data=CatalystContext(
+                symbol=symbol,
+                provider=self.name,
+                generated_at=datetime.now(UTC),
+                events=tuple(events),
+            ),
+        )
+
+    def _row_to_catalyst_event(self, row: dict[str, Any]) -> CatalystEvent | None:
+        headline = self._optional_text(row.get("title"))
+        published_at = self._optional_datetime(row.get("publishedDate"))
+        if headline is None:
+            return None
+        if published_at is None:
+            raise ValueError("publishedDate is required")
+        return CatalystEvent(
+            headline=headline,
+            provider=self.name,
+            published_at=published_at,
+            source=self._optional_text(row.get("site")),
+            url=self._optional_text(row.get("url")),
+            summary=self._optional_text(row.get("text")),
+        )
+
     def _parse_candles(self, symbol: Symbol, payload: Any) -> ProviderResult[tuple[Candle, ...]]:
         if not isinstance(payload, dict):
             return ProviderResult.failure(
@@ -1366,6 +1439,18 @@ class FmpProvider:
         if isinstance(value, int | float):
             return datetime.fromtimestamp(value, tz=UTC)
         return datetime.now(UTC)
+
+    def _optional_datetime(self, value: object) -> datetime | None:
+        if not isinstance(value, str) or not value.strip():
+            return None
+        text = value.strip().replace("Z", "+00:00")
+        try:
+            parsed = datetime.fromisoformat(text)
+        except ValueError:
+            return None
+        if parsed.tzinfo is None or parsed.utcoffset() is None:
+            return parsed.replace(tzinfo=UTC)
+        return parsed.astimezone(UTC)
 
     def _optional_text(self, value: object) -> str | None:
         if value is None:

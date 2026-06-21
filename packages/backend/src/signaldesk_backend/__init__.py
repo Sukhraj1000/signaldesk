@@ -25,6 +25,8 @@ from signaldesk_backend.indicators import (
 )
 from signaldesk_backend.models import (
     Candle,
+    CatalystContext,
+    CatalystEvent,
     FundamentalContext,
     KeyLevels,
     Provenance,
@@ -62,6 +64,8 @@ from signaldesk_backend.providers import (
 
 __all__ = [
     "Candle",
+    "CatalystContext",
+    "CatalystEvent",
     "ConfirmationInvalidationLevel",
     "ConfirmationInvalidationLevels",
     "FallbackProvider",
