@@ -1164,6 +1164,20 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
     expected["score"] = {
         "breakdowns": expected["scores"],
     }
+    expected["signal_card"] = {
+        "identity": expected["identity"],
+        "provider_mode": expected["provider_mode"],
+        "facts": expected["facts"],
+        "trend": expected["trend"],
+        "levels": expected["levels"],
+        "events": expected["events"],
+        "risk": expected["risk"],
+        "score": expected["score"],
+        "provenance": expected["provenance"],
+        "unavailable_context": expected["unavailable_context"],
+        "llm": "none",
+        "narrative": None,
+    }
     assert payload == expected
 
 
@@ -1182,6 +1196,7 @@ def test_ta_table_output_stays_flat_when_json_contract_sections_are_added(
     assert "latest_close\t49" in result.stdout
     assert "facts\t" not in result.stdout
     assert "deterministic_signals\t" not in result.stdout
+    assert "signal_card\t" not in result.stdout
     assert "scores\t" not in result.stdout
     assert "unavailable_context\t" not in result.stdout
 

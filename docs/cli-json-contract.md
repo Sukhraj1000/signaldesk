@@ -32,5 +32,6 @@ The v1 JSON keeps early flat and grouped fields for compatibility, then adds can
 - `events`: deterministic event list; mirrors `technical_events`.
 - `risk`: deterministic flags and unavailable context together for card rendering.
 - `score`: deterministic score breakdowns for setup quality, risk, and data quality.
+- `signal_card`: one canonical nested card object that groups `identity`, `provider_mode`, `facts`, `trend`, `levels`, `events`, `risk`, `score`, `provenance`, `unavailable_context`, and LLM narrative metadata for renderers that should consume a single object.
 
-The canonical aliases do not introduce new data sources or LLM-derived facts; they regroup already-computed deterministic output and unavailable-context metadata.
+The canonical aliases do not introduce new data sources or LLM-derived facts; they regroup already-computed deterministic output and unavailable-context metadata. The top-level compatibility fields remain available while downstream adapters migrate to `signal_card`.
