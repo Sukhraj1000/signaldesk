@@ -116,6 +116,7 @@ def technical_analysis(
         candles=result.data,
         interval=interval,
         provider_mode=provider_mode_payload,
+        as_of=end,
         mode_unavailable_context=mode_unavailable_context,
     )
     if output_format == "json":
@@ -206,6 +207,7 @@ def _technical_analysis_report(
     candles: tuple[Candle, ...],
     interval: str,
     provider_mode: dict[str, Any],
+    as_of: datetime,
     mode_unavailable_context: tuple[dict[str, Any], ...] = (),
 ) -> dict[str, Any]:
     closes = tuple(candle.close for candle in candles)
@@ -286,6 +288,7 @@ def _technical_analysis_report(
         assess_technical_analysis_risks(
             candle_count=len(candles),
             latest_candle_timestamp=latest_candle.timestamp,
+            as_of=as_of,
             trend_regime=trend_regime,
             volatility_regime=volatility_regime,
             volume_regime=volume_regime,
@@ -297,6 +300,8 @@ def _technical_analysis_report(
     scores = _score_payloads(
         score_technical_analysis(
             candle_count=len(candles),
+            latest_candle_timestamp=latest_candle.timestamp,
+            as_of=as_of,
             trend_regime=trend_regime,
             volatility_regime=volatility_regime,
             technical_events=technical_events,

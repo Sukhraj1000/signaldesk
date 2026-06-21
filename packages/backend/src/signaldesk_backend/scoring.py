@@ -1,6 +1,7 @@
 """Deterministic score assembly for technical-analysis outputs."""
 
 from collections.abc import Sequence
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from signaldesk_backend.indicators import (
@@ -14,6 +15,9 @@ from signaldesk_backend.models import ScoreBreakdown, ScoreReason
 def score_technical_analysis(
     *,
     candle_count: int,
+    latest_candle_timestamp: datetime | None = None,
+    as_of: datetime | None = None,
+    stale_after: timedelta = timedelta(days=7),
     trend_regime: RegimeClassification,
     volatility_regime: RegimeClassification,
     technical_events: Sequence[DeterministicTechnicalEvent],
@@ -40,6 +44,9 @@ def score_technical_analysis(
     )
     data_quality_score, data_quality_reasons = _data_quality_score(
         candle_count=candle_count,
+        latest_candle_timestamp=latest_candle_timestamp,
+        as_of=as_of,
+        stale_after=stale_after,
         trend_regime=trend_regime,
         volatility_regime=volatility_regime,
         fundamentals_unavailable=fundamentals_unavailable,
@@ -230,6 +237,9 @@ def _risk_score(
 def _data_quality_score(
     *,
     candle_count: int,
+    latest_candle_timestamp: datetime | None,
+    as_of: datetime | None,
+    stale_after: timedelta,
     trend_regime: RegimeClassification,
     volatility_regime: RegimeClassification,
     fundamentals_unavailable: bool,
@@ -255,6 +265,48 @@ def _data_quality_score(
                     message=regime.reason,
                     source=regime.source_rule,
                     weight=Decimal("0.15"),
+                )
+            )
+    if latest_candle_timestamp is not None:
+        reference_time = as_of or datetime.now(UTC)
+        latest_timestamp_is_naive = (
+            latest_candle_timestamp.tzinfo is None
+            or latest_candle_timestamp.utcoffset() is None
+        )
+        reference_time_is_naive = (
+            reference_time.tzinfo is None or reference_time.utcoffset() is None
+        )
+        if latest_timestamp_is_naive or reference_time_is_naive:
+            score -= Decimal("20")
+            if latest_timestamp_is_naive:
+                message = (
+                    "Latest candle timestamp is timezone-naive, so data freshness "
+                    "cannot be verified deterministically."
+                )
+            else:
+                message = (
+                    "Freshness reference timestamp is timezone-naive, so data "
+                    "freshness cannot be verified deterministically."
+                )
+            reasons.append(
+                ScoreReason(
+                    code="unverifiable_price_history_freshness",
+                    message=message,
+                    source="historical_candles",
+                    weight=Decimal("0.20"),
+                )
+            )
+        elif reference_time - latest_candle_timestamp > stale_after:
+            score -= Decimal("20")
+            reasons.append(
+                ScoreReason(
+                    code="stale_price_history",
+                    message=(
+                        "Latest candle is older than the deterministic freshness "
+                        f"threshold of {stale_after.days} day(s)."
+                    ),
+                    source="historical_candles",
+                    weight=Decimal("0.20"),
                 )
             )
     if fundamentals_unavailable:

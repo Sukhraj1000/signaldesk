@@ -1058,7 +1058,7 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
             },
             {
                 "category": "data_quality",
-                "score": "60",
+                "score": "40",
                 "reasons": [
                     {
                         "code": "price_history_available",
@@ -1077,6 +1077,15 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
                         "message": "Need at least 64 candles to classify volatility; received 40.",
                         "source": "insufficient_history_for_volatility_regime",
                         "weight": "0.15",
+                    },
+                    {
+                        "code": "stale_price_history",
+                        "message": (
+                            "Latest candle is older than the deterministic freshness threshold "
+                            "of 7 day(s)."
+                        ),
+                        "source": "historical_candles",
+                        "weight": "0.20",
                     },
                     {
                         "code": "fundamentals_unavailable",
