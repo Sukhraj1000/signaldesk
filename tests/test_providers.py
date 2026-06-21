@@ -824,6 +824,7 @@ def test_fmp_provider_reports_missing_or_invalid_fundamental_context_safely() ->
     missing_key = FmpProvider(api_key=None)
     empty = FmpProvider(api_key="test-key", _urlopen=FakeFmpUrlopen(b"[]"))
     invalid = FmpProvider(api_key="test-key", _urlopen=FakeFmpUrlopen(b'[{"mktCap":-1}]'))
+    fractional = FmpProvider(api_key="test-key", _urlopen=FakeFmpUrlopen(b'[{"mktCap":1.9}]'))
 
     assert missing_key.get_fundamental_context(Symbol("amd")) == ProviderResult.failure(
         provider="fmp", error="FMP credentials are not configured"
@@ -832,6 +833,9 @@ def test_fmp_provider_reports_missing_or_invalid_fundamental_context_safely() ->
         provider="fmp", error="no fundamental context for AMD"
     )
     assert invalid.get_fundamental_context(Symbol("amd")) == ProviderResult.failure(
+        provider="fmp", error="fmp fundamental data was invalid"
+    )
+    assert fractional.get_fundamental_context(Symbol("amd")) == ProviderResult.failure(
         provider="fmp", error="fmp fundamental data was invalid"
     )
 

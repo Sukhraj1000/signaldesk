@@ -1379,6 +1379,8 @@ class FmpProvider:
         numeric = Decimal(str(value))
         if not numeric.is_finite() or numeric < Decimal("0"):
             raise ValueError("value must be non-negative")
+        if numeric != numeric.to_integral_value():
+            raise ValueError("value must be an integer")
         return int(numeric)
 
     def _decimal_from_value(self, value: object) -> Decimal | None:
