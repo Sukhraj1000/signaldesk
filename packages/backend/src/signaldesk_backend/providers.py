@@ -366,11 +366,15 @@ def resolve_provider_mode(
             (),
         )
 
+    default_provider = _default_price_provider(registry)
     unavailable = (
         UnavailableContext(
             context_type="enhanced_price",
             provider="fmp",
-            reason="FMP credentials are not configured; using default yfinance price provider",
+            reason=(
+                "FMP credentials are not configured; "
+                f"using default {default_provider} price provider"
+            ),
         ),
         UnavailableContext(
             context_type="fundamentals",
@@ -384,7 +388,7 @@ def resolve_provider_mode(
         ),
     )
     return (
-        ProviderMode(mode="enhanced", price_provider=_default_price_provider(registry)),
+        ProviderMode(mode="enhanced", price_provider=default_provider),
         unavailable,
     )
 

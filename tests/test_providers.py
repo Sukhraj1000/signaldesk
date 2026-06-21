@@ -511,6 +511,22 @@ def test_resolve_provider_mode_defaults_to_yfinance_price_role() -> None:
     assert unavailable_context == ()
 
 
+def test_resolve_provider_mode_falls_back_to_local_fixture_price_role(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("FMP_API_KEY", raising=False)
+    registry = ProviderRegistry((LocalFixtureProvider(),))
+
+    default_mode, default_unavailable = resolve_provider_mode(registry)
+    enhanced_mode, enhanced_unavailable = resolve_provider_mode(registry, mode="enhanced")
+
+    assert default_mode.price_provider == "local-fixture"
+    assert default_unavailable == ()
+    assert enhanced_mode.price_provider == "local-fixture"
+    assert enhanced_unavailable[0].context_type == "enhanced_price"
+    assert enhanced_unavailable[0].reason.endswith("default local-fixture price provider")
+
+
 def test_resolve_provider_mode_reports_missing_enhanced_context_without_key(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
