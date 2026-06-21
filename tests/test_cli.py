@@ -1659,8 +1659,11 @@ def test_ta_json_schema_documents_required_signal_card_sections(
         cli_main, "default_provider_registry", lambda: ProviderRegistry((WorkingProvider(),))
     )
 
-    schema_path = Path(__file__).resolve().parents[1] / "docs/schemas/signaldesk.ta.v1.schema.json"
+    repo_root = Path(__file__).resolve().parents[1]
+    schema_path = repo_root / "docs/schemas/signaldesk.ta.v1.schema.json"
+    golden_path = repo_root / "tests/golden/ta_signal_card_contract_v1.json"
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    golden_contract = json.loads(golden_path.read_text(encoding="utf-8"))
     result = CliRunner().invoke(
         app, ["ta", "AMD", "--provider", "working", "--llm", "none", "--output", "json"]
     )
@@ -1669,10 +1672,20 @@ def test_ta_json_schema_documents_required_signal_card_sections(
     payload = json.loads(result.stdout)
     signal_card_required = schema["properties"]["signal_card"]["required"]
 
+    assert golden_contract["schema_version"] == "signaldesk.ta.v1"
     assert schema["properties"]["schema_version"] == {"const": "signaldesk.ta.v1"}
-    assert payload["schema_version"] == "signaldesk.ta.v1"
+    assert payload["schema_version"] == golden_contract["schema_version"]
+    assert schema["required"] == golden_contract["required_top_level_sections"]
+    assert signal_card_required == golden_contract["required_signal_card_sections"]
+    assert set(golden_contract["required_top_level_sections"]).issubset(payload)
     assert set(signal_card_required) == set(payload["signal_card"].keys())
-    for section in signal_card_required:
+    for section in golden_contract["alias_sections_that_must_match_signal_card"]:
         assert payload["signal_card"][section] == payload[section]
+    assert sorted(
+        item["context_type"] for item in payload["signal_card"]["unavailable_context"]
+    ) == sorted(golden_contract["required_unavailable_context_types"])
+    assert [
+        item["category"] for item in payload["signal_card"]["score"]["breakdowns"]
+    ] == golden_contract["score_breakdown_categories"]
     assert schema["$defs"]["risk"]["required"] == ["flags", "unavailable_context"]
     assert schema["$defs"]["score"]["required"] == ["breakdowns"]

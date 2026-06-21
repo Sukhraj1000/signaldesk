@@ -1,0 +1,56 @@
+{
+  "schema_version": "signaldesk.ta.v1",
+  "required_top_level_sections": [
+    "schema_version",
+    "identity",
+    "provider_mode",
+    "facts",
+    "trend",
+    "levels",
+    "events",
+    "risk",
+    "score",
+    "provenance",
+    "unavailable_context",
+    "llm",
+    "narrative",
+    "signal_card"
+  ],
+  "required_signal_card_sections": [
+    "identity",
+    "provider_mode",
+    "facts",
+    "trend",
+    "levels",
+    "events",
+    "risk",
+    "score",
+    "provenance",
+    "unavailable_context",
+    "llm",
+    "narrative"
+  ],
+  "alias_sections_that_must_match_signal_card": [
+    "identity",
+    "provider_mode",
+    "facts",
+    "trend",
+    "levels",
+    "events",
+    "risk",
+    "score",
+    "provenance",
+    "unavailable_context",
+    "llm",
+    "narrative"
+  ],
+  "required_unavailable_context_types": [
+    "fundamentals",
+    "llm_narrative"
+  ],
+  "score_breakdown_categories": [
+    "setup_quality",
+    "risk",
+    "data_quality"
+  ]
+}
