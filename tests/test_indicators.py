@@ -11,6 +11,9 @@ from signaldesk_backend import (
     Symbol,
     average_true_range,
     calculate_fibonacci_retracement_levels,
+    classify_trend_regime,
+    classify_volatility_regime,
+    classify_volume_regime,
     derive_confirmation_invalidation_levels,
     detect_support_resistance_zones,
     detect_swing_highs,
@@ -276,8 +279,7 @@ def test_average_true_range_uses_sma_seed_then_wilder_smoothing() -> None:
 
 def test_volume_moving_average_returns_aligned_rolling_means() -> None:
     candles = tuple(
-        make_volume_candle(index, volume)
-        for index, volume in enumerate((100, 200, 300, 600))
+        make_volume_candle(index, volume) for index, volume in enumerate((100, 200, 300, 600))
     )
 
     assert volume_moving_average(candles, period=3) == (
@@ -290,8 +292,7 @@ def test_volume_moving_average_returns_aligned_rolling_means() -> None:
 
 def test_relative_volume_compares_volume_to_prior_trailing_average() -> None:
     candles = tuple(
-        make_volume_candle(index, volume)
-        for index, volume in enumerate((100, 200, 300, 600))
+        make_volume_candle(index, volume) for index, volume in enumerate((100, 200, 300, 600))
     )
 
     assert relative_volume(candles, period=3) == (
@@ -303,9 +304,7 @@ def test_relative_volume_compares_volume_to_prior_trailing_average() -> None:
 
 
 def test_volume_indicators_return_warmup_values_for_insufficient_input() -> None:
-    candles = tuple(
-        make_volume_candle(index, volume) for index, volume in enumerate((100, 200))
-    )
+    candles = tuple(make_volume_candle(index, volume) for index, volume in enumerate((100, 200)))
 
     assert volume_moving_average(candles, period=3) == (None, None)
     assert relative_volume(candles, period=3) == (None, None)
@@ -317,6 +316,115 @@ def test_relative_volume_returns_none_for_zero_trailing_average() -> None:
     )
 
     assert relative_volume(candles, period=3) == (None, None, None, None)
+
+
+def test_classify_trend_regime_uses_moving_average_alignment() -> None:
+    uptrend = tuple(Decimal(index) for index in range(1, 61))
+    downtrend = tuple(Decimal(index) for index in range(60, 0, -1))
+    sideways = (Decimal("10"),) * 60
+
+    assert classify_trend_regime(uptrend, short_period=3, long_period=5).regime == "uptrend"
+    assert classify_trend_regime(downtrend, short_period=3, long_period=5).regime == "downtrend"
+    assert classify_trend_regime(sideways, short_period=3, long_period=5).regime == "sideways"
+
+
+def test_classify_trend_regime_reports_insufficient_history() -> None:
+    result = classify_trend_regime((Decimal("10"), Decimal("11")), short_period=2, long_period=3)
+
+    assert result.regime == "unknown"
+    assert result.source_rule == "insufficient_history_for_trend_regime"
+
+
+def test_classify_volatility_regime_compares_atr_to_historical_baseline() -> None:
+    compressed = tuple(make_candle(index, "10") for index in range(9))
+    normal = tuple(
+        make_ohlc_candle(
+            index,
+            open_=Decimal("10"),
+            high=Decimal("11"),
+            low=Decimal("9"),
+            close=Decimal("10"),
+        )
+        for index in range(9)
+    )
+    expanded = (
+        *normal[:-1],
+        make_ohlc_candle(
+            8,
+            open_=Decimal("10"),
+            high=Decimal("20"),
+            low=Decimal("5"),
+            close=Decimal("10"),
+        ),
+    )
+
+    assert (
+        classify_volatility_regime(compressed, atr_period=3, baseline_period=6).regime
+        == "volatility_compression"
+    )
+    assert (
+        classify_volatility_regime(normal, atr_period=3, baseline_period=6).regime
+        == "normal_volatility"
+    )
+    assert (
+        classify_volatility_regime(expanded, atr_period=3, baseline_period=6).regime
+        == "volatility_expansion"
+    )
+
+
+def test_classify_volatility_regime_detects_positive_atr_after_zero_baseline() -> None:
+    candles = (
+        *(make_candle(index, "10") for index in range(5)),
+        make_ohlc_candle(
+            5,
+            open_=Decimal("10"),
+            high=Decimal("15"),
+            low=Decimal("5"),
+            close=Decimal("10"),
+        ),
+    )
+
+    result = classify_volatility_regime(candles, atr_period=3, baseline_period=3)
+
+    assert result.regime == "volatility_expansion"
+    assert result.source_rule == "positive_latest_atr_against_zero_atr_baseline"
+
+
+def test_classify_volatility_regime_reports_insufficient_history() -> None:
+    result = classify_volatility_regime(
+        tuple(make_candle(index, "10") for index in range(4)),
+        atr_period=3,
+        baseline_period=3,
+    )
+
+    assert result.regime == "unknown"
+    assert result.source_rule == "insufficient_history_for_volatility_regime"
+
+
+def test_classify_volume_regime_uses_prior_trailing_average() -> None:
+    high_volume = tuple(
+        make_volume_candle(index, volume) for index, volume in enumerate((100, 100, 100, 200))
+    )
+    low_volume = tuple(
+        make_volume_candle(index, volume) for index, volume in enumerate((100, 100, 100, 50))
+    )
+    normal_volume = tuple(
+        make_volume_candle(index, volume) for index, volume in enumerate((100, 100, 100, 100))
+    )
+
+    assert classify_volume_regime(high_volume, period=3).regime == "high_volume"
+    assert classify_volume_regime(low_volume, period=3).regime == "low_volume"
+    assert classify_volume_regime(normal_volume, period=3).regime == "normal_volume"
+
+
+def test_classify_volume_regime_reports_unavailable_zero_baseline() -> None:
+    result = classify_volume_regime(
+        tuple(make_volume_candle(index, volume) for index, volume in enumerate((0, 0, 0, 100))),
+        period=3,
+    )
+
+    assert result.regime == "unknown"
+    assert result.source_rule == "unavailable_relative_volume_for_volume_regime"
 
 
 def test_calculate_fibonacci_retracement_levels_for_upward_move() -> None:
@@ -722,23 +830,15 @@ def test_derive_confirmation_invalidation_levels_reports_unavailable_sides_as_no
         lambda values: macd(values, slow_period=0),
         lambda values: macd(values, signal_period=0),
         lambda values: volume_moving_average(
-            tuple(
-                make_volume_candle(index, int(value))
-                for index, value in enumerate(values)
-            ),
+            tuple(make_volume_candle(index, int(value)) for index, value in enumerate(values)),
             period=0,
         ),
         lambda values: relative_volume(
-            tuple(
-                make_volume_candle(index, int(value))
-                for index, value in enumerate(values)
-            ),
+            tuple(make_volume_candle(index, int(value)) for index, value in enumerate(values)),
             period=0,
         ),
         lambda values: average_true_range(
-            tuple(
-                make_candle(index, str(value)) for index, value in enumerate(values)
-            ),
+            tuple(make_candle(index, str(value)) for index, value in enumerate(values)),
             period=0,
         ),
     ],
@@ -756,17 +856,11 @@ def test_moving_averages_reject_non_positive_periods(indicator: Indicator) -> No
         lambda values: relative_strength_index(values, period=3),
         lambda values: macd(values, fast_period=2, slow_period=3, signal_period=2).macd_line,
         lambda values: volume_moving_average(
-            tuple(
-                make_volume_candle(index, int(value))
-                for index, value in enumerate(values)
-            ),
+            tuple(make_volume_candle(index, int(value)) for index, value in enumerate(values)),
             period=3,
         ),
         lambda values: relative_volume(
-            tuple(
-                make_volume_candle(index, int(value))
-                for index, value in enumerate(values)
-            ),
+            tuple(make_volume_candle(index, int(value)) for index, value in enumerate(values)),
             period=3,
         ),
     ],

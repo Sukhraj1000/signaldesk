@@ -14,6 +14,9 @@ from signaldesk_backend import (
     Settings,
     Symbol,
     average_true_range,
+    classify_trend_regime,
+    classify_volatility_regime,
+    classify_volume_regime,
     default_provider_registry,
     derive_confirmation_invalidation_levels,
     detect_swing_highs,
@@ -174,6 +177,9 @@ _TABLE_REPORT_KEYS = (
     "atr_14",
     "volume_average_20",
     "relative_volume_20",
+    "trend_regime",
+    "volatility_regime",
+    "volume_regime",
     "latest_swing_high",
     "latest_swing_low",
     "confirmation_level",
@@ -199,6 +205,9 @@ def _technical_analysis_report(
     atr_14 = average_true_range(candles, period=14)[-1]
     volume_average_20 = volume_moving_average(candles, period=20)[-1]
     relative_volume_20 = relative_volume(candles, period=20)[-1]
+    trend_regime = classify_trend_regime(closes)
+    volatility_regime = classify_volatility_regime(candles)
+    volume_regime = classify_volume_regime(candles)
     latest_swing_high = _latest_level(detect_swing_highs(candles))
     latest_swing_low = _latest_level(detect_swing_lows(candles))
     setup_levels = derive_confirmation_invalidation_levels(candles)
@@ -226,6 +235,11 @@ def _technical_analysis_report(
     swing_levels = {
         "latest_swing_high": latest_swing_high,
         "latest_swing_low": latest_swing_low,
+    }
+    regimes = {
+        "trend": _regime_payload(trend_regime),
+        "volatility": _regime_payload(volatility_regime),
+        "volume": _regime_payload(volume_regime),
     }
     setup = {
         "confirmation_level": _setup_level(setup_levels.confirmation),
@@ -264,6 +278,9 @@ def _technical_analysis_report(
         "atr_14": indicators["atr_14"],
         "volume_average_20": indicators["volume_average_20"],
         "relative_volume_20": indicators["relative_volume_20"],
+        "trend_regime": regimes["trend"],
+        "volatility_regime": regimes["volatility"],
+        "volume_regime": regimes["volume"],
         "latest_swing_high": swing_levels["latest_swing_high"],
         "latest_swing_low": swing_levels["latest_swing_low"],
         "confirmation_level": setup["confirmation_level"],
@@ -271,6 +288,7 @@ def _technical_analysis_report(
         "facts": facts,
         "deterministic_signals": {
             "indicators": indicators,
+            "regimes": regimes,
             "swing_levels": swing_levels,
             "setup_levels": setup,
         },
@@ -307,6 +325,14 @@ def _latest_level(points: tuple[Any, ...]) -> dict[str, Any] | None:
         "candle_index": point.candle_index,
         "timestamp": point.timestamp.isoformat(),
         "price": _decimal_text(point.price),
+    }
+
+
+def _regime_payload(regime: Any) -> dict[str, Any]:
+    return {
+        "regime": regime.regime,
+        "source_rule": regime.source_rule,
+        "reason": regime.reason,
     }
 
 
