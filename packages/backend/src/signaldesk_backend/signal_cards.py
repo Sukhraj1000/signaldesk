@@ -46,6 +46,9 @@ def assemble_ta_signal_card_report(
     contract while the canonical card is adopted by downstream renderers.
     """
 
+    if schema_version != identity.get("schema_version"):
+        raise ValueError("signal-card schema_version must match identity schema_version")
+
     _require_signal_card_sections(
         identity=identity,
         provider_mode=provider_mode,
