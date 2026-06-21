@@ -1,5 +1,5 @@
 import pytest
-from signaldesk_backend import assemble_ta_signal_card_report
+from signaldesk_backend import assemble_ta_signal_card_report, validate_ta_signal_card_report
 
 
 def _base_sections() -> dict[str, object]:
@@ -14,11 +14,7 @@ def _base_sections() -> dict[str, object]:
         "flags": [{"kind": "scope", "severity": "info"}],
         "unavailable_context": unavailable_context,
     }
-    score = {
-        "breakdowns": [
-            {"category": "data_quality", "score": "100", "reasons": []}
-        ]
-    }
+    score = {"breakdowns": [{"category": "data_quality", "score": "100", "reasons": []}]}
     return {
         "schema_version": "signaldesk.ta.v1",
         "identity": {
@@ -68,3 +64,23 @@ def test_assemble_ta_signal_card_report_rejects_missing_required_sections() -> N
 
     with pytest.raises(ValueError, match="risk section"):
         assemble_ta_signal_card_report(**sections)  # type: ignore[arg-type]
+
+
+def test_validate_ta_signal_card_report_rejects_alias_drift() -> None:
+    sections = _base_sections()
+    payload = assemble_ta_signal_card_report(**sections)  # type: ignore[arg-type]
+    payload["signal_card"] = {**payload["signal_card"], "facts": {"symbol": "AMD"}}
+
+    with pytest.raises(ValueError, match="facts"):
+        validate_ta_signal_card_report(payload)
+
+
+def test_validate_ta_signal_card_report_rejects_missing_card_sections() -> None:
+    sections = _base_sections()
+    payload = assemble_ta_signal_card_report(**sections)  # type: ignore[arg-type]
+    payload["signal_card"] = {
+        key: value for key, value in payload["signal_card"].items() if key != "risk"
+    }
+
+    with pytest.raises(ValueError, match="risk"):
+        validate_ta_signal_card_report(payload)
