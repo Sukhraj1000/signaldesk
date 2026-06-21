@@ -1124,14 +1124,16 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
         "llm": "none",
         "narrative": None,
     }
-    assert payload["identity"]["generated_at"]
+    generated_at = payload["identity"]["generated_at"]
+    assert isinstance(generated_at, str)
+    datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
     expected["facts"]["data_start"] = "2024-01-01T00:00:00+00:00"
     expected["facts"]["data_end"] = "2024-02-09T00:00:00+00:00"
     expected["facts"]["latest_volume"] = 1039
     expected["identity"] = {
         "symbol": "AMD",
         "timeframe": "1d",
-        "generated_at": payload["identity"]["generated_at"],
+        "generated_at": generated_at,
         "schema_version": "signaldesk.ta.v1",
     }
     expected["trend"] = {
