@@ -393,6 +393,79 @@ def test_config_inspect_reports_json_and_rejects_unknown_output(monkeypatch: Mon
     assert "--output must be 'table' or 'json'." in invalid_result.stderr
 
 
+def test_scan_command_runs_watchlist_against_fixture_provider(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        cli_main, "default_provider_registry", lambda: ProviderRegistry((WorkingProvider(),))
+    )
+    watchlist = tmp_path / "watchlist.yaml"
+    watchlist.write_text("symbols:\n  - amd\n  - MSFT\n  - AMD\n", encoding="utf-8")
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "scan",
+            "--watchlist",
+            str(watchlist),
+            "--provider",
+            "working",
+            "--llm",
+            "none",
+            "--output",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["symbols"] == ["AMD", "MSFT"]
+    assert payload["provider_mode"] == {
+        "mode": "explicit",
+        "price_provider": "working",
+        "fundamentals_provider": None,
+        "catalyst_provider": None,
+        "llm_provider": None,
+        "unavailable_context": [],
+    }
+    assert [item["status"] for item in payload["results"]] == ["ok", "ok"]
+    first_summary = payload["results"][0]["summary"]
+    assert first_summary["schema_version"] == "signaldesk.ta.v1"
+    assert first_summary["symbol"] == "AMD"
+    assert first_summary["provider"] == "working"
+    assert first_summary["latest_close"] == "49"
+    assert first_summary["provenance"] == [
+        {
+            "provider": "working",
+            "source": "historical_candles",
+            "timeframe": "1d",
+            "inputs": ["AMD"],
+            "observations": 40,
+        }
+    ]
+    assert first_summary["unavailable_context"] == [
+        {
+            "context_type": "fundamentals",
+            "reason": "not available in the default technical-analysis CLI path",
+            "provider": "working",
+        },
+        {
+            "context_type": "llm_narrative",
+            "reason": "--llm none selected; narrative explanations are disabled",
+            "provider": None,
+        },
+    ]
+
+
+def test_scan_command_reports_table_output_and_watchlist_errors(tmp_path: Path) -> None:
+    missing_result = CliRunner().invoke(
+        app, ["scan", "--watchlist", str(tmp_path / "missing.yaml")]
+    )
+
+    assert missing_result.exit_code == 2
+    assert "watchlist file not found" in missing_result.stderr
+
+
 def test_config_inspect_helpers_redact_secrets_from_payload() -> None:
     payload = _config_inspect_payload(
         Settings(

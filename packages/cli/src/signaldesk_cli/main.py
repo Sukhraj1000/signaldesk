@@ -2,6 +2,7 @@ import json
 import os
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
@@ -159,35 +160,22 @@ def technical_analysis(
 
     registry = default_provider_registry()
     try:
-        requested_symbol = Symbol(symbol)
-        (
-            market_data_provider,
-            provider_mode_payload,
-            mode_unavailable_context,
-        ) = _resolve_ta_provider(registry, provider=provider, mode=mode)
+        report = _fetch_ta_report(
+            registry,
+            symbol=symbol,
+            provider=provider,
+            mode=mode,
+            interval=interval,
+            days=days,
+            as_of=datetime.now(UTC),
+        )
     except (KeyError, ValueError) as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(2) from exc
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
 
-    end = datetime.now(UTC)
-    start = end - timedelta(days=days)
-    result = market_data_provider.get_historical_candles(
-        requested_symbol, start=start, end=end, interval=interval
-    )
-    if not result.ok or not result.data:
-        diagnostic = redact_provider_diagnostic(result.error or "provider returned no candles")
-        typer.echo(f"{market_data_provider.name} failed: {diagnostic}", err=True)
-        raise typer.Exit(1)
-
-    report = _technical_analysis_report(
-        symbol=requested_symbol,
-        provider_name=market_data_provider.name,
-        candles=result.data,
-        interval=interval,
-        provider_mode=provider_mode_payload,
-        as_of=end,
-        mode_unavailable_context=mode_unavailable_context,
-    )
     validate_ta_signal_card_report(report)
     if output_format == "json":
         typer.echo(json.dumps(report, indent=2, sort_keys=True))
@@ -195,6 +183,203 @@ def technical_analysis(
 
     for key, value in _ta_table_report_values(report).items():
         typer.echo(f"{key}\t{value}")
+
+
+def _fetch_ta_report(
+    registry: ProviderRegistry,
+    *,
+    symbol: str,
+    provider: str | None,
+    mode: str,
+    interval: str,
+    days: int,
+    as_of: datetime,
+) -> dict[str, Any]:
+    requested_symbol = Symbol(symbol)
+    (
+        market_data_provider,
+        provider_mode_payload,
+        mode_unavailable_context,
+    ) = _resolve_ta_provider(registry, provider=provider, mode=mode)
+
+    start = as_of - timedelta(days=days)
+    result = market_data_provider.get_historical_candles(
+        requested_symbol, start=start, end=as_of, interval=interval
+    )
+    if not result.ok or not result.data:
+        diagnostic = redact_provider_diagnostic(result.error or "provider returned no candles")
+        raise RuntimeError(
+            f"{market_data_provider.name} failed for {requested_symbol.ticker}: {diagnostic}"
+        )
+
+    report = _technical_analysis_report(
+        symbol=requested_symbol,
+        provider_name=market_data_provider.name,
+        candles=result.data,
+        interval=interval,
+        provider_mode=provider_mode_payload,
+        as_of=as_of,
+        mode_unavailable_context=mode_unavailable_context,
+    )
+    validate_ta_signal_card_report(report)
+    return report
+
+
+def _load_watchlist_symbols(path: Path) -> tuple[str, ...]:
+    if not path.exists():
+        raise ValueError(f"watchlist file not found: {path}")
+    symbols: list[str] = []
+    in_symbols = False
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line_without_comment = raw_line.split("#", 1)[0].rstrip()
+        stripped = line_without_comment.strip()
+        if not stripped:
+            continue
+        if stripped == "symbols:":
+            in_symbols = True
+            continue
+        if stripped.endswith(":") and not stripped.startswith("-"):
+            in_symbols = False
+            continue
+        if not in_symbols or not stripped.startswith("-"):
+            continue
+        symbol = stripped[1:].strip().strip("'\"")
+        if symbol:
+            symbols.append(Symbol(symbol).ticker)
+    if not symbols:
+        raise ValueError(f"watchlist file has no symbols: {path}")
+    return tuple(dict.fromkeys(symbols))
+
+
+def _scan_result_summary(report: dict[str, Any]) -> dict[str, Any]:
+    card = extract_ta_signal_card(report)
+    setup_scores = [
+        score for score in card["score"]["breakdowns"] if score["category"] == "setup_quality"
+    ]
+    risk_scores = [score for score in card["score"]["breakdowns"] if score["category"] == "risk"]
+    return {
+        "schema_version": card["identity"]["schema_version"],
+        "symbol": card["identity"]["symbol"],
+        "provider": card["facts"]["provider"],
+        "interval": card["facts"]["interval"],
+        "candles": card["facts"]["candles"],
+        "latest_timestamp": card["facts"]["latest_timestamp"],
+        "latest_close": card["facts"]["latest_close"],
+        "trend_regime": card["trend"]["regimes"]["trend"],
+        "confirmation_level": card["levels"]["confirmation"],
+        "invalidation_level": card["levels"]["invalidation"],
+        "risk_flags": card["risk"]["flags"],
+        "unavailable_context": card["unavailable_context"],
+        "setup_quality_score": setup_scores[0]["score"] if setup_scores else None,
+        "risk_score": risk_scores[0]["score"] if risk_scores else None,
+        "provenance": card["provenance"],
+    }
+
+
+def _format_scan_table(payload: dict[str, Any]) -> tuple[str, ...]:
+    header = (
+        "symbol\tstatus\tprovider\tlatest_close\ttrend_regime\t"
+        "setup_quality_score\trisk_score\tunavailable_context"
+    )
+    lines = [header]
+    for result in payload["results"]:
+        if result["status"] != "ok":
+            lines.append(f"{result['symbol']}	failed						{result['error']}")
+            continue
+        summary = result["summary"]
+        lines.append(
+            f"{summary['symbol']}	ok	"
+            f"{summary['provider']}	"
+            f"{summary['latest_close']}	"
+            f"{summary['trend_regime']['regime']}	"
+            f"{summary['setup_quality_score']}	"
+            f"{summary['risk_score']}	"
+            f"{len(summary['unavailable_context'])}"
+        )
+    return tuple(lines)
+
+
+@app.command("scan")
+def scan_watchlist(
+    watchlist: Path = typer.Option(  # noqa: B008
+        ..., help="YAML watchlist containing a top-level symbols list."
+    ),
+    provider: str | None = typer.Option(
+        None,
+        help=(
+            "Registered price provider to use for every symbol. When omitted, SignalDesk "
+            "uses --mode role resolution."
+        ),
+    ),
+    mode: str = typer.Option("default", help="Provider role mode: default or enhanced."),
+    llm: str = typer.Option("none", help="LLM provider. Only 'none' is currently supported."),
+    interval: str = typer.Option("1d", help="Historical candle interval."),
+    days: int = typer.Option(120, min=1, help="Number of calendar days of history to request."),
+    output: str = typer.Option("table", help="Output format: table or json."),
+) -> None:
+    """Run deterministic TA summaries for every symbol in a watchlist."""
+
+    if llm.strip().lower() != "none":
+        typer.echo("Only --llm none is currently supported.", err=True)
+        raise typer.Exit(2)
+    output_format = output.strip().lower()
+    if output_format not in {"table", "json"}:
+        typer.echo("--output must be 'table' or 'json'.", err=True)
+        raise typer.Exit(2)
+
+    try:
+        symbols = _load_watchlist_symbols(watchlist)
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from exc
+
+    registry = default_provider_registry()
+    scanned_at = datetime.now(UTC)
+    results: list[dict[str, Any]] = []
+    exit_code = 0
+    for symbol in symbols:
+        try:
+            report = _fetch_ta_report(
+                registry,
+                symbol=symbol,
+                provider=provider,
+                mode=mode,
+                interval=interval,
+                days=days,
+                as_of=scanned_at,
+            )
+        except (KeyError, ValueError) as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(2) from exc
+        except RuntimeError as exc:
+            exit_code = 1
+            results.append({"symbol": symbol, "status": "failed", "error": str(exc)})
+            continue
+        results.append({"symbol": symbol, "status": "ok", "summary": _scan_result_summary(report)})
+
+    payload = {
+        "watchlist": str(watchlist),
+        "scanned_at": scanned_at.isoformat(),
+        "provider_mode": _provider_mode_payload(mode)
+        if provider is None
+        else {
+            "mode": "explicit",
+            "price_provider": provider.strip(),
+            "fundamentals_provider": None,
+            "catalyst_provider": None,
+            "llm_provider": None,
+            "unavailable_context": [],
+        },
+        "symbols": list(symbols),
+        "results": results,
+    }
+    if output_format == "json":
+        typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+    else:
+        for line in _format_scan_table(payload):
+            typer.echo(line)
+    if exit_code:
+        raise typer.Exit(exit_code)
 
 
 def _ta_table_report_values(report: dict[str, Any]) -> dict[str, Any]:
