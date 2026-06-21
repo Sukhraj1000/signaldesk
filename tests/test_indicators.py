@@ -26,6 +26,7 @@ from signaldesk_backend import (
     detect_swing_highs,
     detect_swing_lows,
     detect_swing_points,
+    detect_trend_regime_shift_events,
     detect_volatility_regime_events,
     exponential_moving_average,
     macd,
@@ -889,6 +890,74 @@ def test_detect_moving_average_cross_events_returns_empty_without_cross_or_histo
 
     assert detect_moving_average_cross_events(no_cross, period=3) == ()
     assert detect_moving_average_cross_events(no_cross[:3], period=3) == ()
+
+
+def test_detect_trend_regime_shift_events_reports_traceable_regime_changes() -> None:
+    bullish_shift = tuple(
+        make_candle(index, close)
+        for index, close in enumerate(("10", "10", "10", "10", "10", "15"))
+    )
+    bearish_shift = tuple(
+        make_candle(index, close)
+        for index, close in enumerate(("10", "10", "10", "10", "10", "5"))
+    )
+
+    assert detect_trend_regime_shift_events(
+        bullish_shift, short_period=3, long_period=5
+    ) == (
+        DeterministicTechnicalEvent(
+            event_type="trend_regime_shift",
+            timestamp=bullish_shift[-1].timestamp,
+            candle_index=5,
+            severity="bullish",
+            source_rule="latest_candle_changed_trend_regime_classification",
+            source_indicators=("sma_3", "sma_5"),
+            reason=(
+                "Trend regime shifted from sideways to uptrend: Latest close is above "
+                "the short SMA, and the short SMA is above the long SMA."
+            ),
+            price=Decimal("15"),
+            invalidation_condition=(
+                "A later close changing the deterministic trend regime away from uptrend "
+                "would end this regime-shift condition."
+            ),
+        ),
+    )
+    assert detect_trend_regime_shift_events(
+        bearish_shift, short_period=3, long_period=5
+    ) == (
+        DeterministicTechnicalEvent(
+            event_type="trend_regime_shift",
+            timestamp=bearish_shift[-1].timestamp,
+            candle_index=5,
+            severity="bearish",
+            source_rule="latest_candle_changed_trend_regime_classification",
+            source_indicators=("sma_3", "sma_5"),
+            reason=(
+                "Trend regime shifted from sideways to downtrend: Latest close is below "
+                "the short SMA, and the short SMA is below the long SMA."
+            ),
+            price=Decimal("5"),
+            invalidation_condition=(
+                "A later close changing the deterministic trend regime away from downtrend "
+                "would end this regime-shift condition."
+            ),
+        ),
+    )
+
+
+def test_detect_trend_regime_shift_events_returns_empty_without_shift_or_history() -> None:
+    no_shift = tuple(make_candle(index, "10") for index in range(6))
+
+    assert detect_trend_regime_shift_events(no_shift, short_period=3, long_period=5) == ()
+    assert detect_trend_regime_shift_events(no_shift[:5], short_period=3, long_period=5) == ()
+
+
+def test_detect_trend_regime_shift_events_rejects_invalid_periods() -> None:
+    with pytest.raises(ValueError, match="short_period must be less than long_period"):
+        detect_trend_regime_shift_events(
+            (make_candle(0, "10"),), short_period=5, long_period=5
+        )
 
 
 def test_detect_breakout_breakdown_events_reports_level_crosses() -> None:
