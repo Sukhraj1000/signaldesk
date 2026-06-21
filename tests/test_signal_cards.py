@@ -104,7 +104,7 @@ def test_validate_ta_signal_card_report_rejects_identity_fact_drift() -> None:
     payload["facts"] = {**payload["facts"], "symbol": "NVDA"}
     payload["signal_card"] = {**payload["signal_card"], "facts": payload["facts"]}
 
-    with pytest.raises(ValueError, match="facts.symbol"):
+    with pytest.raises(ValueError, match=r"facts\.symbol"):
         validate_ta_signal_card_report(payload)
 
 
