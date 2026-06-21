@@ -871,7 +871,10 @@ def test_stooq_provider_reports_historical_capabilities_without_network() -> Non
     assert capabilities[0].live_check_suitable is False
     assert health == ProviderResult.success(
         provider="stooq",
-        data="ready (no external credentials required; network used only for candle fetches)",
+        data=(
+            "not checked (no external credentials required; "
+            "network availability is verified only during candle fetches)"
+        ),
     )
     assert quote == ProviderResult.failure(
         provider="stooq", error="stooq quote retrieval is not supported"
