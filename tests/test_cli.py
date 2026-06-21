@@ -237,6 +237,34 @@ class MovingAverageCrossProvider(WorkingProvider):
 
 
 @dataclass(frozen=True)
+class TrendRegimeShiftProvider(WorkingProvider):
+    name: str = "trend-regime-shift"
+
+    def get_historical_candles(
+        self,
+        symbol: Symbol,
+        *,
+        start: datetime,
+        end: datetime,
+        interval: str,
+    ) -> ProviderResult[tuple[Candle, ...]]:
+        closes = (*("10" for _ in range(50)), "70")
+        candles = tuple(
+            Candle(
+                symbol=symbol,
+                timestamp=datetime(2024, 1, 1, tzinfo=UTC) + timedelta(days=index),
+                open=Decimal(close),
+                high=Decimal("80"),
+                low=Decimal("1"),
+                close=Decimal(close),
+                volume=1000 + index,
+            )
+            for index, close in enumerate(closes)
+        )
+        return ProviderResult.success(provider=self.name, data=candles)
+
+
+@dataclass(frozen=True)
 class RelativeVolumeSpikeProvider(WorkingProvider):
     name: str = "relative-volume-spike"
 
@@ -1025,6 +1053,69 @@ def test_ta_command_includes_traceable_moving_average_events(
                 "A close back below sma_20 10.05 would invalidate the reclaim event."
             ),
         }
+    ]
+    assert payload["deterministic_signals"]["events"] == payload["technical_events"]
+
+
+def test_ta_command_includes_traceable_trend_regime_shift_events(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        cli_main,
+        "default_provider_registry",
+        lambda: ProviderRegistry((TrendRegimeShiftProvider(),)),
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "ta",
+            "AMD",
+            "--provider",
+            "trend-regime-shift",
+            "--llm",
+            "none",
+            "--output",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["technical_events"] == [
+        {
+            "event_type": "reclaimed_moving_average",
+            "timestamp": "2024-02-20T00:00:00+00:00",
+            "candle_index": 50,
+            "severity": "bullish",
+            "source_rule": "close_crossed_above_sma",
+            "source_indicators": ["sma_20"],
+            "reason": (
+                "Latest close 70 moved above sma_20 13 after the prior close was not "
+                "above its SMA."
+            ),
+            "price": "70",
+            "invalidation_condition": (
+                "A close back below sma_20 13 would invalidate the reclaim event."
+            ),
+        },
+        {
+            "event_type": "trend_regime_shift",
+            "timestamp": "2024-02-20T00:00:00+00:00",
+            "candle_index": 50,
+            "severity": "bullish",
+            "source_rule": "latest_candle_changed_trend_regime_classification",
+            "source_indicators": ["sma_20", "sma_50"],
+            "reason": (
+                "Trend regime shifted from sideways to uptrend: Latest close is above "
+                "the short SMA, and the short SMA is above the long SMA."
+            ),
+            "price": "70",
+            "invalidation_condition": (
+                "A later close changing the deterministic trend regime away from uptrend "
+                "would end this regime-shift condition."
+            ),
+        },
     ]
     assert payload["deterministic_signals"]["events"] == payload["technical_events"]
 

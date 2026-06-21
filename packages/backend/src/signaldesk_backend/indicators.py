@@ -608,6 +608,67 @@ def detect_moving_average_cross_events(
     return ()
 
 
+def detect_trend_regime_shift_events(
+    candles: Sequence[CandleInput], *, short_period: int = 20, long_period: int = 50
+) -> tuple[DeterministicTechnicalEvent, ...]:
+    """Detect a latest-candle trend regime shift from MA alignment.
+
+    The rule compares the deterministic trend classification before and after
+    the latest candle. It emits only when both classifications are available and
+    the regime changes, so insufficient warmup returns no event rather than
+    inferred context.
+    """
+
+    _validate_period(short_period)
+    _validate_period(long_period)
+    if short_period >= long_period:
+        raise ValueError("short_period must be less than long_period")
+    if len(candles) < long_period + 1:
+        return ()
+
+    previous_regime = classify_trend_regime(
+        tuple(candle.close for candle in candles[:-1]),
+        short_period=short_period,
+        long_period=long_period,
+    )
+    latest_regime = classify_trend_regime(
+        tuple(candle.close for candle in candles),
+        short_period=short_period,
+        long_period=long_period,
+    )
+    if "unknown" in {previous_regime.regime, latest_regime.regime}:
+        return ()
+    if previous_regime.regime == latest_regime.regime:
+        return ()
+
+    latest_candle = candles[-1]
+    severity: Literal["info", "bullish", "bearish", "warning"] = "info"
+    if latest_regime.regime == "uptrend":
+        severity = "bullish"
+    elif latest_regime.regime == "downtrend":
+        severity = "bearish"
+
+    return (
+        DeterministicTechnicalEvent(
+            event_type="trend_regime_shift",
+            timestamp=latest_candle.timestamp,
+            candle_index=len(candles) - 1,
+            severity=severity,
+            source_rule="latest_candle_changed_trend_regime_classification",
+            source_indicators=(f"sma_{short_period}", f"sma_{long_period}"),
+            reason=(
+                f"Trend regime shifted from {previous_regime.regime} to "
+                f"{latest_regime.regime}: {latest_regime.reason}"
+            ),
+            price=latest_candle.close,
+            invalidation_condition=(
+                f"A later close changing the deterministic trend regime away from "
+                f"{latest_regime.regime} would end this regime-shift condition."
+            ),
+        ),
+    )
+
+
 def detect_breakout_breakdown_events(
     candles: Sequence[CandleInput],
     *,
