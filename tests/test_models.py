@@ -6,6 +6,8 @@ from decimal import Decimal
 import pytest
 from signaldesk_backend import (
     Candle,
+    CatalystContext,
+    CatalystEvent,
     FundamentalContext,
     KeyLevels,
     Provenance,
@@ -252,6 +254,32 @@ def test_fundamental_context_normalizes_provider_facts_without_ta_signals() -> N
     assert context.market_cap == 289_000_000_000
     assert context.currency == "USD"
     assert context.source_url == "https://www.amd.com"
+
+
+def test_catalyst_context_normalizes_provider_events_without_ta_signals() -> None:
+    event = CatalystEvent(
+        headline=" AMD announces data center accelerator update ",
+        provider=" FMP ",
+        published_at=NOW,
+        source=" Example Wire ",
+        url=" https://example.test/amd-news ",
+        summary=" Provider supplied article summary. ",
+    )
+    context = CatalystContext(
+        symbol=Symbol("amd"),
+        provider=" FMP ",
+        generated_at=NOW,
+        events=(event,),
+    )
+
+    assert event.headline == "AMD announces data center accelerator update"
+    assert event.provider == "fmp"
+    assert event.source == "Example Wire"
+    assert event.url == "https://example.test/amd-news"
+    assert event.summary == "Provider supplied article summary."
+    assert context.symbol.ticker == "AMD"
+    assert context.provider == "fmp"
+    assert context.events == (event,)
 
 
 @pytest.mark.parametrize("market_cap", [-1, -100])

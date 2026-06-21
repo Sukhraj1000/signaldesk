@@ -256,6 +256,57 @@ class FundamentalContext:
 
 
 @dataclass(frozen=True, kw_only=True)
+class CatalystEvent:
+    """Structured provider-sourced catalyst fact kept separate from TA signals."""
+
+    headline: str
+    provider: str
+    published_at: datetime | None = None
+    source: str | None = None
+    url: str | None = None
+    summary: str | None = None
+
+    def __post_init__(self) -> None:
+        headline = self.headline.strip()
+        provider = self.provider.strip().lower()
+        if not headline:
+            raise ValueError("headline is required")
+        if not provider:
+            raise ValueError("provider is required")
+        if self.published_at is not None:
+            _require_timezone_aware(self.published_at)
+        object.__setattr__(self, "headline", headline)
+        object.__setattr__(self, "provider", provider)
+        for field_name in ("source", "url", "summary"):
+            value = getattr(self, field_name)
+            normalized = value.strip() if isinstance(value, str) else None
+            object.__setattr__(self, field_name, normalized or None)
+
+
+@dataclass(frozen=True, kw_only=True)
+class CatalystContext:
+    """Structured provider-sourced catalyst context kept separate from TA signals."""
+
+    symbol: Symbol
+    provider: str
+    generated_at: datetime
+    events: tuple[CatalystEvent, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.symbol, Symbol):
+            raise TypeError("symbol must be a Symbol")
+        _require_timezone_aware(self.generated_at)
+        provider = self.provider.strip().lower()
+        if not provider:
+            raise ValueError("provider is required")
+        events = tuple(self.events)
+        if any(not isinstance(event, CatalystEvent) for event in events):
+            raise TypeError("catalyst events must be CatalystEvent")
+        object.__setattr__(self, "provider", provider)
+        object.__setattr__(self, "events", events)
+
+
+@dataclass(frozen=True, kw_only=True)
 class UnavailableContext:
     """Market context that was unavailable and must not be treated as a false negative."""
 

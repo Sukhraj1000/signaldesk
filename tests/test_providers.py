@@ -9,6 +9,8 @@ import pytest
 import signaldesk_backend.providers as providers_module
 from signaldesk_backend import (
     Candle,
+    CatalystContext,
+    CatalystEvent,
     FallbackProvider,
     FmpProvider,
     FundamentalContext,
@@ -820,6 +822,43 @@ def test_fmp_provider_translates_mocked_fundamental_context() -> None:
     assert "apikey=test-key" in opener.request_url
 
 
+def test_fmp_provider_translates_mocked_catalyst_context() -> None:
+    opener = FakeFmpUrlopen(
+        b'[{"symbol":"AMD","publishedDate":"2026-01-15 13:45:00",'
+        b'"title":"AMD announces data center accelerator update",'
+        b'"site":"Example Wire","url":"https://example.test/amd-news",'
+        b'"text":"Provider supplied article summary."},'
+        b'{"symbol":"AMD","publishedDate":"invalid-date","title":"   "}]'
+    )
+    provider = FmpProvider(api_key="test-key", _urlopen=opener, timeout_seconds=2.5)
+    symbol = Symbol("amd")
+
+    result = provider.get_catalyst_context(symbol)
+
+    assert result.ok is True
+    assert result.data is not None
+    assert result.data == CatalystContext(
+        symbol=symbol,
+        provider="fmp",
+        generated_at=result.data.generated_at,
+        events=(
+            CatalystEvent(
+                headline="AMD announces data center accelerator update",
+                provider="fmp",
+                published_at=datetime(2026, 1, 15, 13, 45, tzinfo=UTC),
+                source="Example Wire",
+                url="https://example.test/amd-news",
+                summary="Provider supplied article summary.",
+            ),
+        ),
+    )
+    assert opener.request_url is not None
+    assert "stock_news" in opener.request_url
+    assert "tickers=AMD" in opener.request_url
+    assert "limit=10" in opener.request_url
+    assert "apikey=test-key" in opener.request_url
+
+
 def test_fmp_provider_reports_missing_or_invalid_fundamental_context_safely() -> None:
     missing_key = FmpProvider(api_key=None)
     empty = FmpProvider(api_key="test-key", _urlopen=FakeFmpUrlopen(b"[]"))
@@ -837,6 +876,29 @@ def test_fmp_provider_reports_missing_or_invalid_fundamental_context_safely() ->
     )
     assert fractional.get_fundamental_context(Symbol("amd")) == ProviderResult.failure(
         provider="fmp", error="fmp fundamental data was invalid"
+    )
+
+
+def test_fmp_provider_reports_missing_or_invalid_catalyst_context_safely() -> None:
+    missing_key = FmpProvider(api_key=None)
+    empty = FmpProvider(api_key="test-key", _urlopen=FakeFmpUrlopen(b"[]"))
+    malformed = FmpProvider(api_key="test-key", _urlopen=FakeFmpUrlopen(b"{}"))
+    invalid_event = FmpProvider(
+        api_key="test-key",
+        _urlopen=FakeFmpUrlopen(b'[{"title":"Headline","publishedDate":123}]'),
+    )
+
+    assert missing_key.get_catalyst_context(Symbol("amd")) == ProviderResult.failure(
+        provider="fmp", error="FMP credentials are not configured"
+    )
+    assert empty.get_catalyst_context(Symbol("amd")) == ProviderResult.failure(
+        provider="fmp", error="no catalyst context for AMD"
+    )
+    assert malformed.get_catalyst_context(Symbol("amd")) == ProviderResult.failure(
+        provider="fmp", error="fmp catalyst data was invalid"
+    )
+    assert invalid_event.get_catalyst_context(Symbol("amd")) == ProviderResult.failure(
+        provider="fmp", error="fmp catalyst data was invalid"
     )
 
 
