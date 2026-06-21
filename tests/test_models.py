@@ -12,6 +12,8 @@ from signaldesk_backend import (
     ProviderMode,
     ProviderResult,
     Quote,
+    RiskAssessment,
+    RiskFlag,
     SignalCard,
     Symbol,
     TechnicalEvent,
@@ -223,6 +225,34 @@ def test_signal_card_defaults_to_no_unavailable_context() -> None:
     assert card.unavailable_context == ()
 
 
+def test_risk_assessment_normalizes_typed_flags_and_overall_severity() -> None:
+    flag = RiskFlag(
+        kind=" Breakdown Risk ",
+        severity=" WARNING ",
+        message="Close below invalidation would weaken the setup.",
+        source=" Technical Levels ",
+    )
+    assessment = RiskAssessment(flags=(flag,), overall_severity=" Warning ")
+
+    assert flag.kind == "breakdown_risk"
+    assert flag.severity == "warning"
+    assert flag.message == "Close below invalidation would weaken the setup."
+    assert flag.source == "technical_levels"
+    assert assessment.flags == (flag,)
+    assert assessment.overall_severity == "warning"
+
+
+def test_risk_assessment_derives_highest_flag_severity_when_not_supplied() -> None:
+    assessment = RiskAssessment(
+        flags=(
+            RiskFlag(kind="scope_limit", severity="info", message="TA-only output."),
+            RiskFlag(kind="volatility", severity="critical", message="ATR is elevated."),
+        )
+    )
+
+    assert assessment.overall_severity == "critical"
+
+
 def test_signal_card_references_analysis_facts_without_credentials() -> None:
     provenance, levels, event, snapshot = _analysis_fixture()
     unavailable = UnavailableContext(
@@ -250,6 +280,15 @@ def test_signal_card_references_analysis_facts_without_credentials() -> None:
         ),
         provenance=(provenance,),
         unavailable_context=(unavailable,),
+        risk_assessment=RiskAssessment(
+            flags=(
+                RiskFlag(
+                    kind="scope_limit",
+                    severity="info",
+                    message="TA-only output; catalysts are unavailable context.",
+                ),
+            )
+        ),
         tags=(" Breakout ", "Momentum"),
     )
 
@@ -265,6 +304,8 @@ def test_signal_card_references_analysis_facts_without_credentials() -> None:
     )
     assert card.provenance == (provenance,)
     assert card.unavailable_context == (unavailable,)
+    assert card.risk_assessment is not None
+    assert card.risk_assessment.overall_severity == "info"
     assert card.tags == ("breakout", "momentum")
 
 
@@ -288,6 +329,15 @@ def test_analysis_models_serialize_with_dataclass_payloads() -> None:
         provider_mode=ProviderMode(mode="default", price_provider="yfinance"),
         provenance=(provenance,),
         unavailable_context=(unavailable,),
+        risk_assessment=RiskAssessment(
+            flags=(
+                RiskFlag(
+                    kind="scope_limit",
+                    severity="info",
+                    message="Enhanced context is unavailable.",
+                ),
+            )
+        ),
     )
 
     provenance_payload = asdict(provenance)
@@ -302,6 +352,8 @@ def test_analysis_models_serialize_with_dataclass_payloads() -> None:
     assert card_payload["provenance"][0]["source"] == "unit-test-candles"
     assert card_payload["unavailable_context"][0]["context_type"] == "fundamentals"
     assert card_payload["unavailable_context"][0]["reason"] == "enhanced provider not configured"
+    assert card_payload["risk_assessment"]["overall_severity"] == "info"
+    assert card_payload["risk_assessment"]["flags"][0]["kind"] == "scope_limit"
 
 
 @pytest.mark.parametrize(
@@ -358,6 +410,36 @@ def test_analysis_models_serialize_with_dataclass_payloads() -> None:
         (
             lambda: ProviderMode(mode="default", price_provider=" "),
             "price_provider",
+        ),
+        (
+            lambda: RiskFlag(kind=" ", severity="info", message="risk"),
+            "kind",
+        ),
+        (
+            lambda: RiskFlag(kind="scope_limit", severity="urgent", message="risk"),
+            "severity",
+        ),
+        (
+            lambda: RiskFlag(kind="scope_limit", severity="info", message=" "),
+            "message",
+        ),
+        (
+            lambda: RiskAssessment(flags=()),
+            "risk assessment must include at least one flag",
+        ),
+        (
+            lambda: RiskAssessment(
+                flags=(RiskFlag(kind="scope_limit", severity="info", message="risk"),),
+                overall_severity="urgent",
+            ),
+            "overall_severity",
+        ),
+        (
+            lambda: RiskAssessment(
+                flags=(RiskFlag(kind="volatility", severity="critical", message="risk"),),
+                overall_severity="warning",
+            ),
+            "overall_severity must not be lower than highest flag severity",
         ),
         (
             lambda: SignalCard(
