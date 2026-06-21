@@ -408,10 +408,15 @@ def _format_provider_capabilities(
 
 def _run_provider_health_checks(
     registry: ProviderRegistry,
+    *,
+    live_check_only: bool = False,
 ) -> tuple[int, tuple[dict[str, Any], ...]]:
     payload: list[dict[str, Any]] = []
     exit_code = 0
+    safe_provider_names = _live_check_provider_names(registry) if live_check_only else None
     for provider in registry.list():
+        if safe_provider_names is not None and provider.name not in safe_provider_names:
+            continue
         try:
             result = provider.health_check()
         except Exception:
@@ -423,6 +428,20 @@ def _run_provider_health_checks(
         if not result.ok:
             exit_code = 1
     return exit_code, tuple(payload)
+
+
+def _live_check_provider_names(registry: ProviderRegistry) -> frozenset[str]:
+    """Return providers declaring at least one health/live-check-safe capability."""
+
+    safe_names: set[str] = set()
+    for provider in registry.list():
+        try:
+            capabilities = provider.capabilities()
+        except Exception:
+            continue
+        if any(capability.live_check_suitable for capability in capabilities):
+            safe_names.add(provider.name)
+    return frozenset(safe_names)
 
 
 def _provider_mode_payload(mode: str) -> dict[str, Any]:
@@ -546,6 +565,10 @@ def providers_list(
 @providers_app.command("check")
 def providers_check(
     output: str = typer.Option("table", help="Output format: table or json."),
+    live_check_only: bool = typer.Option(
+        False,
+        help="Only check providers that declare their health checks safe for live checks.",
+    ),
 ) -> None:
     """Run safe local health checks for registered market-data providers."""
 
@@ -554,7 +577,9 @@ def providers_check(
         typer.echo("--output must be 'table' or 'json'.", err=True)
         raise typer.Exit(2)
 
-    exit_code, provider_statuses = _run_provider_health_checks(default_provider_registry())
+    exit_code, provider_statuses = _run_provider_health_checks(
+        default_provider_registry(), live_check_only=live_check_only
+    )
     if output_format == "json":
         typer.echo(json.dumps({"providers": provider_statuses}, indent=2))
     else:

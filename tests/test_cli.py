@@ -459,6 +459,44 @@ def test_providers_check_reports_default_local_provider_without_secrets() -> Non
     assert "TOKEN" not in result.stdout
 
 
+def test_providers_check_live_check_only_uses_capability_safety() -> None:
+    result = CliRunner().invoke(app, ["providers", "check", "--live-check-only"])
+
+    assert result.exit_code == 0
+    assert "provider\tstatus\tresult" in result.stdout
+    assert (
+        "local-fixture\tok\tready (deterministic historical candles; "
+        "no external credentials required)" in result.stdout
+    )
+    assert "stooq" not in result.stdout
+    assert "yfinance" not in result.stdout
+    assert "fmp" not in result.stdout
+    assert "polygon" not in result.stdout
+    assert "twelve-data" not in result.stdout
+
+
+def test_providers_check_json_live_check_only_reports_safe_subset() -> None:
+    result = CliRunner().invoke(
+        app, ["providers", "check", "--output", "json", "--live-check-only"]
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload == {
+        "providers": [
+            {
+                "provider": "local-fixture",
+                "status": "ok",
+                "result": (
+                    "ready (deterministic historical candles; "
+                    "no external credentials required)"
+                ),
+                "warnings": [],
+            }
+        ]
+    }
+
+
 def test_ta_command_runs_against_default_local_fixture_without_network(
     monkeypatch: MonkeyPatch,
 ) -> None:
