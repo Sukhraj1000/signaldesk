@@ -2,6 +2,7 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
 
 import signaldesk_backend.providers as providers_module
@@ -1575,3 +1576,29 @@ def test_providers_check_rejects_unknown_output_format() -> None:
 
     assert result.exit_code == 2
     assert "--output must be 'table' or 'json'." in result.stderr
+
+
+def test_ta_json_schema_documents_required_signal_card_sections(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        cli_main, "default_provider_registry", lambda: ProviderRegistry((WorkingProvider(),))
+    )
+
+    schema_path = Path(__file__).resolve().parents[1] / "docs/schemas/signaldesk.ta.v1.schema.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    result = CliRunner().invoke(
+        app, ["ta", "AMD", "--provider", "working", "--llm", "none", "--output", "json"]
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    signal_card_required = schema["properties"]["signal_card"]["required"]
+
+    assert schema["properties"]["schema_version"] == {"const": "signaldesk.ta.v1"}
+    assert payload["schema_version"] == "signaldesk.ta.v1"
+    assert set(signal_card_required) == set(payload["signal_card"].keys())
+    for section in signal_card_required:
+        assert payload["signal_card"][section] == payload[section]
+    assert schema["$defs"]["risk"]["required"] == ["flags", "unavailable_context"]
+    assert schema["$defs"]["score"]["required"] == ["breakdowns"]

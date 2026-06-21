@@ -1,0 +1,471 @@
+{
+  "$defs": {
+    "facts": {
+      "additionalProperties": true,
+      "properties": {
+        "candles": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "data_end": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "data_start": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "interval": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "latest_close": {
+          "type": "string"
+        },
+        "latest_timestamp": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "latest_volume": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "provider": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "symbol": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "symbol",
+        "provider",
+        "interval",
+        "candles",
+        "data_start",
+        "data_end",
+        "latest_timestamp",
+        "latest_close",
+        "latest_volume"
+      ],
+      "type": "object"
+    },
+    "identity": {
+      "additionalProperties": true,
+      "properties": {
+        "generated_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "signaldesk.ta.v1"
+        },
+        "symbol": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "timeframe": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "symbol",
+        "timeframe",
+        "generated_at",
+        "schema_version"
+      ],
+      "type": "object"
+    },
+    "levels": {
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "fibonacci": {
+          "type": "array"
+        },
+        "invalidation": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "resistance": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "support": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "support",
+        "resistance",
+        "fibonacci",
+        "confirmation",
+        "invalidation"
+      ],
+      "type": "object"
+    },
+    "provenance": {
+      "additionalProperties": true,
+      "required": [
+        "provider",
+        "source",
+        "timeframe",
+        "inputs",
+        "observations"
+      ],
+      "type": "object"
+    },
+    "provider_mode": {
+      "additionalProperties": false,
+      "properties": {
+        "catalyst_provider": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fundamentals_provider": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "llm_provider": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "mode": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "price_provider": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode",
+        "price_provider",
+        "fundamentals_provider",
+        "catalyst_provider",
+        "llm_provider"
+      ],
+      "type": "object"
+    },
+    "risk": {
+      "additionalProperties": false,
+      "properties": {
+        "flags": {
+          "items": {
+            "$ref": "#/$defs/risk_flag"
+          },
+          "type": "array"
+        },
+        "unavailable_context": {
+          "items": {
+            "$ref": "#/$defs/unavailable_context"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "flags",
+        "unavailable_context"
+      ],
+      "type": "object"
+    },
+    "risk_flag": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "message": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "info",
+            "warning",
+            "critical"
+          ]
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "severity",
+        "message",
+        "source"
+      ],
+      "type": "object"
+    },
+    "score": {
+      "additionalProperties": false,
+      "properties": {
+        "breakdowns": {
+          "items": {
+            "$ref": "#/$defs/score_breakdown"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "breakdowns"
+      ],
+      "type": "object"
+    },
+    "score_breakdown": {
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "enum": [
+            "setup_quality",
+            "risk",
+            "data_quality"
+          ]
+        },
+        "reasons": {
+          "type": "array"
+        },
+        "score": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "category",
+        "score",
+        "reasons"
+      ],
+      "type": "object"
+    },
+    "technical_event": {
+      "additionalProperties": true,
+      "required": [
+        "event_type",
+        "timestamp",
+        "severity",
+        "source_rule",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "trend": {
+      "additionalProperties": false,
+      "properties": {
+        "momentum": {
+          "type": "object"
+        },
+        "moving_averages": {
+          "type": "object"
+        },
+        "regimes": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "moving_averages",
+        "momentum",
+        "regimes"
+      ],
+      "type": "object"
+    },
+    "unavailable_context": {
+      "additionalProperties": false,
+      "properties": {
+        "context_type": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "details": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "provider": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reason": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "context_type",
+        "reason",
+        "provider"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://signaldesk.local/schemas/signaldesk.ta.v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "events": {
+      "items": {
+        "$ref": "#/$defs/technical_event"
+      },
+      "type": "array"
+    },
+    "facts": {
+      "$ref": "#/$defs/facts"
+    },
+    "identity": {
+      "$ref": "#/$defs/identity"
+    },
+    "levels": {
+      "$ref": "#/$defs/levels"
+    },
+    "llm": {
+      "type": "string"
+    },
+    "narrative": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "provenance": {
+      "items": {
+        "$ref": "#/$defs/provenance"
+      },
+      "type": "array"
+    },
+    "provider_mode": {
+      "$ref": "#/$defs/provider_mode"
+    },
+    "risk": {
+      "$ref": "#/$defs/risk"
+    },
+    "schema_version": {
+      "const": "signaldesk.ta.v1"
+    },
+    "score": {
+      "$ref": "#/$defs/score"
+    },
+    "signal_card": {
+      "additionalProperties": false,
+      "properties": {
+        "events": {
+          "items": {
+            "$ref": "#/$defs/technical_event"
+          },
+          "type": "array"
+        },
+        "facts": {
+          "$ref": "#/$defs/facts"
+        },
+        "identity": {
+          "$ref": "#/$defs/identity"
+        },
+        "levels": {
+          "$ref": "#/$defs/levels"
+        },
+        "llm": {
+          "type": "string"
+        },
+        "narrative": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "provenance": {
+          "items": {
+            "$ref": "#/$defs/provenance"
+          },
+          "type": "array"
+        },
+        "provider_mode": {
+          "$ref": "#/$defs/provider_mode"
+        },
+        "risk": {
+          "$ref": "#/$defs/risk"
+        },
+        "score": {
+          "$ref": "#/$defs/score"
+        },
+        "trend": {
+          "$ref": "#/$defs/trend"
+        },
+        "unavailable_context": {
+          "items": {
+            "$ref": "#/$defs/unavailable_context"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "identity",
+        "provider_mode",
+        "facts",
+        "trend",
+        "levels",
+        "events",
+        "risk",
+        "score",
+        "provenance",
+        "unavailable_context",
+        "llm",
+        "narrative"
+      ],
+      "type": "object"
+    },
+    "trend": {
+      "$ref": "#/$defs/trend"
+    },
+    "unavailable_context": {
+      "items": {
+        "$ref": "#/$defs/unavailable_context"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "identity",
+    "provider_mode",
+    "facts",
+    "trend",
+    "levels",
+    "events",
+    "risk",
+    "score",
+    "provenance",
+    "unavailable_context",
+    "llm",
+    "narrative",
+    "signal_card"
+  ],
+  "title": "SignalDesk TA signal card JSON contract",
+  "type": "object"
+}

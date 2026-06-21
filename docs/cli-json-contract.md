@@ -22,6 +22,8 @@ Default mode remains useful without paid keys. Enhanced provider or LLM fields m
 
 The golden CLI test in `tests/test_cli.py` protects the current `signaldesk.ta.v1` shape with fixture-backed data, so CI does not require live provider network or paid credentials.
 
+The machine-readable schema for the canonical signal-card envelope lives at [`docs/schemas/signaldesk.ta.v1.schema.json`](schemas/signaldesk.ta.v1.schema.json). It is intentionally limited to the durable renderer-facing sections and keeps early flat compatibility fields as additional top-level properties.
+
 ## Signal-card section aliases
 
 The v1 JSON keeps early flat and grouped fields for compatibility, then adds canonical signal-card sections so future CLI/API/dashboard/reporting renderers can share one object:
