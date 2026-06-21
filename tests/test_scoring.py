@@ -119,6 +119,36 @@ def test_score_technical_analysis_reduces_data_quality_for_unverifiable_naive_ti
     assert data_quality.reasons[-1].code == "unverifiable_price_history_freshness"
 
 
+def test_score_technical_analysis_reduces_data_quality_for_unverifiable_naive_as_of() -> None:
+    scores = score_technical_analysis(
+        candle_count=120,
+        latest_candle_timestamp=NOW - timedelta(days=12),
+        as_of=datetime(2026, 1, 15),
+        stale_after=timedelta(days=7),
+        trend_regime=RegimeClassification(
+            regime="uptrend",
+            source_rule="close_above_short_sma_above_long_sma",
+            reason="Latest close is above aligned moving averages.",
+        ),
+        volatility_regime=RegimeClassification(
+            regime="normal_volatility",
+            source_rule="latest_atr_within_trailing_baseline_band",
+            reason="Latest ATR is normal.",
+        ),
+        technical_events=(),
+        setup_levels=ConfirmationInvalidationLevels(confirmation=None, invalidation=None),
+        fundamentals_unavailable=False,
+    )
+
+    data_quality = next(score for score in scores if score.category == "data_quality")
+    assert data_quality.score == Decimal("80")
+    assert data_quality.reasons[-1].code == "unverifiable_price_history_freshness"
+    assert data_quality.reasons[-1].message == (
+        "Freshness reference timestamp is timezone-naive, so data freshness "
+        "cannot be verified deterministically."
+    )
+
+
 def test_score_technical_analysis_bounds_scores_and_uses_event_reasons() -> None:
     warning_events = tuple(
         DeterministicTechnicalEvent(

@@ -268,20 +268,35 @@ def _data_quality_score(
                 )
             )
     if latest_candle_timestamp is not None:
-        if latest_candle_timestamp.tzinfo is None or latest_candle_timestamp.utcoffset() is None:
+        reference_time = as_of or datetime.now(UTC)
+        latest_timestamp_is_naive = (
+            latest_candle_timestamp.tzinfo is None
+            or latest_candle_timestamp.utcoffset() is None
+        )
+        reference_time_is_naive = (
+            reference_time.tzinfo is None or reference_time.utcoffset() is None
+        )
+        if latest_timestamp_is_naive or reference_time_is_naive:
             score -= Decimal("20")
+            if latest_timestamp_is_naive:
+                message = (
+                    "Latest candle timestamp is timezone-naive, so data freshness "
+                    "cannot be verified deterministically."
+                )
+            else:
+                message = (
+                    "Freshness reference timestamp is timezone-naive, so data "
+                    "freshness cannot be verified deterministically."
+                )
             reasons.append(
                 ScoreReason(
                     code="unverifiable_price_history_freshness",
-                    message=(
-                        "Latest candle timestamp is timezone-naive, so data freshness "
-                        "cannot be verified deterministically."
-                    ),
+                    message=message,
                     source="historical_candles",
                     weight=Decimal("0.20"),
                 )
             )
-        elif (as_of or datetime.now(UTC)) - latest_candle_timestamp > stale_after:
+        elif reference_time - latest_candle_timestamp > stale_after:
             score -= Decimal("20")
             reasons.append(
                 ScoreReason(
