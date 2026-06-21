@@ -349,11 +349,6 @@ def test_health_command() -> None:
     assert "SignalDesk is configured for local." in result.stdout
 
 
-
-
-
-
-
 def test_config_inspect_reports_sanitized_table(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("LOG_LEVEL", "debug")
@@ -376,9 +371,7 @@ def test_config_inspect_reports_sanitized_table(monkeypatch: MonkeyPatch) -> Non
 
 
 def test_config_inspect_reports_json_and_rejects_unknown_output(monkeypatch: MonkeyPatch) -> None:
-    monkeypatch.setenv(
-        "DATABASE_URL", "postgresql://user:password@example.test/db?sslmode=require"
-    )
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user:password@example.test/db?sslmode=require")
     monkeypatch.setenv("REDIS_URL", "redis://redis.test:6379/0")
 
     json_result = CliRunner().invoke(app, ["config", "inspect", "--output", "json"])
@@ -487,6 +480,7 @@ def test_config_inspect_helpers_redact_secrets_from_payload() -> None:
     assert payload["redis_url"] == "redis://<redacted>@redis.test:6379/0"
     assert "password" not in json.dumps(payload)
     assert "password" not in "\n".join(lines)
+
 
 def test_providers_check_is_available_from_help() -> None:
     result = CliRunner().invoke(app, ["providers", "--help"])
@@ -1097,8 +1091,7 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
                 "kind": "stale_data",
                 "severity": "warning",
                 "message": (
-                    "Latest candle is older than the deterministic freshness threshold "
-                    "of 7 day(s)."
+                    "Latest candle is older than the deterministic freshness threshold of 7 day(s)."
                 ),
                 "source": "historical_candles",
             },
@@ -1525,8 +1518,7 @@ def test_ta_command_includes_traceable_trend_regime_shift_events(
             "source_rule": "close_crossed_above_sma",
             "source_indicators": ["sma_20"],
             "reason": (
-                "Latest close 70 moved above sma_20 13 after the prior close was not "
-                "above its SMA."
+                "Latest close 70 moved above sma_20 13 after the prior close was not above its SMA."
             ),
             "price": "70",
             "invalidation_condition": (
@@ -1831,3 +1823,69 @@ def test_ta_json_schema_documents_required_signal_card_sections(
     ] == golden_contract["score_breakdown_categories"]
     assert schema["$defs"]["risk"]["required"] == ["flags", "unavailable_context"]
     assert schema["$defs"]["score"]["required"] == ["breakdowns"]
+
+
+def test_report_watchlist_markdown_uses_fixture_provider(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        cli_main, "default_provider_registry", lambda: ProviderRegistry((WorkingProvider(),))
+    )
+    watchlist = tmp_path / "watchlist.yaml"
+    watchlist.write_text("symbols:\n  - AMD\n  - MSFT\n", encoding="utf-8")
+
+    result = CliRunner().invoke(
+        app,
+        ["report", "--watchlist", str(watchlist), "--provider", "working", "--format", "markdown"],
+    )
+
+    assert result.exit_code == 0
+    assert "# SignalDesk watchlist report" in result.stdout
+    assert "| AMD | ok | working | 49 | unknown | 50 | 60 |" in result.stdout
+    assert "| MSFT | ok | working | 49 | unknown | 50 | 60 |" in result.stdout
+    assert "## Provenance" in result.stdout
+    assert "provider `working`" in result.stdout
+
+
+def test_report_watchlist_redacts_provider_failure_secrets(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        cli_main,
+        "default_provider_registry",
+        lambda: ProviderRegistry((FailingHistoricalProvider(),)),
+    )
+    watchlist = tmp_path / "watchlist.yaml"
+    watchlist.write_text("symbols:\n  - AMD\n", encoding="utf-8")
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "report",
+            "--watchlist",
+            str(watchlist),
+            "--provider",
+            "failing-history",
+            "--format",
+            "markdown",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "apikey=<redacted>" in result.stdout
+    assert "secret" not in result.stdout
+    assert "secret" not in result.stderr
+
+
+def test_report_watchlist_rejects_unsupported_format_and_llm() -> None:
+    bad_format = CliRunner().invoke(
+        app, ["report", "--watchlist", "watchlists/default.yaml", "--format", "html"]
+    )
+    bad_llm = CliRunner().invoke(
+        app, ["report", "--watchlist", "watchlists/default.yaml", "--llm", "openai"]
+    )
+
+    assert bad_format.exit_code == 2
+    assert "--format must be 'markdown'." in bad_format.stderr
+    assert bad_llm.exit_code == 2
+    assert "Only --llm none is currently supported." in bad_llm.stderr
