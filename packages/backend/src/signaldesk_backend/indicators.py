@@ -657,6 +657,126 @@ def detect_relative_volume_spike_events(
     )
 
 
+def detect_volatility_regime_events(
+    candles: Sequence[CandleInput],
+    *,
+    atr_period: int = 14,
+    baseline_period: int = 50,
+    expansion_threshold: Decimal = Decimal("1.5"),
+    compression_threshold: Decimal = Decimal("0.75"),
+) -> tuple[DeterministicTechnicalEvent, ...]:
+    """Detect latest-candle volatility expansion or compression from ATR.
+
+    The rule compares the latest ATR to a trailing ATR baseline that excludes the
+    latest candle. Expansion emits when latest ATR is at least
+    ``expansion_threshold`` times that baseline; compression emits when latest
+    ATR is at most ``compression_threshold`` times it. Warmup periods and normal
+    values return no event rather than inferred context.
+    """
+
+    _validate_period(atr_period)
+    _validate_period(baseline_period)
+    if expansion_threshold <= Decimal("0") or compression_threshold <= Decimal("0"):
+        raise ValueError("volatility thresholds must be positive")
+    if compression_threshold >= expansion_threshold:
+        raise ValueError("compression_threshold must be less than expansion_threshold")
+
+    required_candles = atr_period + baseline_period
+    if len(candles) < required_candles:
+        return ()
+
+    atr_values = tuple(
+        value
+        for value in average_true_range(candles, period=atr_period)
+        if value is not None
+    )
+    baseline_window = atr_values[-(baseline_period + 1) :]
+    if len(baseline_window) < baseline_period + 1:
+        return ()
+
+    historical_baseline_values = baseline_window[:-1]
+    latest_atr = baseline_window[-1]
+    baseline_atr = sum(historical_baseline_values, Decimal("0")) / Decimal(
+        len(historical_baseline_values)
+    )
+    latest_candle = candles[-1]
+    atr_indicator = f"atr_{atr_period}"
+
+    if baseline_atr == 0:
+        if latest_atr == 0:
+            return (
+                DeterministicTechnicalEvent(
+                    event_type="volatility_compression",
+                    timestamp=latest_candle.timestamp,
+                    candle_index=len(candles) - 1,
+                    severity="info",
+                    source_rule="zero_latest_atr_and_zero_atr_baseline",
+                    source_indicators=(atr_indicator,),
+                    reason="Latest ATR and its trailing baseline are both zero.",
+                    price=latest_candle.close,
+                    invalidation_condition=(
+                        "A positive ATR would end the flat compression condition."
+                    ),
+                ),
+            )
+        return (
+            DeterministicTechnicalEvent(
+                event_type="volatility_expansion",
+                timestamp=latest_candle.timestamp,
+                candle_index=len(candles) - 1,
+                severity="warning",
+                source_rule="positive_latest_atr_against_zero_atr_baseline",
+                source_indicators=(atr_indicator,),
+                reason=f"Latest ATR {latest_atr} is positive after a zero ATR baseline.",
+                price=latest_candle.close,
+                invalidation_condition="A return to zero ATR would end the expansion condition.",
+            ),
+        )
+
+    relative_atr = latest_atr / baseline_atr
+    if relative_atr >= expansion_threshold:
+        return (
+            DeterministicTechnicalEvent(
+                event_type="volatility_expansion",
+                timestamp=latest_candle.timestamp,
+                candle_index=len(candles) - 1,
+                severity="warning",
+                source_rule="latest_atr_at_least_threshold_x_trailing_baseline",
+                source_indicators=(atr_indicator,),
+                reason=(
+                    f"Latest ATR {latest_atr} is {relative_atr}x its trailing "
+                    f"{baseline_period}-ATR baseline {baseline_atr}."
+                ),
+                price=latest_candle.close,
+                invalidation_condition=(
+                    f"ATR below {expansion_threshold}x the trailing {baseline_period}-ATR "
+                    "baseline would end the expansion condition."
+                ),
+            ),
+        )
+    if relative_atr <= compression_threshold:
+        return (
+            DeterministicTechnicalEvent(
+                event_type="volatility_compression",
+                timestamp=latest_candle.timestamp,
+                candle_index=len(candles) - 1,
+                severity="info",
+                source_rule="latest_atr_at_most_threshold_x_trailing_baseline",
+                source_indicators=(atr_indicator,),
+                reason=(
+                    f"Latest ATR {latest_atr} is {relative_atr}x its trailing "
+                    f"{baseline_period}-ATR baseline {baseline_atr}."
+                ),
+                price=latest_candle.close,
+                invalidation_condition=(
+                    f"ATR above {compression_threshold}x the trailing {baseline_period}-ATR "
+                    "baseline would end the compression condition."
+                ),
+            ),
+        )
+    return ()
+
+
 def detect_swing_highs(
     candles: Sequence[CandleInput],
     *,
