@@ -22,6 +22,7 @@ from signaldesk_backend import (
     detect_swing_highs,
     detect_swing_lows,
     detect_swing_points,
+    detect_volatility_regime_events,
     exponential_moving_average,
     macd,
     relative_strength_index,
@@ -925,6 +926,110 @@ def test_detect_relative_volume_spike_events_returns_empty_without_spike_or_base
 def test_detect_relative_volume_spike_events_rejects_non_positive_threshold() -> None:
     with pytest.raises(ValueError, match="threshold must be positive"):
         detect_relative_volume_spike_events((make_volume_candle(0, 100),), threshold=Decimal("0"))
+
+
+def test_detect_volatility_regime_events_reports_expansion_and_compression() -> None:
+    normal_range = tuple(
+        make_ohlc_candle(
+            index,
+            open_=Decimal("10"),
+            high=Decimal("11"),
+            low=Decimal("9"),
+            close=Decimal("10"),
+        )
+        for index in range(6)
+    )
+    expanded = (
+        *normal_range[:-1],
+        make_ohlc_candle(
+            5,
+            open_=Decimal("10"),
+            high=Decimal("15"),
+            low=Decimal("5"),
+            close=Decimal("10"),
+        ),
+    )
+    wide_range = tuple(
+        make_ohlc_candle(
+            index,
+            open_=Decimal("10"),
+            high=Decimal("13"),
+            low=Decimal("7"),
+            close=Decimal("10"),
+        )
+        for index in range(5)
+    )
+    compressed = (*wide_range, make_candle(5, "10"))
+
+    assert detect_volatility_regime_events(expanded, atr_period=3, baseline_period=3) == (
+        DeterministicTechnicalEvent(
+            event_type="volatility_expansion",
+            timestamp=expanded[-1].timestamp,
+            candle_index=5,
+            severity="warning",
+            source_rule="latest_atr_at_least_threshold_x_trailing_baseline",
+            source_indicators=("atr_3",),
+            reason=(
+                "Latest ATR 4.666666666666666666666666667 is "
+                "2.333333333333333333333333334x its trailing 3-ATR baseline 2."
+            ),
+            price=Decimal("10"),
+            invalidation_condition=(
+                "ATR below 1.5x the trailing 3-ATR baseline would end the expansion "
+                "condition."
+            ),
+        ),
+    )
+    assert detect_volatility_regime_events(compressed, atr_period=3, baseline_period=3) == (
+        DeterministicTechnicalEvent(
+            event_type="volatility_compression",
+            timestamp=compressed[-1].timestamp,
+            candle_index=5,
+            severity="info",
+            source_rule="latest_atr_at_most_threshold_x_trailing_baseline",
+            source_indicators=("atr_3",),
+            reason=(
+                "Latest ATR 4 is 0.6666666666666666666666666667x its trailing "
+                "3-ATR baseline 6."
+            ),
+            price=Decimal("10"),
+            invalidation_condition=(
+                "ATR above 0.75x the trailing 3-ATR baseline would end the compression "
+                "condition."
+            ),
+        ),
+    )
+
+
+def test_detect_volatility_regime_events_returns_empty_without_event_or_history() -> None:
+    normal = tuple(
+        make_ohlc_candle(
+            index,
+            open_=Decimal("10"),
+            high=Decimal("11"),
+            low=Decimal("9"),
+            close=Decimal("10"),
+        )
+        for index in range(6)
+    )
+
+    assert detect_volatility_regime_events(normal, atr_period=3, baseline_period=3) == ()
+    assert detect_volatility_regime_events(normal[:5], atr_period=3, baseline_period=3) == ()
+
+
+def test_detect_volatility_regime_events_rejects_invalid_thresholds() -> None:
+    candles = (make_candle(0, "10"),)
+
+    with pytest.raises(ValueError, match="volatility thresholds must be positive"):
+        detect_volatility_regime_events(candles, expansion_threshold=Decimal("0"))
+    with pytest.raises(
+        ValueError, match="compression_threshold must be less than expansion_threshold"
+    ):
+        detect_volatility_regime_events(
+            candles,
+            expansion_threshold=Decimal("1.5"),
+            compression_threshold=Decimal("1.5"),
+        )
 
 
 @pytest.mark.parametrize(

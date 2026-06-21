@@ -23,6 +23,7 @@ from signaldesk_backend import (
     detect_relative_volume_spike_events,
     detect_swing_highs,
     detect_swing_lows,
+    detect_volatility_regime_events,
     exponential_moving_average,
     macd,
     redact_provider_diagnostic,
@@ -214,6 +215,7 @@ def _technical_analysis_report(
     technical_events = (
         *detect_moving_average_cross_events(candles),
         *detect_relative_volume_spike_events(candles),
+        *detect_volatility_regime_events(candles),
     )
     latest_swing_high = _latest_level(detect_swing_highs(candles))
     latest_swing_low = _latest_level(detect_swing_lows(candles))
