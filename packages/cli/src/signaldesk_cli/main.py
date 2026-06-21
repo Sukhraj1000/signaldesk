@@ -1,3 +1,4 @@
+import csv
 import json
 import os
 from datetime import UTC, datetime, timedelta
@@ -51,8 +52,10 @@ from signaldesk_backend import (
 app = typer.Typer(help="SignalDesk command-line interface.")
 providers_app = typer.Typer(help="Inspect configured market-data providers.")
 config_app = typer.Typer(help="Inspect local SignalDesk configuration without exposing secrets.")
+fixtures_app = typer.Typer(help="Generate deterministic local fixture data.")
 app.add_typer(providers_app, name="providers")
 app.add_typer(config_app, name="config")
+app.add_typer(fixtures_app, name="fixtures")
 
 
 @app.callback()
@@ -65,6 +68,121 @@ def health() -> None:
     """Print a basic local configuration health check."""
     settings = Settings.from_env()
     typer.echo(f"SignalDesk is configured for {settings.app_env}.")
+
+
+def _parse_fixture_as_of(value: str) -> datetime:
+    try:
+        parsed = datetime.strptime(value.strip(), "%Y-%m-%d")
+    except ValueError as exc:
+        raise ValueError("--as-of must use YYYY-MM-DD format") from exc
+    return parsed.replace(tzinfo=UTC)
+
+
+def _fixture_output_path(output_dir: Path, symbol: str) -> Path:
+    safe_symbol = Symbol(symbol).ticker.lower().replace("/", "-")
+    return output_dir / f"{safe_symbol}-1d.csv"
+
+
+def _fixture_candle_rows(symbol: str, *, days: int, as_of: datetime) -> list[dict[str, str]]:
+    requested_symbol = Symbol(symbol)
+    provider = default_provider_registry().get("local-fixture")
+    result = provider.get_historical_candles(
+        requested_symbol,
+        start=as_of - timedelta(days=days - 1),
+        end=as_of,
+        interval="1d",
+    )
+    if not result.ok or not result.data:
+        diagnostic = redact_provider_diagnostic(result.error or "local fixture returned no candles")
+        raise RuntimeError(f"local-fixture failed for {requested_symbol.ticker}: {diagnostic}")
+    return [
+        {
+            "Date": candle.timestamp.date().isoformat(),
+            "Open": str(candle.open),
+            "High": str(candle.high),
+            "Low": str(candle.low),
+            "Close": str(candle.close),
+            "Volume": str(candle.volume),
+        }
+        for candle in result.data
+    ]
+
+
+def _write_fixture_csv(path: Path, rows: list[dict[str, str]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="", encoding="utf-8") as csv_file:
+        writer = csv.DictWriter(
+            csv_file, fieldnames=("Date", "Open", "High", "Low", "Close", "Volume")
+        )
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+@fixtures_app.command("generate")
+def fixtures_generate(
+    symbols: list[str] | None = typer.Option(  # noqa: B008
+        None,
+        "--symbol",
+        "-s",
+        help="Symbol to generate. Repeat for multiple symbols. Defaults to AMD and MSFT.",
+    ),
+    output_dir: Path = typer.Option(  # noqa: B008
+        Path("fixtures/local"),
+        "--output-dir",
+        help="Directory for generated local CSV fixture files.",
+    ),
+    days: int = typer.Option(60, min=1, max=60, help="Number of daily candles to write."),
+    as_of: str = typer.Option(
+        "2024-12-31", help="Final fixture candle date in YYYY-MM-DD format."
+    ),
+    output: str = typer.Option("table", help="Output format: table or json."),
+) -> None:
+    """Generate deterministic CSV fixtures compatible with the local-csv provider."""
+
+    output_format = output.strip().lower()
+    if output_format not in {"table", "json"}:
+        typer.echo("--output must be 'table' or 'json'.", err=True)
+        raise typer.Exit(2)
+    try:
+        fixture_as_of = _parse_fixture_as_of(as_of)
+        requested_symbols = tuple(
+            dict.fromkeys(Symbol(symbol).ticker for symbol in (symbols or ["AMD", "MSFT"]))
+        )
+        if not requested_symbols:
+            raise ValueError("at least one --symbol is required")
+        generated_files = []
+        for symbol in requested_symbols:
+            rows = _fixture_candle_rows(symbol, days=days, as_of=fixture_as_of)
+            path = _fixture_output_path(output_dir, symbol)
+            _write_fixture_csv(path, rows)
+            generated_files.append(
+                {
+                    "symbol": symbol,
+                    "path": str(path),
+                    "rows": len(rows),
+                    "provider": "local-fixture",
+                    "compatible_provider": "local-csv",
+                    "interval": "1d",
+                    "as_of": fixture_as_of.date().isoformat(),
+                }
+            )
+    except (RuntimeError, OSError, ValueError) as exc:
+        typer.echo(redact_provider_diagnostic(str(exc)), err=True)
+        raise typer.Exit(1 if isinstance(exc, (RuntimeError, OSError)) else 2) from exc
+
+    payload = {
+        "schema_version": "signaldesk.fixtures.v1",
+        "generated": generated_files,
+    }
+    if output_format == "json":
+        typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+        return
+    typer.echo("symbol\tpath\trows\tprovider\tcompatible_provider\tinterval\tas_of")
+    for item in generated_files:
+        typer.echo(
+            f"{item['symbol']}\t{item['path']}\t{item['rows']}\t{item['provider']}\t"
+            f"{item['compatible_provider']}\t{item['interval']}\t{item['as_of']}"
+        )
 
 
 def _redact_url_secret(value: str) -> str:

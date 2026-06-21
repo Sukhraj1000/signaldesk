@@ -21,6 +21,7 @@ signaldesk providers mode
 signaldesk providers check
 signaldesk ta AMD --llm none --output json
 signaldesk scan --watchlist watchlists/default.yaml --provider local-fixture --output json
+signaldesk fixtures generate --symbol AMD --output-dir fixtures/local --output json
 ```
 
 ## Provider modes
@@ -60,6 +61,8 @@ Each configured provider must be registered, advertise the requested role, and b
 `signaldesk providers check` stays safe by avoiding live network probes for providers whose capabilities mark `live_check=false`. Stooq is no-key and default-tier, but its health row reports `not checked` because public endpoint availability is proven only when a candle fetch runs. Use `signaldesk providers check --output json` for machine-readable status rows shaped as `provider`, `status`, `result`, and `warnings`; diagnostic text is redacted before it is printed.
 
 Future provider configuration can build on these resolved roles to split price, catalyst, fundamentals, and LLM providers.
+
+`signaldesk fixtures generate` writes deterministic `local-csv` compatible OHLCV CSV files for demos, docs, and no-network provider experiments without committing live market-data dumps. Use `--output json` for machine-readable file paths and row counts.
 
 `signaldesk scan --watchlist watchlists/default.yaml` reads a small YAML watchlist with a top-level `symbols:` list and renders deterministic TA summaries for each symbol from the same canonical signal-card object used by `signaldesk ta`. Use `--output json` for machine-readable summaries that preserve provider/provenance and unavailable context. For no-network smoke checks, run with `--provider local-fixture` or set `SIGNALDESK_DEFAULT_PRICE_PROVIDER=local-fixture`.
 

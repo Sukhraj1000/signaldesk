@@ -1889,3 +1889,72 @@ def test_report_watchlist_rejects_unsupported_format_and_llm() -> None:
     assert "--format must be 'markdown'." in bad_format.stderr
     assert bad_llm.exit_code == 2
     assert "Only --llm none is currently supported." in bad_llm.stderr
+
+
+def test_fixtures_generate_writes_local_csv_files(tmp_path: Path) -> None:
+    output_dir = tmp_path / "fixtures"
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "fixtures",
+            "generate",
+            "--symbol",
+            "AMD",
+            "--output-dir",
+            str(output_dir),
+            "--days",
+            "3",
+            "--as-of",
+            "2024-12-31",
+            "--output",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    fixture_path = output_dir / "amd-1d.csv"
+    assert payload == {
+        "generated": [
+            {
+                "as_of": "2024-12-31",
+                "compatible_provider": "local-csv",
+                "interval": "1d",
+                "path": str(fixture_path),
+                "provider": "local-fixture",
+                "rows": 3,
+                "symbol": "AMD",
+            }
+        ],
+        "schema_version": "signaldesk.fixtures.v1",
+    }
+    assert fixture_path.read_text(encoding="utf-8").splitlines() == [
+        "Date,Open,High,Low,Close,Volume",
+        "2024-12-29,157,159,155,158,10057",
+        "2024-12-30,158,160,156,159,10058",
+        "2024-12-31,159,161,157,160,10059",
+    ]
+
+
+def test_fixtures_generate_rejects_invalid_options(tmp_path: Path) -> None:
+    bad_output = CliRunner().invoke(
+        app,
+        ["fixtures", "generate", "--output-dir", str(tmp_path), "--output", "xml"],
+    )
+    bad_date = CliRunner().invoke(
+        app,
+        [
+            "fixtures",
+            "generate",
+            "--output-dir",
+            str(tmp_path),
+            "--as-of",
+            "12/31/2024",
+        ],
+    )
+
+    assert bad_output.exit_code == 2
+    assert "--output must be 'table' or 'json'." in bad_output.stderr
+    assert bad_date.exit_code == 2
+    assert "--as-of must use YYYY-MM-DD format" in bad_date.stderr
