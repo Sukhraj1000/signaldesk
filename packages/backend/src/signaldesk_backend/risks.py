@@ -1,6 +1,7 @@
 """Deterministic risk flag assembly for technical-analysis outputs."""
 
 from collections.abc import Sequence
+from datetime import UTC, datetime, timedelta
 
 from signaldesk_backend.indicators import (
     ConfirmationInvalidationLevels,
@@ -13,6 +14,9 @@ from signaldesk_backend.models import RiskFlag
 def assess_technical_analysis_risks(
     *,
     candle_count: int,
+    latest_candle_timestamp: datetime | None = None,
+    as_of: datetime | None = None,
+    stale_after: timedelta = timedelta(days=7),
     trend_regime: RegimeClassification,
     volatility_regime: RegimeClassification,
     volume_regime: RegimeClassification,
@@ -27,6 +31,8 @@ def assess_technical_analysis_risks(
     missing context into typed flags that the CLI/API can render alongside
     deterministic scores.
     """
+
+    reference_time = as_of or datetime.now(UTC)
 
     flags: list[RiskFlag] = [
         RiskFlag(
@@ -52,6 +58,32 @@ def assess_technical_analysis_risks(
                 source="historical_candles",
             )
         )
+
+    if latest_candle_timestamp is not None:
+        if latest_candle_timestamp.tzinfo is None or latest_candle_timestamp.utcoffset() is None:
+            flags.append(
+                RiskFlag(
+                    kind="stale_data",
+                    severity="warning",
+                    message=(
+                        "Latest candle timestamp is timezone-naive, so data freshness "
+                        "cannot be verified deterministically."
+                    ),
+                    source="historical_candles",
+                )
+            )
+        elif reference_time - latest_candle_timestamp > stale_after:
+            flags.append(
+                RiskFlag(
+                    kind="stale_data",
+                    severity="warning",
+                    message=(
+                        "Latest candle is older than the deterministic freshness "
+                        f"threshold of {stale_after.days} day(s)."
+                    ),
+                    source="historical_candles",
+                )
+            )
 
     for regime_name, regime in (
         ("trend", trend_regime),

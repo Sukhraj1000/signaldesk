@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from signaldesk_backend import (
@@ -52,6 +52,55 @@ def test_assess_technical_analysis_risks_flags_insufficient_history_and_missing_
         "info",
     ]
     assert flags[2].source == "insufficient_history_for_trend_regime"
+
+
+def test_assess_technical_analysis_risks_flags_stale_data() -> None:
+    flags = assess_technical_analysis_risks(
+        candle_count=120,
+        latest_candle_timestamp=NOW - timedelta(days=12),
+        as_of=NOW,
+        stale_after=timedelta(days=7),
+        trend_regime=RegimeClassification(
+            regime="uptrend",
+            source_rule="close_above_short_sma_above_long_sma",
+            reason="Latest close is above aligned moving averages.",
+        ),
+        volatility_regime=RegimeClassification(
+            regime="normal_volatility",
+            source_rule="latest_atr_within_trailing_baseline_band",
+            reason="Latest ATR is normal.",
+        ),
+        volume_regime=RegimeClassification(
+            regime="normal_volume",
+            source_rule="latest_volume_within_prior_average_band",
+            reason="Latest volume is normal.",
+        ),
+        technical_events=(),
+        setup_levels=ConfirmationInvalidationLevels(
+            confirmation=ConfirmationInvalidationLevel(
+                kind="confirmation",
+                price=Decimal("125"),
+                source_rule="nearest_resistance_above_latest_close",
+                source_level="resistance_zone[125,125] touches=1",
+                reason="Move through resistance confirms upside continuation.",
+            ),
+            invalidation=ConfirmationInvalidationLevel(
+                kind="invalidation",
+                price=Decimal("100"),
+                source_rule="nearest_support_below_latest_close",
+                source_level="support_zone[100,100] touches=1",
+                reason="Break below support invalidates the setup.",
+            ),
+        ),
+        fundamentals_unavailable=False,
+    )
+
+    stale_flag = next(flag for flag in flags if flag.kind == "stale_data")
+    assert stale_flag.severity == "warning"
+    assert stale_flag.source == "historical_candles"
+    assert stale_flag.message == (
+        "Latest candle is older than the deterministic freshness threshold of 7 day(s)."
+    )
 
 
 def test_assess_technical_analysis_risks_flags_liquidity_volatility_events() -> None:

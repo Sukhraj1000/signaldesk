@@ -949,6 +949,15 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
                 "source": "historical_candles",
             },
             {
+                "kind": "stale_data",
+                "severity": "warning",
+                "message": (
+                    "Latest candle is older than the deterministic freshness threshold "
+                    "of 7 day(s)."
+                ),
+                "source": "historical_candles",
+            },
+            {
                 "kind": "unknown_trend_regime",
                 "severity": "warning",
                 "message": "Need at least 50 closes to classify trend; received 40.",
