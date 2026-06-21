@@ -215,6 +215,16 @@ def _risk_score(
                     weight=Decimal("0.15"),
                 )
             )
+    if volatility_regime.regime == "high_volatility":
+        score += Decimal("15")
+        reasons.append(
+            ScoreReason(
+                code="high_volatility_risk",
+                message="Volatility regime is high_volatility, increasing setup risk.",
+                source=volatility_regime.source_rule,
+                weight=Decimal("0.15"),
+            )
+        )
     if volume_regime.regime == "low_volume":
         score += Decimal("10")
         reasons.append(

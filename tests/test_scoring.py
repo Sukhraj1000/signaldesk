@@ -271,3 +271,47 @@ def test_score_technical_analysis_includes_low_volume_liquidity_risk_reason() ->
     assert risk.score == Decimal("30")
     assert risk.reasons[-1].code == "liquidity_risk_low_volume"
     assert risk.reasons[-1].source == "latest_volume_at_most_0_75x_prior_average"
+
+
+def test_score_technical_analysis_includes_high_volatility_risk_reason() -> None:
+    scores = score_technical_analysis(
+        candle_count=120,
+        trend_regime=RegimeClassification(
+            regime="uptrend",
+            source_rule="close_above_short_sma_above_long_sma",
+            reason="Latest close is above aligned moving averages.",
+        ),
+        volatility_regime=RegimeClassification(
+            regime="high_volatility",
+            source_rule="latest_atr_above_trailing_baseline_band",
+            reason="Latest ATR is above its trailing baseline band.",
+        ),
+        volume_regime=RegimeClassification(
+            regime="normal_volume",
+            source_rule="latest_volume_within_prior_average_band",
+            reason="Latest volume is normal.",
+        ),
+        technical_events=(),
+        setup_levels=ConfirmationInvalidationLevels(
+            confirmation=ConfirmationInvalidationLevel(
+                kind="confirmation",
+                price=Decimal("125"),
+                source_rule="nearest_resistance_above_latest_close",
+                source_level="resistance_zone[125,125] touches=1",
+                reason="Move through resistance confirms upside continuation.",
+            ),
+            invalidation=ConfirmationInvalidationLevel(
+                kind="invalidation",
+                price=Decimal("100"),
+                source_rule="nearest_support_below_latest_close",
+                source_level="support_zone[100,100] touches=1",
+                reason="Break below support invalidates the setup.",
+            ),
+        ),
+        fundamentals_unavailable=False,
+    )
+
+    risk = next(score for score in scores if score.category == "risk")
+    assert risk.score == Decimal("35")
+    assert risk.reasons[-1].code == "high_volatility_risk"
+    assert risk.reasons[-1].source == "latest_atr_above_trailing_baseline_band"
