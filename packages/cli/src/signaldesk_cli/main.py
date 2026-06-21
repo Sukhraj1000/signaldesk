@@ -19,6 +19,7 @@ from signaldesk_backend import (
     classify_volume_regime,
     default_provider_registry,
     derive_confirmation_invalidation_levels,
+    detect_moving_average_cross_events,
     detect_swing_highs,
     detect_swing_lows,
     exponential_moving_average,
@@ -180,6 +181,7 @@ _TABLE_REPORT_KEYS = (
     "trend_regime",
     "volatility_regime",
     "volume_regime",
+    "technical_events",
     "latest_swing_high",
     "latest_swing_low",
     "confirmation_level",
@@ -208,6 +210,7 @@ def _technical_analysis_report(
     trend_regime = classify_trend_regime(closes)
     volatility_regime = classify_volatility_regime(candles)
     volume_regime = classify_volume_regime(candles)
+    technical_events = detect_moving_average_cross_events(candles)
     latest_swing_high = _latest_level(detect_swing_highs(candles))
     latest_swing_low = _latest_level(detect_swing_lows(candles))
     setup_levels = derive_confirmation_invalidation_levels(candles)
@@ -245,6 +248,7 @@ def _technical_analysis_report(
         "confirmation_level": _setup_level(setup_levels.confirmation),
         "invalidation_level": _setup_level(setup_levels.invalidation),
     }
+    events = tuple(_technical_event_payload(event) for event in technical_events)
 
     unavailable_context = [
         *mode_unavailable_context,
@@ -281,6 +285,7 @@ def _technical_analysis_report(
         "trend_regime": regimes["trend"],
         "volatility_regime": regimes["volatility"],
         "volume_regime": regimes["volume"],
+        "technical_events": events,
         "latest_swing_high": swing_levels["latest_swing_high"],
         "latest_swing_low": swing_levels["latest_swing_low"],
         "confirmation_level": setup["confirmation_level"],
@@ -289,6 +294,7 @@ def _technical_analysis_report(
         "deterministic_signals": {
             "indicators": indicators,
             "regimes": regimes,
+            "events": events,
             "swing_levels": swing_levels,
             "setup_levels": setup,
         },
@@ -345,6 +351,20 @@ def _setup_level(level: ConfirmationInvalidationLevel | None) -> dict[str, Any] 
         "source_rule": level.source_rule,
         "source_level": level.source_level,
         "reason": level.reason,
+    }
+
+
+def _technical_event_payload(event: Any) -> dict[str, Any]:
+    return {
+        "event_type": event.event_type,
+        "timestamp": event.timestamp.isoformat(),
+        "candle_index": event.candle_index,
+        "severity": event.severity,
+        "source_rule": event.source_rule,
+        "source_indicators": list(event.source_indicators),
+        "reason": event.reason,
+        "price": _decimal_text(event.price),
+        "invalidation_condition": event.invalidation_condition,
     }
 
 

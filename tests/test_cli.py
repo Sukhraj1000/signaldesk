@@ -209,6 +209,34 @@ class SwingingProvider(WorkingProvider):
 
 
 @dataclass(frozen=True)
+class MovingAverageCrossProvider(WorkingProvider):
+    name: str = "ma-cross"
+
+    def get_historical_candles(
+        self,
+        symbol: Symbol,
+        *,
+        start: datetime,
+        end: datetime,
+        interval: str,
+    ) -> ProviderResult[tuple[Candle, ...]]:
+        closes = (*("10" for _ in range(19)), "9", "12")
+        candles = tuple(
+            Candle(
+                symbol=symbol,
+                timestamp=datetime(2024, 1, 1, tzinfo=UTC) + timedelta(days=index),
+                open=Decimal(close),
+                high=Decimal(close),
+                low=Decimal(close),
+                close=Decimal(close),
+                volume=1000 + index,
+            )
+            for index, close in enumerate(closes)
+        )
+        return ProviderResult.success(provider=self.name, data=candles)
+
+
+@dataclass(frozen=True)
 class FailingHistoricalProvider(WorkingProvider):
     name: str = "failing-history"
 
@@ -770,6 +798,7 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
             "source_rule": "latest_volume_within_prior_average_band",
             "reason": "Latest volume is between 0.75x and 1.5x its prior trailing average.",
         },
+        "technical_events": [],
         "latest_swing_high": None,
         "latest_swing_low": None,
         "confirmation_level": None,
@@ -813,6 +842,7 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
                     ),
                 },
             },
+            "events": [],
             "swing_levels": {"latest_swing_high": None, "latest_swing_low": None},
             "setup_levels": {"confirmation_level": None, "invalidation_level": None},
         },
@@ -905,6 +935,43 @@ def test_ta_command_includes_traceable_confirmation_and_invalidation_levels(
         "Latest close remains above this support zone; a break below it would "
         "invalidate the current technical setup."
     )
+
+
+def test_ta_command_includes_traceable_moving_average_events(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        cli_main,
+        "default_provider_registry",
+        lambda: ProviderRegistry((MovingAverageCrossProvider(),)),
+    )
+
+    result = CliRunner().invoke(
+        app,
+        ["ta", "AMD", "--provider", "ma-cross", "--llm", "none", "--output", "json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["technical_events"] == [
+        {
+            "event_type": "reclaimed_moving_average",
+            "timestamp": "2024-01-21T00:00:00+00:00",
+            "candle_index": 20,
+            "severity": "bullish",
+            "source_rule": "close_crossed_above_sma",
+            "source_indicators": ["sma_20"],
+            "reason": (
+                "Latest close 12 moved above sma_20 10.05 after the prior close was not "
+                "above its SMA."
+            ),
+            "price": "12",
+            "invalidation_condition": (
+                "A close back below sma_20 10.05 would invalidate the reclaim event."
+            ),
+        }
+    ]
+    assert payload["deterministic_signals"]["events"] == payload["technical_events"]
 
 
 def test_ta_command_reports_provider_failures_without_secrets(monkeypatch: MonkeyPatch) -> None:

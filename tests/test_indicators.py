@@ -5,6 +5,7 @@ from decimal import Decimal
 import pytest
 from signaldesk_backend import (
     Candle,
+    DeterministicTechnicalEvent,
     FibonacciRetracementLevel,
     LevelZone,
     SwingPoint,
@@ -15,6 +16,7 @@ from signaldesk_backend import (
     classify_volatility_regime,
     classify_volume_regime,
     derive_confirmation_invalidation_levels,
+    detect_moving_average_cross_events,
     detect_support_resistance_zones,
     detect_swing_highs,
     detect_swing_lows,
@@ -818,6 +820,69 @@ def test_derive_confirmation_invalidation_levels_reports_unavailable_sides_as_no
 
     assert levels.confirmation is None
     assert levels.invalidation is None
+
+
+def test_detect_moving_average_cross_events_reports_reclaims_and_losses() -> None:
+    reclaimed = tuple(
+        make_candle(index, close)
+        for index, close in enumerate(("10", "10", "10", "9", "12"))
+    )
+    lost = tuple(
+        make_candle(index, close)
+        for index, close in enumerate(("10", "10", "10", "11", "8"))
+    )
+
+    reclaim_events = detect_moving_average_cross_events(reclaimed, period=3)
+    lost_events = detect_moving_average_cross_events(lost, period=3)
+
+    assert reclaim_events == (
+        DeterministicTechnicalEvent(
+            event_type="reclaimed_moving_average",
+            timestamp=reclaimed[-1].timestamp,
+            candle_index=4,
+            severity="bullish",
+            source_rule="close_crossed_above_sma",
+            source_indicators=("sma_3",),
+            reason=(
+                "Latest close 12 moved above sma_3 10.33333333333333333333333333 "
+                "after the prior close was not above its SMA."
+            ),
+            price=Decimal("12"),
+            invalidation_condition=(
+                "A close back below sma_3 10.33333333333333333333333333 would "
+                "invalidate the reclaim event."
+            ),
+        ),
+    )
+    assert lost_events == (
+        DeterministicTechnicalEvent(
+            event_type="lost_moving_average",
+            timestamp=lost[-1].timestamp,
+            candle_index=4,
+            severity="bearish",
+            source_rule="close_crossed_below_sma",
+            source_indicators=("sma_3",),
+            reason=(
+                "Latest close 8 moved below sma_3 9.666666666666666666666666667 "
+                "after the prior close was not below its SMA."
+            ),
+            price=Decimal("8"),
+            invalidation_condition=(
+                "A close back above sma_3 9.666666666666666666666666667 would "
+                "invalidate the loss event."
+            ),
+        ),
+    )
+
+
+def test_detect_moving_average_cross_events_returns_empty_without_cross_or_history() -> None:
+    no_cross = tuple(
+        make_candle(index, close)
+        for index, close in enumerate(("10", "10", "10", "11", "12"))
+    )
+
+    assert detect_moving_average_cross_events(no_cross, period=3) == ()
+    assert detect_moving_average_cross_events(no_cross[:3], period=3) == ()
 
 
 @pytest.mark.parametrize(
