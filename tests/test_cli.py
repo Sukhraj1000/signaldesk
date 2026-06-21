@@ -102,6 +102,25 @@ class WorkingProvider:
 
 
 @dataclass(frozen=True)
+class FundamentalsCapabilityProvider(WorkingProvider):
+    name: str = "fundamentals-provider"
+
+    def capabilities(self) -> tuple[ProviderCapability, ...]:
+        return (
+            ProviderCapability(
+                provider=self.name,
+                data_role="fundamentals",
+                supports_realtime=False,
+                supports_historical=True,
+                supported_asset_classes=frozenset({"equity"}),
+                supported_intervals=frozenset({"1d"}),
+                credential_state="required",
+                live_check_suitable=False,
+            ),
+        )
+
+
+@dataclass(frozen=True)
 class SwingingProvider(WorkingProvider):
     name: str = "swinging"
 
@@ -186,13 +205,19 @@ def test_providers_list_reports_yfinance_capabilities() -> None:
 
     assert result.exit_code == 0
     assert (
-        "provider\trealtime\thistorical\tasset_classes\tintervals\tcredential_state\tlive_check"
+        "provider\trole\trealtime\thistorical\tasset_classes\tintervals\tcredential_state\tlive_check"
         in result.stdout
     )
-    assert "local-fixture\tfalse\ttrue\tequity,fixture\t1d\tnot_required\ttrue" in result.stdout
-    assert "polygon\ttrue\ttrue\tequity,etf,index\t1d\tplaceholder\tfalse" in result.stdout
-    assert "twelve-data\ttrue\ttrue\tequity,etf,index\t1d\tplaceholder\tfalse" in result.stdout
-    assert "yfinance\ttrue\ttrue\tcrypto,equity,etf,index" in result.stdout
+    assert (
+        "local-fixture\tprice\tfalse\ttrue\tequity,fixture\t1d\tnot_required\ttrue"
+        in result.stdout
+    )
+    assert "polygon\tprice\ttrue\ttrue\tequity,etf,index\t1d\tplaceholder\tfalse" in result.stdout
+    assert (
+        "twelve-data\tprice\ttrue\ttrue\tequity,etf,index\t1d\tplaceholder\tfalse"
+        in result.stdout
+    )
+    assert "yfinance\tprice\ttrue\ttrue\tcrypto,equity,etf,index" in result.stdout
     assert "not_required\tfalse" in result.stdout
 
 
@@ -475,8 +500,17 @@ def test_provider_capability_formatter_reports_registry_capabilities() -> None:
     lines = _format_provider_capabilities(ProviderRegistry((ExplodingProvider(),)))
 
     assert lines == (
-        "provider\trealtime\thistorical\tasset_classes\tintervals\tcredential_state\tlive_check",
-        "exploding\tfalse\tfalse\t\t\tunknown\tfalse",
+        "provider\trole\trealtime\thistorical\tasset_classes\tintervals\tcredential_state\tlive_check",
+        "exploding\tunknown\tfalse\tfalse\t\t\tunknown\tfalse",
+    )
+
+
+def test_provider_capability_formatter_uses_declared_data_role() -> None:
+    lines = _format_provider_capabilities(ProviderRegistry((FundamentalsCapabilityProvider(),)))
+
+    assert lines == (
+        "provider\trole\trealtime\thistorical\tasset_classes\tintervals\tcredential_state\tlive_check",
+        "fundamentals-provider\tfundamentals\tfalse\ttrue\tequity\t1d\trequired\tfalse",
     )
 
 
@@ -490,8 +524,8 @@ def test_providers_list_continues_when_capabilities_raise(monkeypatch: MonkeyPat
     result = CliRunner().invoke(app, ["providers", "list"])
 
     assert result.exit_code == 0
-    assert "exploding-capabilities\tfalse\tfalse\t\t\tunknown\tfalse" in result.stdout
-    assert "exploding\tfalse\tfalse\t\t\tunknown\tfalse" in result.stdout
+    assert "exploding-capabilities\tunknown\tfalse\tfalse\t\t\tunknown\tfalse" in result.stdout
+    assert "exploding\tunknown\tfalse\tfalse\t\t\tunknown\tfalse" in result.stdout
     assert "secret capability detail" not in result.stdout
 
 
