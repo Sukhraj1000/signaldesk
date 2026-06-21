@@ -20,9 +20,11 @@ from urllib.request import Request, urlopen
 from signaldesk_backend.models import (
     Candle,
     ProviderCapability,
+    ProviderMode,
     ProviderResult,
     Quote,
     Symbol,
+    UnavailableContext,
 )
 
 _CREDENTIAL_QUERY_KEYS = frozenset(
@@ -327,6 +329,101 @@ class ProviderRegistry:
 
     def __len__(self) -> int:
         return len(self._providers)
+
+
+def resolve_provider_mode(
+    registry: ProviderRegistry,
+    *,
+    mode: str = "default",
+) -> tuple[ProviderMode, tuple[UnavailableContext, ...]]:
+    """Resolve role providers for a provider mode without network I/O.
+
+    Default mode keeps the open-data price path on yfinance. Enhanced mode uses
+    FMP for price/fundamentals/catalysts only when credentials are configured;
+    otherwise it keeps yfinance for price and reports enhanced context as
+    unavailable instead of crashing or silently pretending richer data exists.
+    """
+
+    normalized_mode = mode.strip().lower()
+    if normalized_mode not in {"default", "enhanced"}:
+        raise ValueError("mode must be default or enhanced")
+
+    if normalized_mode == "default":
+        return (
+            ProviderMode(mode="default", price_provider=_default_price_provider(registry)),
+            (),
+        )
+
+    fmp_configured = _provider_has_configured_role(registry, provider_name="fmp", role="price")
+    if fmp_configured:
+        return (
+            ProviderMode(
+                mode="enhanced",
+                price_provider="fmp",
+                fundamentals_provider="fmp",
+                catalyst_provider="fmp",
+            ),
+            (),
+        )
+
+    unavailable = (
+        UnavailableContext(
+            context_type="enhanced_price",
+            provider="fmp",
+            reason="FMP credentials are not configured; using default yfinance price provider",
+        ),
+        UnavailableContext(
+            context_type="fundamentals",
+            provider="fmp",
+            reason="FMP credentials are not configured",
+        ),
+        UnavailableContext(
+            context_type="catalyst",
+            provider="fmp",
+            reason="FMP credentials are not configured",
+        ),
+    )
+    return (
+        ProviderMode(mode="enhanced", price_provider=_default_price_provider(registry)),
+        unavailable,
+    )
+
+
+def _default_price_provider(registry: ProviderRegistry) -> str:
+    if _provider_has_role(registry, provider_name="yfinance", role="price"):
+        return "yfinance"
+    if _provider_has_role(registry, provider_name="local-fixture", role="price"):
+        return "local-fixture"
+    raise ValueError("no default price provider is registered")
+
+
+def _provider_has_configured_role(
+    registry: ProviderRegistry, *, provider_name: str, role: str
+) -> bool:
+    try:
+        provider = registry.get(provider_name)
+    except KeyError:
+        return False
+    try:
+        capabilities = provider.capabilities()
+    except Exception:
+        return False
+    return any(
+        capability.data_role == role and capability.credential_state == "configured"
+        for capability in capabilities
+    )
+
+
+def _provider_has_role(registry: ProviderRegistry, *, provider_name: str, role: str) -> bool:
+    try:
+        provider = registry.get(provider_name)
+    except KeyError:
+        return False
+    try:
+        capabilities = provider.capabilities()
+    except Exception:
+        return False
+    return any(capability.data_role == role for capability in capabilities)
 
 
 @dataclass(frozen=True)
