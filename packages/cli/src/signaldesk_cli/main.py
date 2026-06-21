@@ -41,6 +41,7 @@ from signaldesk_backend import (
     resolve_provider_mode,
     score_technical_analysis,
     simple_moving_average,
+    validate_ta_signal_card_report,
     volume_moving_average,
 )
 
@@ -122,6 +123,7 @@ def technical_analysis(
         as_of=end,
         mode_unavailable_context=mode_unavailable_context,
     )
+    validate_ta_signal_card_report(report)
     if output_format == "json":
         typer.echo(json.dumps(report, indent=2, sort_keys=True))
         return

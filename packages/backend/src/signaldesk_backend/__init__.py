@@ -77,7 +77,10 @@ from signaldesk_backend.providers import (
 )
 from signaldesk_backend.risks import assess_technical_analysis_risks
 from signaldesk_backend.scoring import score_technical_analysis
-from signaldesk_backend.signal_cards import assemble_ta_signal_card_report
+from signaldesk_backend.signal_cards import (
+    assemble_ta_signal_card_report,
+    validate_ta_signal_card_report,
+)
 
 __all__ = [
     "Candle",
@@ -151,5 +154,6 @@ __all__ = [
     "relative_volume",
     "score_technical_analysis",
     "simple_moving_average",
+    "validate_ta_signal_card_report",
     "volume_moving_average",
 ]

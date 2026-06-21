@@ -1,6 +1,22 @@
 """Canonical signal-card payload assembly helpers."""
 
+from collections.abc import Mapping
 from typing import Any
+
+_CANONICAL_SIGNAL_CARD_SECTIONS = (
+    "identity",
+    "provider_mode",
+    "facts",
+    "trend",
+    "levels",
+    "events",
+    "risk",
+    "score",
+    "provenance",
+    "unavailable_context",
+    "llm",
+    "narrative",
+)
 
 
 def assemble_ta_signal_card_report(
@@ -54,7 +70,7 @@ def assemble_ta_signal_card_report(
         "narrative": narrative,
     }
 
-    return {
+    report = {
         "schema_version": identity["schema_version"],
         **flat_fields,
         "provider_mode": provider_mode,
@@ -74,6 +90,45 @@ def assemble_ta_signal_card_report(
         "llm": llm,
         "narrative": narrative,
     }
+    validate_ta_signal_card_report(report)
+    return report
+
+
+def validate_ta_signal_card_report(report: Mapping[str, Any]) -> None:
+    """Validate renderer-facing signal-card alias consistency.
+
+    Downstream CLI, API, dashboard, and reporting adapters should render the
+    nested ``signal_card`` object. The top-level aliases remain during the v1
+    migration, so this guard fails fast if a future assembler change updates a
+    top-level section without keeping the canonical nested card in sync.
+    """
+
+    signal_card = report.get("signal_card")
+    if not isinstance(signal_card, Mapping):
+        raise ValueError("signal-card report must include a signal_card object")
+
+    missing_report_sections = [
+        section for section in _CANONICAL_SIGNAL_CARD_SECTIONS if section not in report
+    ]
+    if missing_report_sections:
+        missing = ", ".join(missing_report_sections)
+        raise ValueError(f"signal-card report missing top-level section(s): {missing}")
+
+    missing_card_sections = [
+        section for section in _CANONICAL_SIGNAL_CARD_SECTIONS if section not in signal_card
+    ]
+    if missing_card_sections:
+        missing = ", ".join(missing_card_sections)
+        raise ValueError(f"signal_card missing section(s): {missing}")
+
+    drifted_sections = [
+        section
+        for section in _CANONICAL_SIGNAL_CARD_SECTIONS
+        if signal_card[section] != report[section]
+    ]
+    if drifted_sections:
+        drifted = ", ".join(drifted_sections)
+        raise ValueError(f"signal_card section(s) drifted from top-level aliases: {drifted}")
 
 
 def _require_signal_card_sections(**sections: dict[str, Any]) -> None:
