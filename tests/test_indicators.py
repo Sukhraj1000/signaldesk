@@ -17,6 +17,7 @@ from signaldesk_backend import (
     classify_volume_regime,
     derive_confirmation_invalidation_levels,
     detect_moving_average_cross_events,
+    detect_relative_volume_spike_events,
     detect_support_resistance_zones,
     detect_swing_highs,
     detect_swing_lows,
@@ -883,6 +884,47 @@ def test_detect_moving_average_cross_events_returns_empty_without_cross_or_histo
 
     assert detect_moving_average_cross_events(no_cross, period=3) == ()
     assert detect_moving_average_cross_events(no_cross[:3], period=3) == ()
+
+
+def test_detect_relative_volume_spike_events_reports_traceable_spike() -> None:
+    candles = tuple(
+        make_volume_candle(index, volume) for index, volume in enumerate((100, 100, 100, 200))
+    )
+
+    assert detect_relative_volume_spike_events(candles, period=3) == (
+        DeterministicTechnicalEvent(
+            event_type="relative_volume_spike",
+            timestamp=candles[-1].timestamp,
+            candle_index=3,
+            severity="info",
+            source_rule="latest_volume_at_least_threshold_x_prior_average",
+            source_indicators=("relative_volume_3",),
+            reason="Latest volume 200 is 2x its prior 3-candle average volume 100.",
+            price=Decimal("10"),
+            invalidation_condition=(
+                "Relative volume below 1.5x the prior 3-candle average would end "
+                "the spike condition."
+            ),
+        ),
+    )
+
+
+def test_detect_relative_volume_spike_events_returns_empty_without_spike_or_baseline() -> None:
+    normal_volume = tuple(
+        make_volume_candle(index, volume) for index, volume in enumerate((100, 100, 100, 120))
+    )
+    zero_baseline = tuple(
+        make_volume_candle(index, volume) for index, volume in enumerate((0, 0, 0, 200))
+    )
+
+    assert detect_relative_volume_spike_events(normal_volume, period=3) == ()
+    assert detect_relative_volume_spike_events(normal_volume[:3], period=3) == ()
+    assert detect_relative_volume_spike_events(zero_baseline, period=3) == ()
+
+
+def test_detect_relative_volume_spike_events_rejects_non_positive_threshold() -> None:
+    with pytest.raises(ValueError, match="threshold must be positive"):
+        detect_relative_volume_spike_events((make_volume_candle(0, 100),), threshold=Decimal("0"))
 
 
 @pytest.mark.parametrize(
