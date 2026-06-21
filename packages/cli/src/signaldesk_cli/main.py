@@ -402,7 +402,13 @@ def _scan_watchlist_payload(
             )
         except RuntimeError as exc:
             exit_code = 1
-            results.append({"symbol": symbol, "status": "failed", "error": str(exc)})
+            results.append(
+                {
+                    "symbol": symbol,
+                    "status": "failed",
+                    "error": redact_provider_diagnostic(str(exc)),
+                }
+            )
             continue
         results.append({"symbol": symbol, "status": "ok", "summary": _scan_result_summary(report)})
 
@@ -478,15 +484,15 @@ def report_watchlist(
     llm: str = typer.Option("none", help="LLM provider. Only 'none' is currently supported."),
     interval: str = typer.Option("1d", help="Historical candle interval."),
     days: int = typer.Option(120, min=1, help="Number of calendar days of history to request."),
-    format: str = typer.Option("markdown", help="Report format: markdown."),
+    report_format: str = typer.Option("markdown", "--format", help="Report format: markdown."),
 ) -> None:
     """Generate a deterministic Markdown report for a watchlist."""
 
     if llm.strip().lower() != "none":
         typer.echo("Only --llm none is currently supported.", err=True)
         raise typer.Exit(2)
-    report_format = format.strip().lower()
-    if report_format not in {"markdown", "md"}:
+    normalized_report_format = report_format.strip().lower()
+    if normalized_report_format not in {"markdown", "md"}:
         typer.echo("--format must be 'markdown'.", err=True)
         raise typer.Exit(2)
     try:

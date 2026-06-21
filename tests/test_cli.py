@@ -1847,6 +1847,36 @@ def test_report_watchlist_markdown_uses_fixture_provider(
     assert "provider `working`" in result.stdout
 
 
+def test_report_watchlist_redacts_provider_failure_secrets(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        cli_main,
+        "default_provider_registry",
+        lambda: ProviderRegistry((FailingHistoricalProvider(),)),
+    )
+    watchlist = tmp_path / "watchlist.yaml"
+    watchlist.write_text("symbols:\n  - AMD\n", encoding="utf-8")
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "report",
+            "--watchlist",
+            str(watchlist),
+            "--provider",
+            "failing-history",
+            "--format",
+            "markdown",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "apikey=<redacted>" in result.stdout
+    assert "secret" not in result.stdout
+    assert "secret" not in result.stderr
+
+
 def test_report_watchlist_rejects_unsupported_format_and_llm() -> None:
     bad_format = CliRunner().invoke(
         app, ["report", "--watchlist", "watchlists/default.yaml", "--format", "html"]
