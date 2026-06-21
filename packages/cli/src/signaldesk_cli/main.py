@@ -34,6 +34,7 @@ from signaldesk_backend import (
     detect_trend_regime_shift_events,
     detect_volatility_regime_events,
     exponential_moving_average,
+    extract_ta_signal_card,
     macd,
     redact_provider_diagnostic,
     relative_strength_index,
@@ -135,7 +136,7 @@ def technical_analysis(
 def _ta_table_report_values(report: dict[str, Any]) -> dict[str, Any]:
     """Return the flat TA table view from the canonical signal-card object."""
 
-    card = report["signal_card"]
+    card = extract_ta_signal_card(report)
     identity = card["identity"]
     facts = card["facts"]
     trend = card["trend"]

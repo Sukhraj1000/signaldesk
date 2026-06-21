@@ -1,5 +1,9 @@
 import pytest
-from signaldesk_backend import assemble_ta_signal_card_report, validate_ta_signal_card_report
+from signaldesk_backend import (
+    assemble_ta_signal_card_report,
+    extract_ta_signal_card,
+    validate_ta_signal_card_report,
+)
 
 
 def _base_sections() -> dict[str, object]:
@@ -93,3 +97,23 @@ def test_validate_ta_signal_card_report_rejects_missing_card_sections() -> None:
 
     with pytest.raises(ValueError, match="risk"):
         validate_ta_signal_card_report(payload)
+
+
+def test_extract_ta_signal_card_validates_and_returns_renderer_object() -> None:
+    sections = _base_sections()
+    payload = assemble_ta_signal_card_report(**sections)  # type: ignore[arg-type]
+
+    card = extract_ta_signal_card(payload)
+
+    assert card is payload["signal_card"]
+    assert card["facts"] is payload["facts"]
+    assert card["risk"] is payload["risk"]
+
+
+def test_extract_ta_signal_card_rejects_drift_before_rendering() -> None:
+    sections = _base_sections()
+    payload = assemble_ta_signal_card_report(**sections)  # type: ignore[arg-type]
+    payload["signal_card"] = {**payload["signal_card"], "score": {"breakdowns": []}}
+
+    with pytest.raises(ValueError, match="score"):
+        extract_ta_signal_card(payload)

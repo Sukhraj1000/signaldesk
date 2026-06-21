@@ -79,6 +79,7 @@ from signaldesk_backend.risks import assess_technical_analysis_risks
 from signaldesk_backend.scoring import score_technical_analysis
 from signaldesk_backend.signal_cards import (
     assemble_ta_signal_card_report,
+    extract_ta_signal_card,
     validate_ta_signal_card_report,
 )
 
@@ -144,6 +145,7 @@ __all__ = [
     "detect_swing_points",
     "detect_trend_regime_shift_events",
     "exponential_moving_average",
+    "extract_ta_signal_card",
     "fallback_provider_call",
     "macd",
     "normalize_provider_name",
