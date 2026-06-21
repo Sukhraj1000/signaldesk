@@ -200,7 +200,9 @@ def test_providers_check_is_available_from_help() -> None:
     assert "list" in result.stdout
 
 
-def test_providers_list_reports_yfinance_capabilities() -> None:
+def test_providers_list_reports_yfinance_capabilities(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.delenv("FMP_API_KEY", raising=False)
+
     result = CliRunner().invoke(app, ["providers", "list"])
 
     assert result.exit_code == 0
@@ -217,6 +219,7 @@ def test_providers_list_reports_yfinance_capabilities() -> None:
         "twelve-data\tprice\ttrue\ttrue\tequity,etf,index\t1d\tplaceholder\tfalse"
         in result.stdout
     )
+    assert "fmp\tprice\ttrue\ttrue\tequity,etf,index\t1d\tnot_configured\tfalse" in result.stdout
     assert "yfinance\tprice\ttrue\ttrue\tcrypto,equity,etf,index" in result.stdout
     assert "not_required\tfalse" in result.stdout
 
