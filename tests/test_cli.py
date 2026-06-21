@@ -929,6 +929,7 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
             },
             "events": [],
             "swing_levels": {"latest_swing_high": None, "latest_swing_low": None},
+            "fibonacci_levels": [],
             "setup_levels": {"confirmation_level": None, "invalidation_level": None},
         },
         "risks": [
@@ -1243,6 +1244,72 @@ def test_ta_command_includes_traceable_confirmation_and_invalidation_levels(
         "Latest close remains above this support zone; a break below it would "
         "invalidate the current technical setup."
     )
+
+
+def test_ta_command_includes_traceable_fibonacci_levels(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        cli_main, "default_provider_registry", lambda: ProviderRegistry((SwingingProvider(),))
+    )
+
+    result = CliRunner().invoke(
+        app, ["ta", "AMD", "--provider", "swinging", "--llm", "none", "--output", "json"]
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    fibonacci = payload["levels"]["fibonacci"]
+
+    assert fibonacci == [
+        {
+            "ratio": "0.236",
+            "percent": "23.600",
+            "price": "11.09420",
+            "direction": "up",
+            "swing_start": "8",
+            "swing_end": "12.05",
+            "source_rule": "latest_swing_low_to_high_retracement",
+        },
+        {
+            "ratio": "0.382",
+            "percent": "38.200",
+            "price": "10.50290",
+            "direction": "up",
+            "swing_start": "8",
+            "swing_end": "12.05",
+            "source_rule": "latest_swing_low_to_high_retracement",
+        },
+        {
+            "ratio": "0.5",
+            "percent": "50.0",
+            "price": "10.025",
+            "direction": "up",
+            "swing_start": "8",
+            "swing_end": "12.05",
+            "source_rule": "latest_swing_low_to_high_retracement",
+        },
+        {
+            "ratio": "0.618",
+            "percent": "61.800",
+            "price": "9.54710",
+            "direction": "up",
+            "swing_start": "8",
+            "swing_end": "12.05",
+            "source_rule": "latest_swing_low_to_high_retracement",
+        },
+        {
+            "ratio": "0.786",
+            "percent": "78.600",
+            "price": "8.86670",
+            "direction": "up",
+            "swing_start": "8",
+            "swing_end": "12.05",
+            "source_rule": "latest_swing_low_to_high_retracement",
+        },
+    ]
+    assert payload["signal_card"]["levels"]["fibonacci"] == fibonacci
+    assert payload["deterministic_signals"]["fibonacci_levels"] == fibonacci
 
 
 def test_ta_command_includes_traceable_moving_average_events(
