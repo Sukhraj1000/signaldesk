@@ -27,6 +27,7 @@ from signaldesk_backend import (
     normalize_provider_name,
     provider_rate_limit_failure,
     redact_provider_diagnostic,
+    resolve_provider_mode,
 )
 
 NOW = datetime(2026, 1, 15, 14, 30, tzinfo=UTC)
@@ -498,6 +499,72 @@ def test_default_provider_registry_includes_safe_local_fixture_provider() -> Non
         provider="local-fixture",
         data="ready (deterministic historical candles; no external credentials required)",
     )
+
+
+def test_resolve_provider_mode_defaults_to_yfinance_price_role() -> None:
+    provider_mode, unavailable_context = resolve_provider_mode(default_provider_registry())
+
+    assert provider_mode.mode == "default"
+    assert provider_mode.price_provider == "yfinance"
+    assert provider_mode.fundamentals_provider is None
+    assert provider_mode.catalyst_provider is None
+    assert unavailable_context == ()
+
+
+def test_resolve_provider_mode_falls_back_to_local_fixture_price_role(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("FMP_API_KEY", raising=False)
+    registry = ProviderRegistry((LocalFixtureProvider(),))
+
+    default_mode, default_unavailable = resolve_provider_mode(registry)
+    enhanced_mode, enhanced_unavailable = resolve_provider_mode(registry, mode="enhanced")
+
+    assert default_mode.price_provider == "local-fixture"
+    assert default_unavailable == ()
+    assert enhanced_mode.price_provider == "local-fixture"
+    assert enhanced_unavailable[0].context_type == "enhanced_price"
+    assert enhanced_unavailable[0].reason.endswith("default local-fixture price provider")
+
+
+def test_resolve_provider_mode_reports_missing_enhanced_context_without_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("FMP_API_KEY", raising=False)
+
+    provider_mode, unavailable_context = resolve_provider_mode(
+        default_provider_registry(), mode="enhanced"
+    )
+
+    assert provider_mode.mode == "enhanced"
+    assert provider_mode.price_provider == "yfinance"
+    assert provider_mode.fundamentals_provider is None
+    assert provider_mode.catalyst_provider is None
+    assert tuple(item.context_type for item in unavailable_context) == (
+        "enhanced_price",
+        "fundamentals",
+        "catalyst",
+    )
+    assert all(item.provider == "fmp" for item in unavailable_context)
+    assert all("credentials are not configured" in item.reason for item in unavailable_context)
+
+
+def test_resolve_provider_mode_uses_fmp_roles_when_configured() -> None:
+    provider_mode, unavailable_context = resolve_provider_mode(
+        ProviderRegistry((FmpProvider(api_key="test-key"), YFinanceProvider(_module=None))),
+        mode="enhanced",
+    )
+
+    assert provider_mode.mode == "enhanced"
+    assert provider_mode.price_provider == "fmp"
+    assert provider_mode.fundamentals_provider == "fmp"
+    assert provider_mode.catalyst_provider == "fmp"
+    assert unavailable_context == ()
+
+
+def test_resolve_provider_mode_rejects_unknown_mode() -> None:
+    with pytest.raises(ValueError, match="mode must be default or enhanced"):
+        resolve_provider_mode(default_provider_registry(), mode="paid")
 
 
 def test_local_fixture_provider_returns_deterministic_daily_candles() -> None:

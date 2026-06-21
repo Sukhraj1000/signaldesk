@@ -21,6 +21,7 @@ from signaldesk_backend import (
     redact_provider_diagnostic,
     relative_strength_index,
     relative_volume,
+    resolve_provider_mode,
     simple_moving_average,
     volume_moving_average,
 )
@@ -390,6 +391,67 @@ def _run_provider_health_checks(
         if not result.ok:
             exit_code = 1
     return exit_code, tuple(payload)
+
+
+def _provider_mode_payload(mode: str) -> dict[str, Any]:
+    provider_mode, unavailable_context = resolve_provider_mode(
+        default_provider_registry(), mode=mode
+    )
+    return {
+        "mode": provider_mode.mode,
+        "price_provider": provider_mode.price_provider,
+        "fundamentals_provider": provider_mode.fundamentals_provider,
+        "catalyst_provider": provider_mode.catalyst_provider,
+        "llm_provider": provider_mode.llm_provider,
+        "unavailable_context": [
+            {
+                "context_type": item.context_type,
+                "reason": item.reason,
+                "provider": item.provider,
+                "details": item.details,
+            }
+            for item in unavailable_context
+        ],
+    }
+
+
+def _format_provider_mode(payload: dict[str, Any]) -> tuple[str, ...]:
+    lines = ["role\tprovider"]
+    lines.append(f"mode\t{payload['mode']}")
+    lines.append(f"price\t{payload['price_provider']}")
+    lines.append(f"fundamentals\t{payload['fundamentals_provider'] or 'unavailable'}")
+    lines.append(f"catalyst\t{payload['catalyst_provider'] or 'unavailable'}")
+    lines.append(f"llm\t{payload['llm_provider'] or 'none'}")
+    for item in payload["unavailable_context"]:
+        lines.append(
+            f"unavailable:{item['context_type']}\t{item['provider'] or 'none'}: {item['reason']}"
+        )
+    return tuple(lines)
+
+
+@providers_app.command("mode")
+def providers_mode(
+    mode: str = typer.Option("default", help="Provider mode to resolve: default or enhanced."),
+    output: str = typer.Option("table", help="Output format: table or json."),
+) -> None:
+    """Resolve provider roles for default or enhanced mode without network I/O."""
+
+    output_format = output.strip().lower()
+    if output_format not in {"table", "json"}:
+        typer.echo("--output must be 'table' or 'json'.", err=True)
+        raise typer.Exit(2)
+    try:
+        payload = _provider_mode_payload(mode)
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from exc
+
+    if output_format == "json":
+        typer.echo(json.dumps(payload, indent=2))
+        return
+
+    for line in _format_provider_mode(payload):
+        typer.echo(line)
 
 
 @providers_app.command("list")

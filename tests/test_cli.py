@@ -198,6 +198,7 @@ def test_providers_check_is_available_from_help() -> None:
     assert result.exit_code == 0
     assert "check" in result.stdout
     assert "list" in result.stdout
+    assert "mode" in result.stdout
 
 
 def test_providers_list_reports_yfinance_capabilities(monkeypatch: MonkeyPatch) -> None:
@@ -236,6 +237,42 @@ def test_providers_list_reports_yfinance_capabilities(monkeypatch: MonkeyPatch) 
     )
     assert "yfinance\tdefault\tprice\ttrue\ttrue\tcrypto,equity,etf,index" in result.stdout
     assert "not_required\tfalse" in result.stdout
+
+
+def test_providers_mode_resolves_default_price_role(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.delenv("FMP_API_KEY", raising=False)
+
+    result = CliRunner().invoke(app, ["providers", "mode"])
+
+    assert result.exit_code == 0
+    assert "role\tprovider" in result.stdout
+    assert "mode\tdefault" in result.stdout
+    assert "price\tyfinance" in result.stdout
+    assert "fundamentals\tunavailable" in result.stdout
+    assert "catalyst\tunavailable" in result.stdout
+
+
+def test_providers_mode_json_reports_enhanced_unavailable_context(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("FMP_API_KEY", raising=False)
+
+    result = CliRunner().invoke(
+        app, ["providers", "mode", "--mode", "enhanced", "--output", "json"]
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["mode"] == "enhanced"
+    assert payload["price_provider"] == "yfinance"
+    assert payload["fundamentals_provider"] is None
+    assert payload["catalyst_provider"] is None
+    assert [item["context_type"] for item in payload["unavailable_context"]] == [
+        "enhanced_price",
+        "fundamentals",
+        "catalyst",
+    ]
+    assert all(item["provider"] == "fmp" for item in payload["unavailable_context"])
 
 
 def test_providers_list_json_reports_machine_readable_capabilities(

@@ -56,6 +56,7 @@ from signaldesk_backend.providers import (
     normalize_provider_name,
     provider_rate_limit_failure,
     redact_provider_diagnostic,
+    resolve_provider_mode,
 )
 
 __all__ = [
@@ -106,6 +107,7 @@ __all__ = [
     "normalize_provider_name",
     "provider_rate_limit_failure",
     "redact_provider_diagnostic",
+    "resolve_provider_mode",
     "relative_strength_index",
     "relative_volume",
     "simple_moving_average",
