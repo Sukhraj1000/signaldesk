@@ -555,6 +555,66 @@ class RiskAssessment:
 
 
 @dataclass(frozen=True, kw_only=True)
+class ScoreReason:
+    """A traceable deterministic reason contributing to a score."""
+
+    code: str
+    message: str
+    source: str
+    weight: Decimal | None = None
+
+    def __post_init__(self) -> None:
+        code = self.code.strip().lower().replace(" ", "_")
+        message = self.message.strip()
+        source = self.source.strip().lower().replace(" ", "_")
+        if not code:
+            raise ValueError("code is required")
+        if not message:
+            raise ValueError("message is required")
+        if not source:
+            raise ValueError("source is required")
+        if self.weight is not None:
+            if not isinstance(self.weight, Decimal):
+                raise TypeError("weight must be a Decimal")
+            if self.weight < Decimal("0") or self.weight > Decimal("1"):
+                raise ValueError("weight must be between 0 and 1")
+        object.__setattr__(self, "code", code)
+        object.__setattr__(self, "message", message)
+        object.__setattr__(self, "source", source)
+
+
+@dataclass(frozen=True, kw_only=True)
+class ScoreBreakdown:
+    """A bounded score with deterministic reasons for one score category."""
+
+    category: str
+    score: Decimal
+    reasons: tuple[ScoreReason, ...]
+
+    ALLOWED_CATEGORIES: ClassVar[tuple[str, ...]] = (
+        "setup_quality",
+        "risk",
+        "data_quality",
+    )
+
+    def __post_init__(self) -> None:
+        category = self.category.strip().lower().replace(" ", "_")
+        if category not in self.ALLOWED_CATEGORIES:
+            raise ValueError("category must be setup_quality, risk, or data_quality")
+        if not isinstance(self.score, Decimal):
+            raise TypeError("score must be a Decimal")
+        if self.score < Decimal("0") or self.score > Decimal("100"):
+            raise ValueError("score must be between 0 and 100")
+        reasons = tuple(self.reasons)
+        if not reasons:
+            raise ValueError("score breakdown must include at least one reason")
+        if any(not isinstance(reason, ScoreReason) for reason in reasons):
+            raise TypeError("score breakdown reasons must be ScoreReason")
+        object.__setattr__(self, "category", category)
+        object.__setattr__(self, "reasons", reasons)
+
+
+@dataclass(frozen=True, kw_only=True)
 class SignalCard:
     """A compact provider-agnostic signal summary assembled from analysis facts."""
 
@@ -571,6 +631,7 @@ class SignalCard:
     provenance: tuple[Provenance, ...] = ()
     unavailable_context: tuple[UnavailableContext, ...] = ()
     risk_assessment: RiskAssessment | None = None
+    scores: tuple[ScoreBreakdown, ...] = ()
     tags: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
@@ -603,5 +664,9 @@ class SignalCard:
             self.risk_assessment, RiskAssessment
         ):
             raise TypeError("risk_assessment must be RiskAssessment")
+        scores = tuple(self.scores)
+        if any(not isinstance(score, ScoreBreakdown) for score in scores):
+            raise TypeError("scores entries must be ScoreBreakdown")
+        object.__setattr__(self, "scores", scores)
         normalized_tags = tuple(tag.strip().lower() for tag in self.tags if tag.strip())
         object.__setattr__(self, "tags", normalized_tags)

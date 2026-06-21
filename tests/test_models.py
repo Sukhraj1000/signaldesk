@@ -17,6 +17,8 @@ from signaldesk_backend import (
     Quote,
     RiskAssessment,
     RiskFlag,
+    ScoreBreakdown,
+    ScoreReason,
     SignalCard,
     Symbol,
     TechnicalEvent,
@@ -356,6 +358,76 @@ def test_risk_assessment_derives_highest_flag_severity_when_not_supplied() -> No
     assert assessment.overall_severity == "critical"
 
 
+def test_score_breakdown_normalizes_deterministic_reasons() -> None:
+    reason = ScoreReason(
+        code=" Trend Alignment ",
+        message="Price is above the short and long moving averages.",
+        source=" Deterministic TA ",
+        weight=Decimal("0.40"),
+    )
+    score = ScoreBreakdown(
+        category=" Setup Quality ",
+        score=Decimal("82.5"),
+        reasons=(reason,),
+    )
+
+    assert reason.code == "trend_alignment"
+    assert reason.source == "deterministic_ta"
+    assert reason.weight == Decimal("0.40")
+    assert score.category == "setup_quality"
+    assert score.reasons == (reason,)
+
+
+def test_signal_card_can_attach_setup_risk_and_data_quality_scores() -> None:
+    scores = (
+        ScoreBreakdown(
+            category="setup_quality",
+            score=Decimal("75"),
+            reasons=(
+                ScoreReason(
+                    code="breakout_confirmation",
+                    message="Latest close reclaimed the confirmation level.",
+                    source="technical_events",
+                ),
+            ),
+        ),
+        ScoreBreakdown(
+            category="risk",
+            score=Decimal("40"),
+            reasons=(
+                ScoreReason(
+                    code="overextension_risk",
+                    message="Close is extended versus ATR.",
+                    source="risk_engine",
+                ),
+            ),
+        ),
+        ScoreBreakdown(
+            category="data_quality",
+            score=Decimal("90"),
+            reasons=(
+                ScoreReason(
+                    code="sufficient_history",
+                    message="Enough candles were available for configured indicators.",
+                    source="provider_data",
+                ),
+            ),
+        ),
+    )
+
+    card = SignalCard(
+        symbol=Symbol("AMD"),
+        generated_at=NOW,
+        timeframe="1d",
+        bias="watch",
+        summary="Deterministic score fixture.",
+        confidence=Decimal("0.65"),
+        scores=scores,
+    )
+
+    assert card.scores == scores
+
+
 def test_signal_card_references_analysis_facts_without_credentials() -> None:
     provenance, levels, event, snapshot = _analysis_fixture()
     unavailable = UnavailableContext(
@@ -441,6 +513,19 @@ def test_analysis_models_serialize_with_dataclass_payloads() -> None:
                 ),
             )
         ),
+        scores=(
+            ScoreBreakdown(
+                category="data_quality",
+                score=Decimal("90"),
+                reasons=(
+                    ScoreReason(
+                        code="fixture_available",
+                        message="Fixture data was available for serialization.",
+                        source="unit_test",
+                    ),
+                ),
+            ),
+        ),
     )
 
     provenance_payload = asdict(provenance)
@@ -457,6 +542,8 @@ def test_analysis_models_serialize_with_dataclass_payloads() -> None:
     assert card_payload["unavailable_context"][0]["reason"] == "enhanced provider not configured"
     assert card_payload["risk_assessment"]["overall_severity"] == "info"
     assert card_payload["risk_assessment"]["flags"][0]["kind"] == "scope_limit"
+    assert card_payload["scores"][0]["category"] == "data_quality"
+    assert card_payload["scores"][0]["reasons"][0]["code"] == "fixture_available"
 
 
 @pytest.mark.parametrize(
@@ -545,6 +632,40 @@ def test_analysis_models_serialize_with_dataclass_payloads() -> None:
             "overall_severity must not be lower than highest flag severity",
         ),
         (
+            lambda: ScoreReason(code=" ", message="reason", source="rule"),
+            "code",
+        ),
+        (
+            lambda: ScoreReason(code="trend", message=" ", source="rule"),
+            "message",
+        ),
+        (
+            lambda: ScoreReason(
+                code="trend", message="reason", source="rule", weight=Decimal("-0.1")
+            ),
+            "weight",
+        ),
+        (
+            lambda: ScoreBreakdown(
+                category="timing",
+                score=Decimal("50"),
+                reasons=(ScoreReason(code="trend", message="reason", source="rule"),),
+            ),
+            "category",
+        ),
+        (
+            lambda: ScoreBreakdown(
+                category="risk",
+                score=Decimal("101"),
+                reasons=(ScoreReason(code="trend", message="reason", source="rule"),),
+            ),
+            "score",
+        ),
+        (
+            lambda: ScoreBreakdown(category="risk", score=Decimal("50"), reasons=()),
+            "score breakdown must include at least one reason",
+        ),
+        (
             lambda: SignalCard(
                 symbol=Symbol("AMD"),
                 generated_at=NOW,
@@ -567,6 +688,18 @@ def test_analysis_models_serialize_with_dataclass_payloads() -> None:
                 provider_mode="default",  # type: ignore[arg-type]
             ),
             "provider_mode must be ProviderMode",
+        ),
+        (
+            lambda: SignalCard(
+                symbol=Symbol("AMD"),
+                generated_at=NOW,
+                timeframe="1d",
+                bias="watch",
+                summary="facts",
+                confidence=Decimal("0.5"),
+                scores=("score",),  # type: ignore[arg-type]
+            ),
+            "scores entries must be ScoreBreakdown",
         ),
         (
             lambda: SignalCard(
