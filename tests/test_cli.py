@@ -124,6 +124,44 @@ class FundamentalsCapabilityProvider(WorkingProvider):
 
 
 @dataclass(frozen=True)
+class FmpRolesProvider(WorkingProvider):
+    name: str = "fmp"
+    credential_state: str = "configured"
+
+    def capabilities(self) -> tuple[ProviderCapability, ...]:
+        return (
+            ProviderCapability(
+                provider=self.name,
+                data_role="price",
+                supports_realtime=False,
+                supports_historical=True,
+                supported_asset_classes=frozenset({"equity"}),
+                supported_intervals=frozenset({"1d"}),
+                credential_state=self.credential_state,
+                provider_tier="enhanced",
+            ),
+            ProviderCapability(
+                provider=self.name,
+                data_role="fundamentals",
+                supports_realtime=False,
+                supports_historical=False,
+                supported_asset_classes=frozenset({"equity"}),
+                credential_state=self.credential_state,
+                provider_tier="enhanced",
+            ),
+            ProviderCapability(
+                provider=self.name,
+                data_role="catalyst",
+                supports_realtime=False,
+                supports_historical=False,
+                supported_asset_classes=frozenset({"equity"}),
+                credential_state=self.credential_state,
+                provider_tier="enhanced",
+            ),
+        )
+
+
+@dataclass(frozen=True)
 class SwingingProvider(WorkingProvider):
     name: str = "swinging"
 
@@ -255,6 +293,44 @@ def test_providers_mode_resolves_default_price_role(monkeypatch: MonkeyPatch) ->
     assert "catalyst\tunavailable" in result.stdout
 
 
+def test_providers_mode_honors_default_price_role_env(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setenv("SIGNALDESK_DEFAULT_PRICE_PROVIDER", "local-fixture")
+
+    result = CliRunner().invoke(app, ["providers", "mode"])
+
+    assert result.exit_code == 0
+    assert "mode\tdefault" in result.stdout
+    assert "price\tlocal-fixture" in result.stdout
+
+
+def test_providers_mode_rejects_unusable_default_price_role_env(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("FMP_API_KEY", raising=False)
+    monkeypatch.setenv("SIGNALDESK_DEFAULT_PRICE_PROVIDER", "fmp")
+
+    result = CliRunner().invoke(app, ["providers", "mode", "--output", "json"])
+
+    assert result.exit_code == 2
+    assert "default price provider is not usable for price role: fmp" in result.stderr
+
+
+def test_providers_mode_reports_unusable_enhanced_role_env(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("FMP_API_KEY", raising=False)
+    monkeypatch.setenv("SIGNALDESK_ENHANCED_PRICE_PROVIDER", "missing-provider")
+
+    result = CliRunner().invoke(
+        app, ["providers", "mode", "--mode", "enhanced", "--output", "json"]
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["price_provider"] == "yfinance"
+    assert payload["unavailable_context"][0]["provider"] == "missing-provider"
+
+
 def test_providers_mode_json_reports_enhanced_unavailable_context(
     monkeypatch: MonkeyPatch,
 ) -> None:
@@ -352,9 +428,7 @@ def test_providers_list_json_filters_capabilities_by_default_tier(
 ) -> None:
     monkeypatch.delenv("FMP_API_KEY", raising=False)
 
-    result = CliRunner().invoke(
-        app, ["providers", "list", "--output", "json", "--tier", "default"]
-    )
+    result = CliRunner().invoke(app, ["providers", "list", "--output", "json", "--tier", "default"])
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
@@ -423,9 +497,7 @@ def test_providers_list_json_filters_by_credential_state(
     payload = json.loads(result.stdout)
     capabilities = payload["providers"]
     assert capabilities
-    assert all(
-        capability["credential_state"] == "not_configured" for capability in capabilities
-    )
+    assert all(capability["credential_state"] == "not_configured" for capability in capabilities)
     assert {capability["provider"] for capability in capabilities} == {"fmp"}
     assert {capability["role"] for capability in capabilities} == {
         "price",
@@ -495,8 +567,7 @@ def test_providers_check_json_live_check_only_reports_safe_subset() -> None:
                 "provider": "local-fixture",
                 "status": "ok",
                 "result": (
-                    "ready (deterministic historical candles; "
-                    "no external credentials required)"
+                    "ready (deterministic historical candles; no external credentials required)"
                 ),
                 "warnings": [],
             }
@@ -580,7 +651,7 @@ def test_ta_command_resolves_enhanced_mode_price_provider(monkeypatch: MonkeyPat
         lambda: ProviderRegistry(
             (
                 WorkingProvider(name="yfinance"),
-                WorkingProvider(name="fmp", credential_state="configured"),
+                FmpRolesProvider(credential_state="configured"),
             )
         ),
     )
@@ -610,7 +681,7 @@ def test_ta_command_reports_enhanced_mode_unavailable_context_when_fmp_key_missi
         lambda: ProviderRegistry(
             (
                 WorkingProvider(name="yfinance"),
-                WorkingProvider(name="fmp", credential_state="not_configured"),
+                FmpRolesProvider(credential_state="not_configured"),
             )
         ),
     )

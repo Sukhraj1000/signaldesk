@@ -20,6 +20,7 @@ from signaldesk_backend import (
     ProviderCapability,
     ProviderRegistry,
     ProviderResult,
+    ProviderRoleConfig,
     Quote,
     StooqProvider,
     Symbol,
@@ -80,6 +81,25 @@ class FakeProvider:
 
     def health_check(self) -> ProviderResult[str]:
         return ProviderResult.success(provider=self.name, data="healthy")
+
+
+class FundamentalsOnlyProvider(FakeProvider):
+    name: str = "fundamentals-provider"
+
+    def __init__(self) -> None:
+        super().__init__(self.name)
+
+    def capabilities(self) -> tuple[ProviderCapability, ...]:
+        return (
+            ProviderCapability(
+                provider=self.name,
+                data_role="fundamentals",
+                supports_realtime=False,
+                supports_historical=False,
+                supported_asset_classes=frozenset({"equity"}),
+                credential_state="configured",
+            ),
+        )
 
 
 class FakeStooqResponse:
@@ -284,9 +304,7 @@ def test_redact_provider_diagnostic_redacts_query_credentials() -> None:
 
 
 def test_redact_provider_diagnostic_redacts_mixed_case_query_credentials() -> None:
-    diagnostic = (
-        "https://example.test/path?Access_Token=secret-token&Password=hunter2&symbol=AMD"
-    )
+    diagnostic = "https://example.test/path?Access_Token=secret-token&Password=hunter2&symbol=AMD"
 
     redacted = redact_provider_diagnostic(diagnostic)
 
@@ -312,8 +330,7 @@ def test_redact_provider_diagnostic_redacts_inline_token_substrings() -> None:
 
 def test_redact_provider_diagnostic_redacts_common_http_credential_forms() -> None:
     diagnostic = (
-        "GET https://user:pass@example.test/path?symbol=AMD failed "
-        "with X-API-Key: header-secret"
+        "GET https://user:pass@example.test/path?symbol=AMD failed with X-API-Key: header-secret"
     )
 
     redacted = redact_provider_diagnostic(diagnostic)
@@ -565,6 +582,63 @@ def test_resolve_provider_mode_uses_fmp_roles_when_configured() -> None:
     assert unavailable_context == ()
 
 
+def test_resolve_provider_mode_honors_default_price_role_config() -> None:
+    provider_mode, unavailable_context = resolve_provider_mode(
+        default_provider_registry(),
+        role_config=ProviderRoleConfig(default_price_provider=" local-fixture "),
+    )
+
+    assert provider_mode.mode == "default"
+    assert provider_mode.price_provider == "local-fixture"
+    assert unavailable_context == ()
+
+
+def test_resolve_provider_mode_reports_unusable_enhanced_role_config() -> None:
+    provider_mode, unavailable_context = resolve_provider_mode(
+        ProviderRegistry((LocalFixtureProvider(), YFinanceProvider(_module=None))),
+        mode="enhanced",
+        role_config=ProviderRoleConfig(
+            enhanced_price_provider="local-fixture",
+            enhanced_fundamentals_provider="local-fixture",
+            enhanced_catalyst_provider="local-fixture",
+        ),
+    )
+
+    assert provider_mode.price_provider == "yfinance"
+    assert provider_mode.fundamentals_provider is None
+    assert provider_mode.catalyst_provider is None
+    assert tuple(item.context_type for item in unavailable_context) == (
+        "enhanced_price",
+        "fundamentals",
+        "catalyst",
+    )
+    assert tuple(item.provider for item in unavailable_context) == (
+        "local-fixture",
+        "local-fixture",
+        "local-fixture",
+    )
+
+
+def test_resolve_provider_mode_rejects_default_price_config_without_price_role() -> None:
+    registry = ProviderRegistry((FundamentalsOnlyProvider(), YFinanceProvider(_module=None)))
+
+    with pytest.raises(ValueError, match="default price provider"):
+        resolve_provider_mode(
+            registry,
+            role_config=ProviderRoleConfig(default_price_provider="fundamentals-provider"),
+        )
+
+
+def test_resolve_provider_mode_rejects_default_price_config_without_credentials() -> None:
+    registry = ProviderRegistry((FmpProvider(api_key=None), YFinanceProvider(_module=None)))
+
+    with pytest.raises(ValueError, match="default price provider"):
+        resolve_provider_mode(
+            registry,
+            role_config=ProviderRoleConfig(default_price_provider="fmp"),
+        )
+
+
 def test_resolve_provider_mode_rejects_unknown_mode() -> None:
     with pytest.raises(ValueError, match="mode must be default or enhanced"):
         resolve_provider_mode(default_provider_registry(), mode="paid")
@@ -709,9 +783,7 @@ def test_fmp_provider_reports_capabilities_and_missing_key_safely(
     assert capabilities[1].supports_realtime is False
     assert capabilities[1].supports_historical is False
     assert capabilities[1].supported_intervals == frozenset()
-    assert all(
-        capability.credential_state == "not_configured" for capability in capabilities
-    )
+    assert all(capability.credential_state == "not_configured" for capability in capabilities)
     assert all(capability.live_check_suitable is False for capability in capabilities)
     assert health == ProviderResult.success(
         provider="fmp", data="unavailable until FMP credentials are configured"
@@ -739,9 +811,7 @@ def test_fmp_provider_reports_configured_credential_state() -> None:
 
 
 def test_fmp_provider_translates_mocked_quote_and_candles() -> None:
-    quote_opener = FakeFmpUrlopen(
-        b'[{"symbol":"AMD","price":176.50,"timestamp":1760000000}]'
-    )
+    quote_opener = FakeFmpUrlopen(b'[{"symbol":"AMD","price":176.50,"timestamp":1760000000}]')
     candle_opener = FakeFmpUrlopen(
         b'{"symbol":"AMD","historical":[{"date":"2026-01-14","open":100.00,'
         b'"high":102.50,"low":99.75,"close":101.25,"volume":123456},'
@@ -1068,10 +1138,7 @@ def test_stooq_provider_reports_historical_capabilities_without_network() -> Non
 
 
 def test_stooq_provider_translates_csv_history() -> None:
-    csv_body = (
-        b"Date,Open,High,Low,Close,Volume\n"
-        b"2026-01-14,100.00,102.50,99.75,101.25,123456\n"
-    )
+    csv_body = b"Date,Open,High,Low,Close,Volume\n2026-01-14,100.00,102.50,99.75,101.25,123456\n"
     opener = FakeStooqUrlopen(csv_body)
     provider = StooqProvider(_urlopen=opener, timeout_seconds=3.5)
     symbol = Symbol("amd")

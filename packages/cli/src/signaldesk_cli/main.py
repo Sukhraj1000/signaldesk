@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
@@ -9,6 +10,7 @@ from signaldesk_backend import (
     ConfirmationInvalidationLevel,
     ProviderRegistry,
     ProviderResult,
+    ProviderRoleConfig,
     Settings,
     Symbol,
     average_true_range,
@@ -131,7 +133,9 @@ def _resolve_ta_provider(
             (),
         )
 
-    provider_mode, unavailable_context = resolve_provider_mode(registry, mode=mode)
+    provider_mode, unavailable_context = resolve_provider_mode(
+        registry, mode=mode, role_config=_provider_role_config_from_env()
+    )
     return (
         registry.get(provider_mode.price_provider),
         {
@@ -526,7 +530,7 @@ def _live_check_provider_names(registry: ProviderRegistry) -> frozenset[str]:
 
 def _provider_mode_payload(mode: str) -> dict[str, Any]:
     provider_mode, unavailable_context = resolve_provider_mode(
-        default_provider_registry(), mode=mode
+        default_provider_registry(), mode=mode, role_config=_provider_role_config_from_env()
     )
     return {
         "mode": provider_mode.mode,
@@ -544,6 +548,15 @@ def _provider_mode_payload(mode: str) -> dict[str, Any]:
             for item in unavailable_context
         ],
     }
+
+
+def _provider_role_config_from_env() -> ProviderRoleConfig:
+    return ProviderRoleConfig(
+        default_price_provider=os.getenv("SIGNALDESK_DEFAULT_PRICE_PROVIDER"),
+        enhanced_price_provider=os.getenv("SIGNALDESK_ENHANCED_PRICE_PROVIDER"),
+        enhanced_fundamentals_provider=os.getenv("SIGNALDESK_ENHANCED_FUNDAMENTALS_PROVIDER"),
+        enhanced_catalyst_provider=os.getenv("SIGNALDESK_ENHANCED_CATALYST_PROVIDER"),
+    )
 
 
 def _format_provider_mode(payload: dict[str, Any]) -> tuple[str, ...]:
