@@ -150,6 +150,35 @@ def validate_ta_signal_card_report(report: Mapping[str, Any]) -> None:
         drifted = ", ".join(drifted_sections)
         raise ValueError(f"signal_card section(s) drifted from top-level aliases: {drifted}")
 
+    _validate_signal_card_identity_contract(report, signal_card)
+
+
+def _validate_signal_card_identity_contract(
+    report: Mapping[str, Any], signal_card: Mapping[str, Any]
+) -> None:
+    identity = signal_card["identity"]
+    facts = signal_card["facts"]
+    provider_mode = signal_card["provider_mode"]
+    if not isinstance(identity, Mapping):
+        raise ValueError("signal_card.identity must be a JSON object")
+    if not isinstance(facts, Mapping):
+        raise ValueError("signal_card.facts must be a JSON object")
+    if not isinstance(provider_mode, Mapping):
+        raise ValueError("signal_card.provider_mode must be a JSON object")
+
+    schema_version = report.get("schema_version")
+    identity_schema_version = identity.get("schema_version")
+    if schema_version != "signaldesk.ta.v1" or identity_schema_version != schema_version:
+        raise ValueError(
+            "signal-card schema_version must be signaldesk.ta.v1 and match identity"
+        )
+    if facts.get("symbol") != identity.get("symbol"):
+        raise ValueError("signal-card facts.symbol must match identity.symbol")
+    if facts.get("interval") != identity.get("timeframe"):
+        raise ValueError("signal-card facts.interval must match identity.timeframe")
+    if provider_mode.get("price_provider") != facts.get("provider"):
+        raise ValueError("signal-card price_provider must match facts.provider")
+
 
 def _require_signal_card_sections(**sections: dict[str, Any]) -> None:
     for section_name, section in sections.items():
