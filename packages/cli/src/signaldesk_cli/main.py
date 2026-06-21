@@ -340,6 +340,36 @@ def _technical_analysis_report(
         "confirmation": setup["confirmation_level"],
         "invalidation": setup["invalidation_level"],
     }
+    provenance = [
+        {
+            "provider": provider_name,
+            "source": "historical_candles",
+            "timeframe": interval,
+            "inputs": [symbol.ticker],
+            "observations": len(candles),
+        }
+    ]
+    risk = {
+        "flags": risks,
+        "unavailable_context": unavailable_context,
+    }
+    score = {
+        "breakdowns": scores,
+    }
+    signal_card = {
+        "identity": identity,
+        "provider_mode": provider_mode,
+        "facts": facts,
+        "trend": trend,
+        "levels": levels,
+        "events": events,
+        "risk": risk,
+        "score": score,
+        "provenance": provenance,
+        "unavailable_context": unavailable_context,
+        "llm": "none",
+        "narrative": None,
+    }
 
     return {
         "schema_version": "signaldesk.ta.v1",
@@ -372,13 +402,9 @@ def _technical_analysis_report(
         "trend": trend,
         "levels": levels,
         "events": events,
-        "risk": {
-            "flags": risks,
-            "unavailable_context": unavailable_context,
-        },
-        "score": {
-            "breakdowns": scores,
-        },
+        "risk": risk,
+        "score": score,
+        "signal_card": signal_card,
         "deterministic_signals": {
             "indicators": indicators,
             "regimes": regimes,
@@ -388,15 +414,7 @@ def _technical_analysis_report(
         },
         "risks": risks,
         "scores": scores,
-        "provenance": [
-            {
-                "provider": provider_name,
-                "source": "historical_candles",
-                "timeframe": interval,
-                "inputs": [symbol.ticker],
-                "observations": len(candles),
-            }
-        ],
+        "provenance": provenance,
         "unavailable_context": unavailable_context,
         "llm": "none",
         "narrative": None,
