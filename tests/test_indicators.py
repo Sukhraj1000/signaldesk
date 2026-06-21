@@ -335,8 +335,8 @@ def test_classify_trend_regime_reports_insufficient_history() -> None:
     assert result.source_rule == "insufficient_history_for_trend_regime"
 
 
-def test_classify_volatility_regime_compares_atr_to_baseline() -> None:
-    compressed = tuple(make_candle(index, "10") for index in range(8))
+def test_classify_volatility_regime_compares_atr_to_historical_baseline() -> None:
+    compressed = tuple(make_candle(index, "10") for index in range(9))
     normal = tuple(
         make_ohlc_candle(
             index,
@@ -345,12 +345,12 @@ def test_classify_volatility_regime_compares_atr_to_baseline() -> None:
             low=Decimal("9"),
             close=Decimal("10"),
         )
-        for index in range(8)
+        for index in range(9)
     )
     expanded = (
         *normal[:-1],
         make_ohlc_candle(
-            7,
+            8,
             open_=Decimal("10"),
             high=Decimal("20"),
             low=Decimal("5"),
@@ -370,6 +370,24 @@ def test_classify_volatility_regime_compares_atr_to_baseline() -> None:
         classify_volatility_regime(expanded, atr_period=3, baseline_period=6).regime
         == "volatility_expansion"
     )
+
+
+def test_classify_volatility_regime_detects_positive_atr_after_zero_baseline() -> None:
+    candles = (
+        *(make_candle(index, "10") for index in range(5)),
+        make_ohlc_candle(
+            5,
+            open_=Decimal("10"),
+            high=Decimal("15"),
+            low=Decimal("5"),
+            close=Decimal("10"),
+        ),
+    )
+
+    result = classify_volatility_regime(candles, atr_period=3, baseline_period=3)
+
+    assert result.regime == "volatility_expansion"
+    assert result.source_rule == "positive_latest_atr_against_zero_atr_baseline"
 
 
 def test_classify_volatility_regime_reports_insufficient_history() -> None:

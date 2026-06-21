@@ -763,7 +763,7 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
         "volatility_regime": {
             "regime": "unknown",
             "source_rule": "insufficient_history_for_volatility_regime",
-            "reason": "Need at least 63 candles to classify volatility; received 40.",
+            "reason": "Need at least 64 candles to classify volatility; received 40.",
         },
         "volume_regime": {
             "regime": "normal_volume",
@@ -803,7 +803,7 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
                 "volatility": {
                     "regime": "unknown",
                     "source_rule": "insufficient_history_for_volatility_regime",
-                    "reason": "Need at least 63 candles to classify volatility; received 40.",
+                    "reason": "Need at least 64 candles to classify volatility; received 40.",
                 },
                 "volume": {
                     "regime": "normal_volume",

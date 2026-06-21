@@ -418,7 +418,7 @@ def classify_volatility_regime(
 
     _validate_period(atr_period)
     _validate_period(baseline_period)
-    required_candles = atr_period + baseline_period - 1
+    required_candles = atr_period + baseline_period
     if len(candles) < required_candles:
         return RegimeClassification(
             regime="unknown",
@@ -431,15 +431,18 @@ def classify_volatility_regime(
 
     atr_values = average_true_range(candles, period=atr_period)
     computable_atr_values = tuple(value for value in atr_values if value is not None)
-    baseline_values = computable_atr_values[-baseline_period:]
-    if len(baseline_values) < baseline_period:
+    baseline_window = computable_atr_values[-(baseline_period + 1) :]
+    if len(baseline_window) < baseline_period + 1:
         return RegimeClassification(
             regime="unknown",
             source_rule="unavailable_atr_baseline_for_volatility_regime",
             reason="ATR warmup did not produce enough values for the volatility baseline.",
         )
-    latest_atr = baseline_values[-1]
-    baseline_atr = sum(baseline_values, Decimal("0")) / Decimal(len(baseline_values))
+    historical_baseline_values = baseline_window[:-1]
+    latest_atr = baseline_window[-1]
+    baseline_atr = sum(historical_baseline_values, Decimal("0")) / Decimal(
+        len(historical_baseline_values)
+    )
     if baseline_atr == 0:
         if latest_atr == 0:
             return RegimeClassification(
