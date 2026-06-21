@@ -148,6 +148,7 @@ signaldesk --help
 signaldesk health
 signaldesk providers list
 signaldesk providers check
+signaldesk fixtures generate --symbol AMD --output-dir fixtures/local --output json
 ```
 
 Live default-mode TA check (`yfinance` is the default price provider when `--provider` is omitted):
