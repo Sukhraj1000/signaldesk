@@ -242,6 +242,10 @@ def test_fundamental_context_normalizes_provider_facts_without_ta_signals() -> N
         sector=" Technology ",
         market_cap=289_000_000_000,
         currency=" USD ",
+        price=Decimal("176.5"),
+        beta=Decimal("1.84"),
+        pe_ratio=Decimal("45.2"),
+        eps=Decimal("3.91"),
         source_url=" https://www.amd.com ",
     )
 
@@ -253,6 +257,10 @@ def test_fundamental_context_normalizes_provider_facts_without_ta_signals() -> N
     assert context.sector == "Technology"
     assert context.market_cap == 289_000_000_000
     assert context.currency == "USD"
+    assert context.price == Decimal("176.5")
+    assert context.beta == Decimal("1.84")
+    assert context.pe_ratio == Decimal("45.2")
+    assert context.eps == Decimal("3.91")
     assert context.source_url == "https://www.amd.com"
 
 

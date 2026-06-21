@@ -230,6 +230,10 @@ class FundamentalContext:
     sector: str | None = None
     market_cap: int | None = None
     currency: str | None = None
+    price: Decimal | None = None
+    beta: Decimal | None = None
+    pe_ratio: Decimal | None = None
+    eps: Decimal | None = None
     source_url: str | None = None
 
     def __post_init__(self) -> None:
@@ -253,6 +257,15 @@ class FundamentalContext:
             object.__setattr__(self, field_name, normalized or None)
         if self.market_cap is not None and self.market_cap < 0:
             raise ValueError("market_cap must be non-negative")
+        for field_name in ("price", "beta", "pe_ratio", "eps"):
+            value = getattr(self, field_name)
+            if value is not None:
+                if not isinstance(value, Decimal):
+                    raise TypeError(f"{field_name} must be a Decimal")
+                if not value.is_finite():
+                    raise ValueError(f"{field_name} must be finite")
+        if self.price is not None and self.price <= Decimal("0"):
+            raise ValueError("price must be positive")
 
 
 @dataclass(frozen=True, kw_only=True)

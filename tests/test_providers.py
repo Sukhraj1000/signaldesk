@@ -795,7 +795,8 @@ def test_fmp_provider_translates_mocked_fundamental_context() -> None:
     opener = FakeFmpUrlopen(
         b'[{"symbol":"AMD","companyName":"Advanced Micro Devices, Inc.",'
         b'"exchangeShortName":"NASDAQ","industry":"Semiconductors",'
-        b'"sector":"Technology","mktCap":289000000000,'
+        b'"sector":"Technology","mktCap":289000000000,"price":176.5,'
+        b'"beta":1.84,"pe":45.2,"eps":3.91,'
         b'"currency":"USD","website":"https://www.amd.com"}]'
     )
     provider = FmpProvider(api_key="test-key", _urlopen=opener, timeout_seconds=2.5)
@@ -815,6 +816,10 @@ def test_fmp_provider_translates_mocked_fundamental_context() -> None:
         sector="Technology",
         market_cap=289000000000,
         currency="USD",
+        price=Decimal("176.5"),
+        beta=Decimal("1.84"),
+        pe_ratio=Decimal("45.2"),
+        eps=Decimal("3.91"),
         source_url="https://www.amd.com",
     )
     assert opener.request_url is not None

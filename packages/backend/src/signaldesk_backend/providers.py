@@ -1324,6 +1324,10 @@ class FmpProvider:
                     sector=self._optional_text(row.get("sector")),
                     market_cap=self._non_negative_int(row.get("mktCap")),
                     currency=self._optional_text(row.get("currency")),
+                    price=self._positive_decimal_from_value(row.get("price")),
+                    beta=self._finite_decimal_from_value(row.get("beta")),
+                    pe_ratio=self._finite_decimal_from_value(row.get("pe")),
+                    eps=self._finite_decimal_from_value(row.get("eps")),
                     source_url=self._optional_text(row.get("website")),
                 ),
             )
@@ -1476,6 +1480,23 @@ class FmpProvider:
         except (InvalidOperation, ValueError):
             return None
         if not decimal_value.is_finite() or decimal_value <= Decimal("0"):
+            return None
+        return decimal_value
+
+    def _finite_decimal_from_value(self, value: object) -> Decimal | None:
+        if value is None or value == "":
+            return None
+        try:
+            decimal_value = Decimal(str(value))
+        except (InvalidOperation, ValueError):
+            return None
+        if not decimal_value.is_finite():
+            return None
+        return decimal_value
+
+    def _positive_decimal_from_value(self, value: object) -> Decimal | None:
+        decimal_value = self._finite_decimal_from_value(value)
+        if decimal_value is None or decimal_value <= Decimal("0"):
             return None
         return decimal_value
 
