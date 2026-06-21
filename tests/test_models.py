@@ -9,6 +9,7 @@ from signaldesk_backend import (
     KeyLevels,
     Provenance,
     ProviderCapability,
+    ProviderMode,
     ProviderResult,
     Quote,
     SignalCard,
@@ -240,6 +241,13 @@ def test_signal_card_references_analysis_facts_without_credentials() -> None:
         snapshot=snapshot,
         key_levels=levels,
         events=(event,),
+        provider_mode=ProviderMode(
+            mode=" Enhanced ",
+            price_provider=" YFinance ",
+            catalyst_provider=" FMP ",
+            fundamentals_provider=" ",
+            llm_provider=" OpenAI ",
+        ),
         provenance=(provenance,),
         unavailable_context=(unavailable,),
         tags=(" Breakout ", "Momentum"),
@@ -249,6 +257,12 @@ def test_signal_card_references_analysis_facts_without_credentials() -> None:
     assert card.snapshot == snapshot
     assert card.key_levels == levels
     assert card.events == (event,)
+    assert card.provider_mode == ProviderMode(
+        mode="enhanced",
+        price_provider="yfinance",
+        catalyst_provider="fmp",
+        llm_provider="openai",
+    )
     assert card.provenance == (provenance,)
     assert card.unavailable_context == (unavailable,)
     assert card.tags == ("breakout", "momentum")
@@ -271,6 +285,7 @@ def test_analysis_models_serialize_with_dataclass_payloads() -> None:
         snapshot=snapshot,
         key_levels=levels,
         events=(event,),
+        provider_mode=ProviderMode(mode="default", price_provider="yfinance"),
         provenance=(provenance,),
         unavailable_context=(unavailable,),
     )
@@ -282,6 +297,8 @@ def test_analysis_models_serialize_with_dataclass_payloads() -> None:
     assert reconstructed_provenance == provenance
     assert card_payload["symbol"]["ticker"] == "AMD"
     assert card_payload["snapshot"]["key_levels"]["confirmation"] == Decimal("111")
+    assert card_payload["provider_mode"]["mode"] == "default"
+    assert card_payload["provider_mode"]["price_provider"] == "yfinance"
     assert card_payload["provenance"][0]["source"] == "unit-test-candles"
     assert card_payload["unavailable_context"][0]["context_type"] == "fundamentals"
     assert card_payload["unavailable_context"][0]["reason"] == "enhanced provider not configured"
@@ -335,6 +352,14 @@ def test_analysis_models_serialize_with_dataclass_payloads() -> None:
             "reason",
         ),
         (
+            lambda: ProviderMode(mode="paid", price_provider="yfinance"),
+            "mode",
+        ),
+        (
+            lambda: ProviderMode(mode="default", price_provider=" "),
+            "price_provider",
+        ),
+        (
             lambda: SignalCard(
                 symbol=Symbol("AMD"),
                 generated_at=NOW,
@@ -345,6 +370,18 @@ def test_analysis_models_serialize_with_dataclass_payloads() -> None:
                 unavailable_context=("missing",),  # type: ignore[arg-type]
             ),
             "unavailable_context entries",
+        ),
+        (
+            lambda: SignalCard(
+                symbol=Symbol("AMD"),
+                generated_at=NOW,
+                timeframe="1d",
+                bias="watch",
+                summary="facts",
+                confidence=Decimal("0.5"),
+                provider_mode="default",  # type: ignore[arg-type]
+            ),
+            "provider_mode must be ProviderMode",
         ),
         (
             lambda: SignalCard(
