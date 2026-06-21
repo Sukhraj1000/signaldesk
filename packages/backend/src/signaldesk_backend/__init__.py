@@ -75,6 +75,7 @@ from signaldesk_backend.providers import (
     redact_provider_diagnostic,
     resolve_provider_mode,
 )
+from signaldesk_backend.risks import assess_technical_analysis_risks
 from signaldesk_backend.scoring import score_technical_analysis
 
 __all__ = [
@@ -120,6 +121,7 @@ __all__ = [
     "UnavailableContext",
     "YFinanceProvider",
     "average_true_range",
+    "assess_technical_analysis_risks",
     "calculate_fibonacci_retracement_levels",
     "classify_trend_regime",
     "classify_volatility_regime",
