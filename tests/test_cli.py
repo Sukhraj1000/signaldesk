@@ -238,6 +238,54 @@ def test_providers_list_reports_yfinance_capabilities(monkeypatch: MonkeyPatch) 
     assert "not_required\tfalse" in result.stdout
 
 
+def test_providers_list_json_reports_machine_readable_capabilities(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("FMP_API_KEY", raising=False)
+
+    result = CliRunner().invoke(app, ["providers", "list", "--output", "json"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    capabilities = payload["providers"]
+    assert {
+        "provider": "local-fixture",
+        "tier": "default",
+        "role": "price",
+        "realtime": False,
+        "historical": True,
+        "asset_classes": ["equity", "fixture"],
+        "intervals": ["1d"],
+        "credential_state": "not_required",
+        "live_check": True,
+    } in capabilities
+    assert {
+        "provider": "fmp",
+        "tier": "enhanced",
+        "role": "fundamentals",
+        "realtime": False,
+        "historical": False,
+        "asset_classes": ["equity", "etf", "index"],
+        "intervals": [],
+        "credential_state": "not_configured",
+        "live_check": False,
+    } in capabilities
+    assert any(
+        capability["provider"] == "yfinance"
+        and capability["tier"] == "default"
+        and capability["role"] == "price"
+        and capability["credential_state"] == "not_required"
+        for capability in capabilities
+    )
+
+
+def test_providers_list_rejects_unknown_output_format() -> None:
+    result = CliRunner().invoke(app, ["providers", "list", "--output", "xml"])
+
+    assert result.exit_code == 2
+    assert "--output must be 'table' or 'json'." in result.stderr
+
+
 def test_providers_check_reports_default_local_provider_without_secrets() -> None:
     result = CliRunner().invoke(app, ["providers", "check"])
 

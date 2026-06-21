@@ -262,33 +262,66 @@ def _format_provider_health(provider_name: str, result: ProviderResult[str]) -> 
     return f"{provider_name}\t{status}\t{detail}"
 
 
-def _format_provider_capabilities(registry: ProviderRegistry) -> tuple[str, ...]:
-    lines = [
-        "provider\ttier\trole\trealtime\thistorical\tasset_classes\tintervals\tcredential_state\tlive_check"
-    ]
+def _unknown_provider_capability(provider_name: str) -> dict[str, Any]:
+    return {
+        "provider": provider_name,
+        "tier": "unknown",
+        "role": "unknown",
+        "realtime": False,
+        "historical": False,
+        "asset_classes": [],
+        "intervals": [],
+        "credential_state": "unknown",
+        "live_check": False,
+    }
+
+
+def _provider_capabilities_payload(registry: ProviderRegistry) -> tuple[dict[str, Any], ...]:
+    payload: list[dict[str, Any]] = []
     for provider in registry.list():
         try:
             capabilities = provider.capabilities()
         except Exception:
-            lines.append(f"{provider.name}\tunknown\tunknown\tfalse\tfalse\t\t\tunknown\tfalse")
+            payload.append(_unknown_provider_capability(provider.name))
             continue
         if not capabilities:
-            lines.append(f"{provider.name}\tunknown\tunknown\tfalse\tfalse\t\t\tunknown\tfalse")
+            payload.append(_unknown_provider_capability(provider.name))
             continue
         for capability in capabilities:
-            asset_classes = ",".join(sorted(capability.supported_asset_classes))
-            intervals = ",".join(sorted(capability.supported_intervals))
-            lines.append(
-                f"{provider.name}\t"
-                f"{capability.provider_tier}\t"
-                f"{capability.data_role}\t"
-                f"{str(capability.supports_realtime).lower()}\t"
-                f"{str(capability.supports_historical).lower()}\t"
-                f"{asset_classes}\t"
-                f"{intervals}\t"
-                f"{capability.credential_state}\t"
-                f"{str(capability.live_check_suitable).lower()}"
+            payload.append(
+                {
+                    "provider": provider.name,
+                    "tier": capability.provider_tier,
+                    "role": capability.data_role,
+                    "realtime": capability.supports_realtime,
+                    "historical": capability.supports_historical,
+                    "asset_classes": sorted(capability.supported_asset_classes),
+                    "intervals": sorted(capability.supported_intervals),
+                    "credential_state": capability.credential_state,
+                    "live_check": capability.live_check_suitable,
+                }
             )
+    return tuple(payload)
+
+
+def _format_provider_capabilities(registry: ProviderRegistry) -> tuple[str, ...]:
+    lines = [
+        "provider\ttier\trole\trealtime\thistorical\tasset_classes\tintervals\tcredential_state\tlive_check"
+    ]
+    for capability in _provider_capabilities_payload(registry):
+        asset_classes = ",".join(capability["asset_classes"])
+        intervals = ",".join(capability["intervals"])
+        lines.append(
+            f"{capability['provider']}\t"
+            f"{capability['tier']}\t"
+            f"{capability['role']}\t"
+            f"{str(capability['realtime']).lower()}\t"
+            f"{str(capability['historical']).lower()}\t"
+            f"{asset_classes}\t"
+            f"{intervals}\t"
+            f"{capability['credential_state']}\t"
+            f"{str(capability['live_check']).lower()}"
+        )
     return tuple(lines)
 
 
@@ -310,10 +343,22 @@ def _run_provider_health_checks(registry: ProviderRegistry) -> tuple[int, tuple[
 
 
 @providers_app.command("list")
-def providers_list() -> None:
+def providers_list(
+    output: str = typer.Option("table", help="Output format: table or json."),
+) -> None:
     """List registered market-data providers and declared capabilities."""
 
-    for line in _format_provider_capabilities(default_provider_registry()):
+    output_format = output.strip().lower()
+    if output_format not in {"table", "json"}:
+        typer.echo("--output must be 'table' or 'json'.", err=True)
+        raise typer.Exit(2)
+
+    registry = default_provider_registry()
+    if output_format == "json":
+        typer.echo(json.dumps({"providers": _provider_capabilities_payload(registry)}, indent=2))
+        return
+
+    for line in _format_provider_capabilities(registry):
         typer.echo(line)
 
 
