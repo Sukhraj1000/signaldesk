@@ -11,9 +11,11 @@ from signaldesk_backend import (
     ProviderRegistry,
     ProviderResult,
     ProviderRoleConfig,
+    RiskFlag,
     ScoreBreakdown,
     Settings,
     Symbol,
+    assess_technical_analysis_risks,
     average_true_range,
     classify_trend_regime,
     classify_volatility_regime,
@@ -277,6 +279,20 @@ def _technical_analysis_report(
             "provider": None,
         },
     ]
+    fundamentals_unavailable = any(
+        item["context_type"] == "fundamentals" for item in unavailable_context
+    )
+    risks = _risk_payloads(
+        assess_technical_analysis_risks(
+            candle_count=len(candles),
+            trend_regime=trend_regime,
+            volatility_regime=volatility_regime,
+            volume_regime=volume_regime,
+            technical_events=technical_events,
+            setup_levels=setup_levels,
+            fundamentals_unavailable=fundamentals_unavailable,
+        )
+    )
     scores = _score_payloads(
         score_technical_analysis(
             candle_count=len(candles),
@@ -284,9 +300,7 @@ def _technical_analysis_report(
             volatility_regime=volatility_regime,
             technical_events=technical_events,
             setup_levels=setup_levels,
-            fundamentals_unavailable=any(
-                item["context_type"] == "fundamentals" for item in unavailable_context
-            ),
+            fundamentals_unavailable=fundamentals_unavailable,
         )
     )
 
@@ -324,16 +338,7 @@ def _technical_analysis_report(
             "swing_levels": swing_levels,
             "setup_levels": setup,
         },
-        "risks": [
-            {
-                "kind": "scope_limit",
-                "severity": "info",
-                "message": (
-                    "This output contains deterministic technical analysis only; missing "
-                    "enhanced context is reported as unavailable context, not as no risk."
-                ),
-            }
-        ],
+        "risks": risks,
         "scores": scores,
         "provenance": [
             {
@@ -348,6 +353,18 @@ def _technical_analysis_report(
         "llm": "none",
         "narrative": None,
     }
+
+
+def _risk_payloads(flags: tuple[RiskFlag, ...]) -> tuple[dict[str, Any], ...]:
+    return tuple(
+        {
+            "kind": flag.kind,
+            "severity": flag.severity,
+            "message": flag.message,
+            "source": flag.source,
+        }
+        for flag in flags
+    )
 
 
 def _score_payloads(scores: tuple[ScoreBreakdown, ...]) -> tuple[dict[str, Any], ...]:

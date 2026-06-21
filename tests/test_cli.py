@@ -937,7 +937,44 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
                     "This output contains deterministic technical analysis only; missing "
                     "enhanced context is reported as unavailable context, not as no risk."
                 ),
-            }
+                "source": "technical_analysis_scope",
+            },
+            {
+                "kind": "insufficient_history",
+                "severity": "warning",
+                "message": (
+                    "Provider returned 40 candle(s); some trend and setup rules require "
+                    "at least 50 observations."
+                ),
+                "source": "historical_candles",
+            },
+            {
+                "kind": "unknown_trend_regime",
+                "severity": "warning",
+                "message": "Need at least 50 closes to classify trend; received 40.",
+                "source": "insufficient_history_for_trend_regime",
+            },
+            {
+                "kind": "unknown_volatility_regime",
+                "severity": "warning",
+                "message": "Need at least 64 candles to classify volatility; received 40.",
+                "source": "insufficient_history_for_volatility_regime",
+            },
+            {
+                "kind": "missing_invalidation_level",
+                "severity": "warning",
+                "message": "No deterministic invalidation level is available from recent swings.",
+                "source": "derive_confirmation_invalidation_levels",
+            },
+            {
+                "kind": "unavailable_enhanced_context",
+                "severity": "info",
+                "message": (
+                    "Fundamental/catalyst context is unavailable and remains separate "
+                    "from deterministic TA risk."
+                ),
+                "source": "unavailable_context",
+            },
         ],
         "scores": [
             {
