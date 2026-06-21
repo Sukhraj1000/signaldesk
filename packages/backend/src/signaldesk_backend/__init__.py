@@ -77,6 +77,7 @@ from signaldesk_backend.providers import (
 )
 from signaldesk_backend.risks import assess_technical_analysis_risks
 from signaldesk_backend.scoring import score_technical_analysis
+from signaldesk_backend.signal_cards import assemble_ta_signal_card_report
 
 __all__ = [
     "Candle",
@@ -121,6 +122,7 @@ __all__ = [
     "UnavailableContext",
     "YFinanceProvider",
     "average_true_range",
+    "assemble_ta_signal_card_report",
     "assess_technical_analysis_risks",
     "calculate_fibonacci_retracement_levels",
     "classify_trend_regime",
