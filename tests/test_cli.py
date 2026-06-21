@@ -939,6 +939,111 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
                 ),
             }
         ],
+        "scores": [
+            {
+                "category": "setup_quality",
+                "score": "50",
+                "reasons": [
+                    {
+                        "code": "deterministic_baseline",
+                        "message": "Setup quality starts from a neutral deterministic baseline.",
+                        "source": "deterministic_ta",
+                        "weight": "0.20",
+                    },
+                    {
+                        "code": "trend_alignment_unconfirmed",
+                        "message": (
+                            "Trend regime is unknown; no directional setup boost is applied."
+                        ),
+                        "source": "insufficient_history_for_trend_regime",
+                        "weight": "0.20",
+                    },
+                    {
+                        "code": "confirmation_level_unavailable",
+                        "message": (
+                            "No deterministic confirmation level is available from recent swings."
+                        ),
+                        "source": "derive_confirmation_invalidation_levels",
+                        "weight": "0.10",
+                    },
+                    {
+                        "code": "invalidation_level_unavailable",
+                        "message": (
+                            "No deterministic invalidation level is available from recent swings."
+                        ),
+                        "source": "derive_confirmation_invalidation_levels",
+                        "weight": "0.10",
+                    },
+                ],
+            },
+            {
+                "category": "risk",
+                "score": "60",
+                "reasons": [
+                    {
+                        "code": "technical_only_scope_limit",
+                        "message": (
+                            "Risk score includes a baseline because this CLI path is TA-only."
+                        ),
+                        "source": "scope_limit",
+                        "weight": "0.20",
+                    },
+                    {
+                        "code": "unknown_trend_regime",
+                        "message": "Trend regime is unknown, increasing risk.",
+                        "source": "insufficient_history_for_trend_regime",
+                        "weight": "0.15",
+                    },
+                    {
+                        "code": "unknown_volatility_regime",
+                        "message": "Volatility regime is unknown, increasing risk.",
+                        "source": "insufficient_history_for_volatility_regime",
+                        "weight": "0.15",
+                    },
+                    {
+                        "code": "missing_invalidation_level",
+                        "message": (
+                            "No deterministic invalidation level is available, increasing risk."
+                        ),
+                        "source": "derive_confirmation_invalidation_levels",
+                        "weight": "0.10",
+                    },
+                ],
+            },
+            {
+                "category": "data_quality",
+                "score": "60",
+                "reasons": [
+                    {
+                        "code": "price_history_available",
+                        "message": "Provider returned 40 historical candle(s).",
+                        "source": "historical_candles",
+                        "weight": "0.30",
+                    },
+                    {
+                        "code": "insufficient_history_for_trend_regime",
+                        "message": "Need at least 50 closes to classify trend; received 40.",
+                        "source": "insufficient_history_for_trend_regime",
+                        "weight": "0.15",
+                    },
+                    {
+                        "code": "insufficient_history_for_volatility_regime",
+                        "message": "Need at least 64 candles to classify volatility; received 40.",
+                        "source": "insufficient_history_for_volatility_regime",
+                        "weight": "0.15",
+                    },
+                    {
+                        "code": "fundamentals_unavailable",
+                        "message": (
+                            "Fundamental context is unavailable and is reported separately "
+                            "from TA facts."
+                        ),
+                        "source": "unavailable_context",
+                        "weight": "0.10",
+                    },
+                ],
+            },
+        ],
         "provenance": [
             {
                 "provider": "working",
@@ -981,6 +1086,7 @@ def test_ta_table_output_stays_flat_when_json_contract_sections_are_added(
     assert "latest_close\t49" in result.stdout
     assert "facts\t" not in result.stdout
     assert "deterministic_signals\t" not in result.stdout
+    assert "scores\t" not in result.stdout
     assert "unavailable_context\t" not in result.stdout
 
 

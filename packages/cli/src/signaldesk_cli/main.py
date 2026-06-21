@@ -11,6 +11,7 @@ from signaldesk_backend import (
     ProviderRegistry,
     ProviderResult,
     ProviderRoleConfig,
+    ScoreBreakdown,
     Settings,
     Symbol,
     average_true_range,
@@ -33,6 +34,7 @@ from signaldesk_backend import (
     relative_strength_index,
     relative_volume,
     resolve_provider_mode,
+    score_technical_analysis,
     simple_moving_average,
     volume_moving_average,
 )
@@ -275,6 +277,18 @@ def _technical_analysis_report(
             "provider": None,
         },
     ]
+    scores = _score_payloads(
+        score_technical_analysis(
+            candle_count=len(candles),
+            trend_regime=trend_regime,
+            volatility_regime=volatility_regime,
+            technical_events=technical_events,
+            setup_levels=setup_levels,
+            fundamentals_unavailable=any(
+                item["context_type"] == "fundamentals" for item in unavailable_context
+            ),
+        )
+    )
 
     return {
         "schema_version": "signaldesk.ta.v1",
@@ -320,6 +334,7 @@ def _technical_analysis_report(
                 ),
             }
         ],
+        "scores": scores,
         "provenance": [
             {
                 "provider": provider_name,
@@ -333,6 +348,25 @@ def _technical_analysis_report(
         "llm": "none",
         "narrative": None,
     }
+
+
+def _score_payloads(scores: tuple[ScoreBreakdown, ...]) -> tuple[dict[str, Any], ...]:
+    return tuple(
+        {
+            "category": score.category,
+            "score": _decimal_text(score.score),
+            "reasons": [
+                {
+                    "code": reason.code,
+                    "message": reason.message,
+                    "source": reason.source,
+                    "weight": _decimal_text(reason.weight),
+                }
+                for reason in score.reasons
+            ],
+        }
+        for score in scores
+    )
 
 
 def _latest_level(points: tuple[Any, ...]) -> dict[str, Any] | None:
