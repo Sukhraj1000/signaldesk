@@ -454,6 +454,45 @@ def test_scan_command_runs_watchlist_against_fixture_provider(
 
 
 
+
+def test_scan_command_outputs_markdown_watchlist_report(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        cli_main, "default_provider_registry", lambda: ProviderRegistry((WorkingProvider(),))
+    )
+    watchlist = tmp_path / "watchlist.yaml"
+    watchlist.write_text(
+        "name: Markdown Watch\n"
+        "tags:\n"
+        "  - default-mode\n"
+        "symbols:\n"
+        "  - AMD\n"
+        "  - MSFT\n",
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "scan",
+            "--watchlist",
+            str(watchlist),
+            "--provider",
+            "working",
+            "--output",
+            "markdown",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "# SignalDesk watchlist report" in result.stdout
+    assert "- Watchlist name: `Markdown Watch`" in result.stdout
+    assert "| 1 | AMD | ok | working | 49 | unknown | 50 | 60 |" in result.stdout
+    assert "| 2 | MSFT | ok | working | 49 | unknown | 50 | 60 |" in result.stdout
+    assert "## Provenance" in result.stdout
+
+
 def test_scan_command_includes_watchlist_metadata_and_skips_disabled_watchlists(
     monkeypatch: MonkeyPatch, tmp_path: Path
 ) -> None:

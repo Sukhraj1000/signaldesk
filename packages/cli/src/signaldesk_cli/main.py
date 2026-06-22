@@ -482,7 +482,7 @@ def scan_watchlist(
     llm: str = typer.Option("none", help="LLM provider. Only 'none' is currently supported."),
     interval: str = typer.Option("1d", help="Historical candle interval."),
     days: int = typer.Option(120, min=1, help="Number of calendar days of history to request."),
-    output: str = typer.Option("table", help="Output format: table or json."),
+    output: str = typer.Option("table", help="Output format: table, json, or markdown."),
 ) -> None:
     """Run deterministic TA summaries for every symbol in a watchlist."""
 
@@ -490,8 +490,8 @@ def scan_watchlist(
         typer.echo("Only --llm none is currently supported.", err=True)
         raise typer.Exit(2)
     output_format = output.strip().lower()
-    if output_format not in {"table", "json"}:
-        typer.echo("--output must be 'table' or 'json'.", err=True)
+    if output_format not in {"table", "json", "markdown", "md"}:
+        typer.echo("--output must be 'table', 'json', or 'markdown'.", err=True)
         raise typer.Exit(2)
 
     try:
@@ -514,6 +514,8 @@ def scan_watchlist(
         raise typer.Exit(2) from exc
     if output_format == "json":
         typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+    elif output_format in {"markdown", "md"}:
+        typer.echo(_format_report_markdown(payload), nl=False)
     else:
         for line in _format_scan_table(payload):
             typer.echo(line)
