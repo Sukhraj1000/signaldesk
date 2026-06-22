@@ -7,7 +7,7 @@ The current schema is `signaldesk.ta.v1`. It keeps backward-compatible top-level
 ## Top-level contract sections
 
 - `schema_version`: schema identifier for the CLI TA JSON object.
-- `facts`: directly observed or request-scoped facts, such as symbol, provider, interval, candle count, latest timestamp, and latest close.
+- `facts`: directly observed or request-scoped facts, such as symbol, provider, interval, candle count, latest timestamp, and latest close. In enhanced mode this may also include `fundamentals` and `catalysts` objects; those objects are provider-sourced context with provider attribution and timestamps, not deterministic TA signals.
 - `provider_mode`: resolved provider-role metadata for the run, including mode, price provider, optional fundamentals provider, optional catalyst provider, and optional LLM provider.
 - `deterministic_signals`: values calculated by SignalDesk deterministic code from the candle series. This currently includes indicators, regimes, deterministic technical events, swing levels, confirmation level, and invalidation level.
 - `risks`: deterministic risk or scope notes with `kind`, `severity`, `message`, and `source`. The TA path currently flags scope limits, insufficient history, unknown regimes, missing invalidation levels, unavailable enhanced context, high volatility, low-volume/liquidity, trend conflicts, and overextension events from already-computed facts. Missing enhanced data must not be interpreted as no risk.
@@ -15,6 +15,12 @@ The current schema is `signaldesk.ta.v1`. It keeps backward-compatible top-level
 - `provenance`: provider/source/timeframe/input/generated-at metadata for the data used to compute the output.
 - `unavailable_context`: context that is unavailable in the current mode, such as fundamentals in the default TA path or LLM narrative when `--llm none` is selected.
 - `llm` and `narrative`: LLM mode metadata. Narrative is `null` until guarded LLM explanation mode is implemented.
+
+## Enhanced context fields
+
+When configured providers return enhanced context, `facts.fundamentals` contains the canonical company-fact fields documented by the schema: `symbol`, `provider`, `generated_at`, `company_name`, `exchange`, `industry`, `sector`, `market_cap`, `currency`, `price`, `beta`, `pe_ratio`, `eps`, and `source_url`. Nullable values mean the provider did not supply that fact; they are not filled by inference.
+
+`facts.catalysts` contains `symbol`, `provider`, `generated_at`, and an `events` array. Each event includes `headline`, `provider`, `published_at`, `source`, `url`, and `summary`. Missing or stale timestamps are surfaced through provenance warnings or unavailable context rather than silently converted into recommendations.
 
 ## Provider mode behavior
 
