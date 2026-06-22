@@ -324,6 +324,10 @@ def _format_ta_markdown(report: dict[str, Any]) -> str:
     risk_scores = [item for item in score["breakdowns"] if item["category"] == "risk"]
     trend_regime = trend["regimes"]["trend"]
     generated_at = identity["generated_at"]
+    setup_quality_score = setup_scores[0]["score"] if setup_scores else "unavailable"
+    risk_score = risk_scores[0]["score"] if risk_scores else "unavailable"
+    confirmation_level = _format_optional_level(levels["confirmation"])
+    invalidation_level = _format_optional_level(levels["invalidation"])
 
     lines = [
         f"# SignalDesk TA report: {identity['symbol']}",
@@ -337,12 +341,21 @@ def _format_ta_markdown(report: dict[str, Any]) -> str:
         f"- Candles: `{facts['candles']}`",
         f"- Latest close: `{facts['latest_close']}` at `{facts['latest_timestamp']}`",
         "",
+        "## Setup",
+        f"- What is the setup? `{trend_regime['regime']}` trend regime with setup quality "
+        f"`{setup_quality_score}` and risk `{risk_score}`.",
+        f"- Why it matters: {trend_regime['reason']}",
+        "",
         "## Deterministic signals",
         f"- Trend regime: `{trend_regime['regime']}` — {trend_regime['reason']}",
-        f"- Confirmation level: `{_format_optional_level(levels['confirmation'])}`",
-        f"- Invalidation level: `{_format_optional_level(levels['invalidation'])}`",
-        f"- Setup quality score: `{setup_scores[0]['score'] if setup_scores else 'unavailable'}`",
-        f"- Risk score: `{risk_scores[0]['score'] if risk_scores else 'unavailable'}`",
+        f"- Confirmation level: `{confirmation_level}`",
+        f"- Invalidation level: `{invalidation_level}`",
+        f"- Setup quality score: `{setup_quality_score}`",
+        f"- Risk score: `{risk_score}`",
+        "",
+        "## Confirmation and invalidation",
+        f"- What confirms it: `{confirmation_level}`",
+        f"- What invalidates it: `{invalidation_level}`",
         "",
         "## Risks",
     ]
@@ -374,8 +387,9 @@ def _format_ta_markdown(report: dict[str, Any]) -> str:
                 provenance["observations"],
             )
         )
+    narrative = card.get("narrative") or "unavailable"
     lines.extend(
-        ["", "## Optional narrative", f"- LLM: `{card['llm']}`", "- Narrative: unavailable"]
+        ["", "## Optional narrative", f"- LLM: `{card['llm']}`", f"- Narrative: {narrative}"]
     )
     return "\n".join(lines) + "\n"
 

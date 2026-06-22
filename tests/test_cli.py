@@ -1575,8 +1575,14 @@ def test_ta_command_outputs_markdown_from_signal_card(monkeypatch: MonkeyPatch) 
     assert "- Generated at: `" in result.stdout
     assert "- Price provider: `working`" in result.stdout
     assert "- Latest close: `49`" in result.stdout
+    assert "## Setup" in result.stdout
+    assert "- What is the setup? `unknown` trend regime" in result.stdout
+    assert "- Why it matters:" in result.stdout
     assert "## Deterministic signals" in result.stdout
     assert "- Trend regime: `unknown`" in result.stdout
+    assert "## Confirmation and invalidation" in result.stdout
+    assert "- What confirms it: `unavailable`" in result.stdout
+    assert "- What invalidates it: `unavailable`" in result.stdout
     assert "## Risks" in result.stdout
     assert "technical analysis only" in result.stdout
     assert "## Unavailable context" in result.stdout
@@ -1592,6 +1598,7 @@ def test_ta_command_outputs_markdown_from_signal_card(monkeypatch: MonkeyPatch) 
     )
     assert "## Optional narrative" in result.stdout
     assert "- LLM: `none`" in result.stdout
+    assert "- Narrative: unavailable" in result.stdout
 
 
 def test_ta_table_output_stays_flat_when_json_contract_sections_are_added(
