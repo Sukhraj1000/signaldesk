@@ -401,16 +401,14 @@ def _scan_result_summary(report: dict[str, Any]) -> dict[str, Any]:
 
 def _format_scan_table(payload: dict[str, Any]) -> tuple[str, ...]:
     header = (
-        "symbol\tstatus\tprovider\tlatest_close\ttrend_regime\t"
-        "setup_quality_score\trisk_score\tunavailable_context"
+        "rank	symbol	status	provider	latest_close	trend_regime	"
+        "setup_quality_score	risk_score	unavailable_context"
     )
     lines = [header]
-    for result in payload["results"]:
-        if result["status"] != "ok":
-            lines.append(f"{result['symbol']}	failed						{result['error']}")
-            continue
+    for result in payload["ranked_setups"]:
         summary = result["summary"]
         lines.append(
+            f"{result['rank']}	"
             f"{summary['symbol']}	ok	"
             f"{summary['provider']}	"
             f"{summary['latest_close']}	"
@@ -419,6 +417,8 @@ def _format_scan_table(payload: dict[str, Any]) -> tuple[str, ...]:
             f"{summary['risk_score']}	"
             f"{len(summary['unavailable_context'])}"
         )
+    for result in payload["failed_symbols"]:
+        lines.append(f"	{result['symbol']}	failed						{result['error']}")
     return tuple(lines)
 
 
@@ -530,13 +530,37 @@ def _scan_watchlist_payload(
             continue
         results.append({"symbol": symbol, "status": "ok", "summary": _scan_result_summary(report)})
 
+    ranked_setups = _rank_scan_setups(results)
+    failed_symbols = tuple(result for result in results if result["status"] != "ok")
+
     return exit_code, {
         "watchlist": str(watchlist),
         "scanned_at": scanned_at.isoformat(),
         "provider_mode": provider_mode,
         "symbols": list(symbols),
         "results": results,
+        "ranked_setups": ranked_setups,
+        "failed_symbols": list(failed_symbols),
     }
+
+
+def _rank_scan_setups(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    successful_results = [result for result in results if result["status"] == "ok"]
+
+    def sort_key(result: dict[str, Any]) -> tuple[int, int, str]:
+        summary = result["summary"]
+        setup_quality_score = summary["setup_quality_score"]
+        risk_score = summary["risk_score"]
+        return (
+            -int(setup_quality_score if setup_quality_score is not None else -1),
+            int(risk_score if risk_score is not None else 101),
+            str(summary["symbol"]),
+        )
+
+    return [
+        {**result, "rank": rank}
+        for rank, result in enumerate(sorted(successful_results, key=sort_key), start=1)
+    ]
 
 
 def _format_report_markdown(payload: dict[str, Any]) -> str:
@@ -558,20 +582,19 @@ def _format_report_markdown(payload: dict[str, Any]) -> str:
     lines.extend(
         [
             "",
-            "| Symbol | Status | Provider | Latest close | Trend | Setup | Risk |",
-            "| --- | --- | --- | ---: | --- | ---: | ---: |",
+            "| Rank | Symbol | Status | Provider | Latest close | Trend | Setup | Risk |",
+            "| ---: | --- | --- | --- | ---: | --- | ---: | ---: |",
         ]
     )
-    for result in payload["results"]:
-        if result["status"] != "ok":
-            lines.append(f"| {result['symbol']} | failed |  |  |  |  | {result['error']} |")
-            continue
+    for result in payload["ranked_setups"]:
         summary = result["summary"]
         lines.append(
-            f"| {summary['symbol']} | ok | {summary['provider']} | "
+            f"| {result['rank']} | {summary['symbol']} | ok | {summary['provider']} | "
             f"{summary['latest_close']} | {summary['trend_regime']['regime']} | "
             f"{summary['setup_quality_score']} | {summary['risk_score']} |"
         )
+    for result in payload["failed_symbols"]:
+        lines.append(f"|  | {result['symbol']} | failed |  |  |  |  | {result['error']} |")
     lines.append("")
     lines.append("## Provenance")
     for result in payload["results"]:
