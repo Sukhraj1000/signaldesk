@@ -1922,7 +1922,7 @@ def _technical_analysis_report(
         )
     unavailable_context.append(
         {
-            "context_type": "llm_narrative",
+            "context_type": "llm_explanation",
             "reason": "--llm none selected; narrative explanations are disabled",
             "provider": None,
         }
