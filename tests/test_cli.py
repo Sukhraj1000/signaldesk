@@ -2197,6 +2197,44 @@ def test_report_watchlist_markdown_separates_signal_card_sections(
     assert "- LLM: `none`" in result.stdout
     assert "- Narrative: unavailable" in result.stdout
 
+
+
+def test_report_watchlist_markdown_keeps_provider_mode_unavailable_details() -> None:
+    payload = {
+        "watchlist": "watchlists/default.yaml",
+        "watchlist_model": {
+            "name": "default",
+            "tags": [],
+            "asset_class": "equity",
+            "enabled": True,
+        },
+        "scanned_at": "2024-01-01T00:00:00+00:00",
+        "provider_mode": {
+            "mode": "enhanced",
+            "price_provider": "local-fixture",
+            "unavailable_context": [
+                {
+                    "context_type": "fundamentals",
+                    "provider": "fmp",
+                    "reason": "FMP_API_KEY is not configured",
+                    "details": "Set FMP_API_KEY to enable enhanced fundamentals.",
+                }
+            ],
+        },
+        "summary": {"total": 0, "ok": 0, "failed": 0, "skipped": 0},
+        "ranked_setups": [],
+        "failed_symbols": [],
+        "skipped_symbols": [],
+        "results": [],
+    }
+
+    markdown = cli_main._format_report_markdown(payload)
+
+    assert (
+        "  - `fundamentals` via `fmp`: FMP_API_KEY is not configured. "
+        "Details: Set FMP_API_KEY to enable enhanced fundamentals."
+    ) in markdown
+
 def test_report_watchlist_json_uses_fixture_provider(
     monkeypatch: MonkeyPatch, tmp_path: Path
 ) -> None:
