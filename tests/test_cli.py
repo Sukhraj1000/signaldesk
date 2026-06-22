@@ -1847,6 +1847,43 @@ def test_report_watchlist_markdown_uses_fixture_provider(
     assert "provider `working`" in result.stdout
 
 
+def test_report_watchlist_json_uses_fixture_provider(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        cli_main, "default_provider_registry", lambda: ProviderRegistry((WorkingProvider(),))
+    )
+    watchlist = tmp_path / "watchlist.yaml"
+    watchlist.write_text("symbols:\n  - AMD\n  - MSFT\n", encoding="utf-8")
+
+    result = CliRunner().invoke(
+        app,
+        ["report", "--watchlist", str(watchlist), "--provider", "working", "--format", "json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["watchlist"] == str(watchlist)
+    assert payload["provider_mode"] == {
+        "mode": "explicit",
+        "price_provider": "working",
+        "fundamentals_provider": None,
+        "catalyst_provider": None,
+        "llm_provider": None,
+        "unavailable_context": [],
+    }
+    assert payload["symbols"] == ["AMD", "MSFT"]
+    assert [result["status"] for result in payload["results"]] == ["ok", "ok"]
+    amd_summary = payload["results"][0]["summary"]
+    assert amd_summary["symbol"] == "AMD"
+    assert amd_summary["provider"] == "working"
+    assert amd_summary["latest_close"] == "49"
+    assert amd_summary["provenance"][0]["provider"] == "working"
+    assert sorted(
+        item["context_type"] for item in amd_summary["unavailable_context"]
+    ) == ["fundamentals", "llm_narrative"]
+
+
 def test_report_watchlist_redacts_provider_failure_secrets(
     monkeypatch: MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -1886,7 +1923,7 @@ def test_report_watchlist_rejects_unsupported_format_and_llm() -> None:
     )
 
     assert bad_format.exit_code == 2
-    assert "--format must be 'markdown'." in bad_format.stderr
+    assert "--format must be 'markdown' or 'json'." in bad_format.stderr
     assert bad_llm.exit_code == 2
     assert "Only --llm none is currently supported." in bad_llm.stderr
 

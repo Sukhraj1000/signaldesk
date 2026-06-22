@@ -21,6 +21,7 @@ signaldesk providers mode
 signaldesk providers check
 signaldesk ta AMD --llm none --output json
 signaldesk scan --watchlist watchlists/default.yaml --provider local-fixture --output json
+signaldesk report --watchlist watchlists/default.yaml --provider local-fixture --format json
 signaldesk fixtures generate --symbol AMD --output-dir fixtures/local --output json
 ```
 
@@ -75,5 +76,7 @@ make check PYTHON=.venv/bin/python
 signaldesk --help
 signaldesk providers check
 ```
+
+`signaldesk report --watchlist watchlists/default.yaml --format markdown` renders the same fixture-backed scan payload as a human-readable report. Use `--format json` for the machine-readable report payload, including per-symbol provenance and unavailable context.
 
 If the PR changes `ta`, `scan`, or `report`, also run the relevant command and include the output summary in the PR.
