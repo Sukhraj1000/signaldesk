@@ -170,6 +170,7 @@ def test_build_ta_llm_prompt_payload_schema_rejects_blank_strings() -> None:
     output_schema = payload["output_schema"]
 
     assert output_schema["properties"]["summary"]["pattern"] == r"\S"
+    assert output_schema["properties"]["deterministic_facts_used"]["minItems"] == 1
     for field in ("deterministic_facts_used", "risks", "unavailable_context"):
         assert output_schema["properties"][field]["items"]["pattern"] == r"\S"
 
@@ -235,6 +236,9 @@ def test_validate_llm_explanation_output_rejects_invented_or_non_string_items() 
 
     with pytest.raises(ValueError, match="deterministic_facts_used"):
         validate_llm_explanation_output({**valid, "deterministic_facts_used": [123]})
+
+    with pytest.raises(ValueError, match="deterministic_facts_used"):
+        validate_llm_explanation_output({**valid, "deterministic_facts_used": []})
 
     with pytest.raises(ValueError, match="summary"):
         validate_llm_explanation_output({**valid, "summary": ""})

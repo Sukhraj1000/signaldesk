@@ -34,6 +34,7 @@ _OUTPUT_SCHEMA: dict[str, Any] = {
         "summary": {"type": "string", "minLength": 1, "pattern": r"\S"},
         "deterministic_facts_used": {
             "type": "array",
+            "minItems": 1,
             "items": {"type": "string", "minLength": 1, "pattern": r"\S"},
         },
         "risks": {
@@ -65,9 +66,13 @@ def _require_non_empty_string(value: Any, field: str) -> str:
     return value
 
 
-def _require_string_list(value: Any, field: str) -> list[str]:
+def _require_string_list(value: Any, field: str, *, min_items: int = 0) -> list[str]:
     if not isinstance(value, list):
         raise ValueError(f"LLM explanation field {field} must be a list of strings")
+    if len(value) < min_items:
+        raise ValueError(
+            f"LLM explanation field {field} must contain at least {min_items} item(s)"
+        )
     strings: list[str] = []
     for index, item in enumerate(value):
         if not isinstance(item, str) or not item.strip():
@@ -101,7 +106,7 @@ def validate_llm_explanation_output(output: Mapping[str, Any]) -> dict[str, Any]
         "schema_version": schema_version,
         "summary": _require_non_empty_string(output["summary"], "summary"),
         "deterministic_facts_used": _require_string_list(
-            output["deterministic_facts_used"], "deterministic_facts_used"
+            output["deterministic_facts_used"], "deterministic_facts_used", min_items=1
         ),
         "risks": _require_string_list(output["risks"], "risks"),
         "unavailable_context": _require_string_list(
