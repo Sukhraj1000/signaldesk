@@ -2231,7 +2231,7 @@ def test_report_watchlist_markdown_keeps_provider_mode_unavailable_details() -> 
     markdown = cli_main._format_report_markdown(payload)
 
     assert (
-        "- `fundamentals` via `fmp`: FMP_API_KEY is not configured. "
+        "  - `fundamentals` via `fmp`: FMP_API_KEY is not configured. "
         "Details: Set FMP_API_KEY to enable enhanced fundamentals."
     ) in markdown
 
