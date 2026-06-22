@@ -867,6 +867,7 @@ def _watchlist_report_provenance(results: list[dict[str, Any]]) -> list[dict[str
                     "provider": provenance["provider"],
                     "source": provenance["source"],
                     "timeframe": provenance["timeframe"],
+                    "inputs": provenance.get("inputs", []),
                     "generated_at": provenance.get("generated_at")
                     or summary["generated_at"],
                     "observations": provenance["observations"],
