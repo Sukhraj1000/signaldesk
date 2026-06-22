@@ -1634,6 +1634,11 @@ def test_ta_table_output_stays_flat_when_json_contract_sections_are_added(
     assert "schema_version\tsignaldesk.ta.v1" in result.stdout
     assert "symbol\tAMD" in result.stdout
     assert "latest_close\t49" in result.stdout
+    assert "generated_at\t" in result.stdout
+    assert (
+        "provenance_summary\tworking:historical_candles:1d inputs=AMD observations=40"
+        in result.stdout
+    )
     assert "setup\tunknown trend; setup_quality=50; risk=60" in result.stdout
     assert "why_it_matters\t" in result.stdout
     assert "what_confirms\tunavailable" in result.stdout
@@ -1649,6 +1654,25 @@ def test_ta_table_output_stays_flat_when_json_contract_sections_are_added(
     assert "signal_card\t" not in result.stdout
     assert "scores\t" not in result.stdout
     assert "unavailable_context\t" not in result.stdout
+
+
+def test_ta_table_provenance_summary_keeps_rows_flat() -> None:
+    summary = cli_main._summarize_provenance(
+        [
+            {
+                "provider": "provider" + chr(9) + "name",
+                "source": "historical" + chr(10) + "candles",
+                "timeframe": "1d" + chr(13) + "test",
+                "inputs": ["AM" + chr(9) + "D"],
+                "observations": "4" + chr(10) + "0",
+            }
+        ]
+    )
+
+    assert summary == "provider name:historical candles:1d test inputs=AM D observations=4 0"
+    assert chr(9) not in summary
+    assert chr(10) not in summary
+    assert chr(13) not in summary
 
 
 def test_ta_command_includes_traceable_confirmation_and_invalidation_levels(
