@@ -539,7 +539,10 @@ def _format_optional_table_level(level: dict[str, Any] | None) -> str:
     if level is None:
         return "unavailable"
     source_rule = level.get("source_rule") or level.get("source") or "unknown_source"
-    return "{} ({})".format(level.get("price", "unavailable"), source_rule)
+    return "{} ({})".format(
+        _flat_table_cell_text(level.get("price", "unavailable")),
+        _flat_table_cell_text(source_rule),
+    )
 
 
 def _summarize_regime(regime: dict[str, Any]) -> str:

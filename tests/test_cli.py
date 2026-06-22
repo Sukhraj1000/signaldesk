@@ -1689,6 +1689,20 @@ def test_ta_table_output_summarizes_nested_signal_card_values(
         assert "[" not in rows[key]
 
 
+def test_ta_table_level_summary_keeps_rows_flat() -> None:
+    summary = cli_main._format_optional_table_level(
+        {
+            "price": "12" + chr(9) + "05",
+            "source_rule": "swing" + chr(10) + "high",
+        }
+    )
+
+    assert summary == "12 05 (swing high)"
+    assert chr(9) not in summary
+    assert chr(10) not in summary
+    assert chr(13) not in summary
+
+
 def test_ta_table_provenance_summary_keeps_rows_flat() -> None:
     summary = cli_main._summarize_provenance(
         [
