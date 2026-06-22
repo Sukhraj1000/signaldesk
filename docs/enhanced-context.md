@@ -21,7 +21,7 @@ Enhanced context is rendered alongside, not inside, deterministic TA facts:
 
 ## Freshness and attribution
 
-Every enhanced payload must carry provider attribution and timestamps. If a fundamental or catalyst timestamp is absent or older than the deterministic freshness threshold, report warnings in provenance. Stale warnings are context about data quality; they are not trading recommendations.
+Every enhanced payload must carry provider attribution and timestamps. If a fundamental or catalyst timestamp is absent or older than the deterministic freshness threshold, currently 7 days for enhanced context, report warnings in provenance. Stale warnings are context about data quality; they are not trading recommendations.
 
 ## Runtime verification examples
 
