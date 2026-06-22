@@ -22,9 +22,11 @@ Default mode remains useful without paid keys. Enhanced provider or LLM fields m
 
 The golden CLI test in `tests/test_cli.py` protects the current `signaldesk.ta.v1` shape with fixture-backed data, so CI does not require live provider network or paid credentials.
 
-## TA Markdown report
+## TA and watchlist Markdown reports
 
 `signaldesk ta <SYMBOL> --llm none --output markdown` renders a compact human-readable report from the same canonical `signal_card` object used by JSON output. The Markdown report separates facts, deterministic signals, risks, unavailable context, provenance, and optional narrative state. It includes the generated timestamp, price provider, latest observed close, explicit missing enhanced/LLM context, and provider/source/timeframe/input/generated-at provenance without introducing LLM-derived facts or extra provider data.
+
+`signaldesk report --watchlist <PATH> --format markdown` renders each successful watchlist entry from the same signal-card summary boundaries. Per-symbol report sections must keep optional narrative state separate from facts and deterministic signals: with `--llm none`, the report shows `LLM: none` and `Narrative: unavailable` instead of fabricating explanation text.
 
 
 The machine-readable schema for the canonical signal-card envelope lives at [`docs/schemas/signaldesk.ta.v1.schema.json`](schemas/signaldesk.ta.v1.schema.json). It is intentionally limited to the durable renderer-facing sections and keeps early flat compatibility fields as additional top-level properties.

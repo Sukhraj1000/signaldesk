@@ -2186,6 +2186,9 @@ def test_report_watchlist_markdown_separates_signal_card_sections(
         "- `llm_narrative` via `none`: --llm none selected; narrative explanations are disabled"
         in result.stdout
     )
+    assert "#### Optional narrative" in result.stdout
+    assert "- LLM: `none`" in result.stdout
+    assert "- Narrative: unavailable" in result.stdout
 
 def test_report_watchlist_json_uses_fixture_provider(
     monkeypatch: MonkeyPatch, tmp_path: Path
@@ -2223,6 +2226,8 @@ def test_report_watchlist_json_uses_fixture_provider(
     assert amd_summary["latest_close"] == "49"
     assert amd_summary["provenance"][0]["provider"] == "working"
     assert amd_summary["provenance"][0]["generated_at"] == payload["scanned_at"]
+    assert amd_summary["llm"] == "none"
+    assert amd_summary["narrative"] is None
     assert sorted(item["context_type"] for item in amd_summary["unavailable_context"]) == [
         "fundamentals",
         "llm_narrative",
