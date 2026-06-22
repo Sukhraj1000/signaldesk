@@ -400,6 +400,30 @@ def _format_optional_level(level: dict[str, Any] | None) -> str:
     return "{} ({})".format(level["price"], level["source_rule"])
 
 
+def _summarize_unavailable_context(items: list[dict[str, Any]]) -> str:
+    if not items:
+        return "none"
+    return "; ".join(
+        "{} via {}: {}".format(
+            item.get("context_type", "unknown"),
+            item.get("provider") or "none",
+            item.get("reason", "unavailable"),
+        )
+        for item in items
+    )
+
+
+def _summarize_risk_flags(flags: list[dict[str, Any]]) -> str:
+    if not flags:
+        return "none"
+    return "; ".join(
+        "{} {}: {}".format(flag.get("severity", "unknown"),
+            flag.get("kind", "unknown"),
+            flag.get("message", "no message provided"),)
+        for flag in flags
+    )
+
+
 def _fetch_ta_report(
     registry: ProviderRegistry,
     *,
@@ -1011,6 +1035,13 @@ def _ta_table_report_values(report: dict[str, Any]) -> dict[str, Any]:
     volume = trend["volume"]
     regimes = trend["regimes"]
     levels = card["levels"]
+    setup_scores = [
+        item for item in card["score"]["breakdowns"] if item["category"] == "setup_quality"
+    ]
+    risk_scores = [item for item in card["score"]["breakdowns"] if item["category"] == "risk"]
+    trend_regime = regimes["trend"]
+    confirmation_level = _format_optional_level(levels["confirmation"])
+    invalidation_level = _format_optional_level(levels["invalidation"])
     values = {
         "schema_version": identity["schema_version"],
         "symbol": identity["symbol"],
@@ -1019,6 +1050,18 @@ def _ta_table_report_values(report: dict[str, Any]) -> dict[str, Any]:
         "candles": facts["candles"],
         "latest_timestamp": facts["latest_timestamp"],
         "latest_close": facts["latest_close"],
+        "setup": "{} trend; setup_quality={}; risk={}".format(
+            trend_regime["regime"],
+            setup_scores[0]["score"] if setup_scores else "unavailable",
+            risk_scores[0]["score"] if risk_scores else "unavailable",
+        ),
+        "why_it_matters": trend_regime["reason"],
+        "what_confirms": confirmation_level,
+        "what_invalidates": invalidation_level,
+        "risk_summary": _summarize_risk_flags(card["risk"]["flags"]),
+        "unavailable_context_summary": _summarize_unavailable_context(
+            card["unavailable_context"]
+        ),
         "sma_20": moving_averages["sma_20"],
         "ema_20": moving_averages["ema_20"],
         "rsi_14": momentum["rsi_14"],
@@ -1093,6 +1136,12 @@ _TABLE_REPORT_KEYS = (
     "candles",
     "latest_timestamp",
     "latest_close",
+    "setup",
+    "why_it_matters",
+    "what_confirms",
+    "what_invalidates",
+    "risk_summary",
+    "unavailable_context_summary",
     "sma_20",
     "ema_20",
     "rsi_14",

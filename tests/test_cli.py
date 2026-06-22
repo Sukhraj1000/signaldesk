@@ -1614,6 +1614,16 @@ def test_ta_table_output_stays_flat_when_json_contract_sections_are_added(
     assert "schema_version\tsignaldesk.ta.v1" in result.stdout
     assert "symbol\tAMD" in result.stdout
     assert "latest_close\t49" in result.stdout
+    assert "setup\tunknown trend; setup_quality=50; risk=60" in result.stdout
+    assert "why_it_matters\t" in result.stdout
+    assert "what_confirms\tunavailable" in result.stdout
+    assert "what_invalidates\tunavailable" in result.stdout
+    assert "risk_summary\t" in result.stdout
+    assert (
+        "unavailable_context_summary\tfundamentals via working: not available in the "
+        "default technical-analysis CLI path"
+        in result.stdout
+    )
     assert "facts\t" not in result.stdout
     assert "deterministic_signals\t" not in result.stdout
     assert "signal_card\t" not in result.stdout
