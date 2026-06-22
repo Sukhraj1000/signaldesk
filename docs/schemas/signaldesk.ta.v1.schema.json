@@ -168,6 +168,7 @@
         "source",
         "timeframe",
         "inputs",
+        "generated_at",
         "observations"
       ],
       "type": "object"

@@ -388,12 +388,17 @@ def _format_ta_markdown(report: dict[str, Any]) -> str:
     lines.extend(["", "## Provenance"])
     for provenance in card["provenance"]:
         inputs = ", ".join(provenance.get("inputs", [])) or "none"
+        generated_at = provenance.get("generated_at") or identity["generated_at"]
         lines.append(
-            "- provider `{}`, source `{}`, timeframe `{}`, inputs `{}`, observations `{}`".format(
+            (
+                "- provider `{}`, source `{}`, timeframe `{}`, inputs `{}`, "
+                "generated at `{}`, observations `{}`"
+            ).format(
                 provenance["provider"],
                 provenance["source"],
                 provenance["timeframe"],
                 inputs,
+                generated_at,
                 provenance["observations"],
             )
         )
@@ -614,6 +619,7 @@ def _scan_result_summary(report: dict[str, Any]) -> dict[str, Any]:
     risk_scores = [score for score in card["score"]["breakdowns"] if score["category"] == "risk"]
     return {
         "schema_version": card["identity"]["schema_version"],
+        "generated_at": card["identity"]["generated_at"],
         "symbol": card["identity"]["symbol"],
         "provider": card["facts"]["provider"],
         "interval": card["facts"]["interval"],
@@ -1037,11 +1043,15 @@ def _format_report_markdown(payload: dict[str, Any]) -> str:
         summary = result["summary"]
         for provenance in summary["provenance"]:
             lines.append(
-                "- {}: provider `{}`, source `{}`, timeframe `{}`, observations `{}`".format(
+                (
+                    "- {}: provider `{}`, source `{}`, timeframe `{}`, "
+                    "generated at `{}`, observations `{}`"
+                ).format(
                     summary["symbol"],
                     provenance["provider"],
                     provenance["source"],
                     provenance["timeframe"],
+                    provenance.get("generated_at", "unavailable"),
                     provenance["observations"],
                 )
             )
@@ -1397,6 +1407,7 @@ def _technical_analysis_report(
             "source": "historical_candles",
             "timeframe": interval,
             "inputs": [symbol.ticker],
+            "generated_at": as_of.isoformat(),
             "observations": len(candles),
         }
     ]

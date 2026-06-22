@@ -12,7 +12,7 @@ The current schema is `signaldesk.ta.v1`. It keeps backward-compatible top-level
 - `deterministic_signals`: values calculated by SignalDesk deterministic code from the candle series. This currently includes indicators, regimes, deterministic technical events, swing levels, confirmation level, and invalidation level.
 - `risks`: deterministic risk or scope notes with `kind`, `severity`, `message`, and `source`. The TA path currently flags scope limits, insufficient history, unknown regimes, missing invalidation levels, unavailable enhanced context, high volatility, low-volume/liquidity, trend conflicts, and overextension events from already-computed facts. Missing enhanced data must not be interpreted as no risk.
 - `scores`: deterministic `setup_quality`, `risk`, and `data_quality` scores bounded from 0 to 100, each with traceable reason codes, source rules, messages, and weights. Decimal values are serialized as strings, matching the rest of the TA JSON contract.
-- `provenance`: provider/source/timeframe/input metadata for the data used to compute the output.
+- `provenance`: provider/source/timeframe/input/generated-at metadata for the data used to compute the output.
 - `unavailable_context`: context that is unavailable in the current mode, such as fundamentals in the default TA path or LLM narrative when `--llm none` is selected.
 - `llm` and `narrative`: LLM mode metadata. Narrative is `null` until guarded LLM explanation mode is implemented.
 
@@ -24,7 +24,7 @@ The golden CLI test in `tests/test_cli.py` protects the current `signaldesk.ta.v
 
 ## TA Markdown report
 
-`signaldesk ta <SYMBOL> --llm none --output markdown` renders a compact human-readable report from the same canonical `signal_card` object used by JSON output. The Markdown report separates facts, deterministic signals, risks, unavailable context, provenance, and optional narrative state. It includes the generated timestamp, price provider, latest observed close, explicit missing enhanced/LLM context, and provider/source/timeframe/input provenance without introducing LLM-derived facts or extra provider data.
+`signaldesk ta <SYMBOL> --llm none --output markdown` renders a compact human-readable report from the same canonical `signal_card` object used by JSON output. The Markdown report separates facts, deterministic signals, risks, unavailable context, provenance, and optional narrative state. It includes the generated timestamp, price provider, latest observed close, explicit missing enhanced/LLM context, and provider/source/timeframe/input/generated-at provenance without introducing LLM-derived facts or extra provider data.
 
 
 The machine-readable schema for the canonical signal-card envelope lives at [`docs/schemas/signaldesk.ta.v1.schema.json`](schemas/signaldesk.ta.v1.schema.json). It is intentionally limited to the durable renderer-facing sections and keeps early flat compatibility fields as additional top-level properties.

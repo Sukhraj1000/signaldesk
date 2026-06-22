@@ -467,6 +467,7 @@ def test_scan_command_runs_watchlist_against_fixture_provider(
             "source": "historical_candles",
             "timeframe": "1d",
             "inputs": ["AMD"],
+            "generated_at": first_summary["generated_at"],
             "observations": 40,
         }
     ]
@@ -1083,6 +1084,7 @@ def test_ta_command_runs_against_default_local_fixture_without_network(
             "source": "historical_candles",
             "timeframe": "1d",
             "inputs": ["AMD"],
+            "generated_at": payload["identity"]["generated_at"],
             "observations": 60,
         }
     ]
@@ -1478,6 +1480,7 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
                 "source": "historical_candles",
                 "timeframe": "1d",
                 "inputs": ["AMD"],
+                "generated_at": payload["identity"]["generated_at"],
                 "observations": 40,
             }
         ],
@@ -1598,9 +1601,10 @@ def test_ta_command_outputs_markdown_from_signal_card(monkeypatch: MonkeyPatch) 
     assert "## Provenance" in result.stdout
     assert (
         "provider `working`, source `historical_candles`, timeframe `1d`, "
-        "inputs `AMD`, observations `40`"
+        "inputs `AMD`, generated at `"
         in result.stdout
     )
+    assert "observations `40`" in result.stdout
     assert "## Optional narrative" in result.stdout
     assert "- LLM: `none`" in result.stdout
     assert "- Narrative: unavailable" in result.stdout
@@ -2217,6 +2221,7 @@ def test_report_watchlist_json_uses_fixture_provider(
     assert amd_summary["provider"] == "working"
     assert amd_summary["latest_close"] == "49"
     assert amd_summary["provenance"][0]["provider"] == "working"
+    assert amd_summary["provenance"][0]["generated_at"] == payload["scanned_at"]
     assert sorted(item["context_type"] for item in amd_summary["unavailable_context"]) == [
         "fundamentals",
         "llm_narrative",
