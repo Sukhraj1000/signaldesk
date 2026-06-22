@@ -1634,6 +1634,11 @@ def test_ta_table_output_stays_flat_when_json_contract_sections_are_added(
     assert "schema_version\tsignaldesk.ta.v1" in result.stdout
     assert "symbol\tAMD" in result.stdout
     assert "latest_close\t49" in result.stdout
+    assert "generated_at\t" in result.stdout
+    assert (
+        "provenance_summary\tworking:historical_candles:1d inputs=AMD observations=40"
+        in result.stdout
+    )
     assert "setup\tunknown trend; setup_quality=50; risk=60" in result.stdout
     assert "why_it_matters\t" in result.stdout
     assert "what_confirms\tunavailable" in result.stdout

@@ -1255,6 +1255,8 @@ def _ta_table_report_values(report: dict[str, Any]) -> dict[str, Any]:
         "candles": facts["candles"],
         "latest_timestamp": facts["latest_timestamp"],
         "latest_close": facts["latest_close"],
+        "generated_at": identity["generated_at"],
+        "provenance_summary": _summarize_provenance(card["provenance"]),
         "setup": "{} trend; setup_quality={}; risk={}".format(
             trend_regime["regime"],
             setup_scores[0]["score"] if setup_scores else "unavailable",
@@ -1287,6 +1289,29 @@ def _ta_table_report_values(report: dict[str, Any]) -> dict[str, Any]:
         "llm": card["llm"],
     }
     return {key: values[key] for key in _TABLE_REPORT_KEYS}
+
+
+def _summarize_provenance(provenance_items: list[dict[str, Any]]) -> str:
+    """Return compact provenance for flat terminal table reports."""
+
+    if not provenance_items:
+        return "none"
+    summary_lines = []
+    for provenance in provenance_items[:3]:
+        inputs = ",".join(provenance.get("inputs", [])) or "none"
+        summary_lines.append(
+            "{}:{}:{} inputs={} observations={}".format(
+                provenance.get("provider", "unknown"),
+                provenance.get("source", "unknown"),
+                provenance.get("timeframe", "unknown"),
+                inputs,
+                provenance.get("observations", "unknown"),
+            )
+        )
+    omitted_count = len(provenance_items) - 3
+    if omitted_count > 0:
+        summary_lines.append(f"{omitted_count} more provenance item(s) omitted")
+    return "; ".join(summary_lines)
 
 
 def _resolve_ta_provider(
@@ -1341,6 +1366,8 @@ _TABLE_REPORT_KEYS = (
     "candles",
     "latest_timestamp",
     "latest_close",
+    "generated_at",
+    "provenance_summary",
     "setup",
     "why_it_matters",
     "what_confirms",
