@@ -1576,6 +1576,7 @@ def test_ta_command_outputs_markdown_from_signal_card(monkeypatch: MonkeyPatch) 
     assert "# SignalDesk TA report: AMD" in result.stdout
     assert "## Facts" in result.stdout
     assert "- Generated at: `" in result.stdout
+    assert "- Schema version: `signaldesk.ta.v1`" in result.stdout
     assert "- Price provider: `working`" in result.stdout
     assert "- Latest close: `49`" in result.stdout
     assert "## Setup" in result.stdout
