@@ -1,5 +1,7 @@
 import json
-from dataclasses import dataclass
+import threading
+import time
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -23,6 +25,7 @@ from signaldesk_cli.main import (
     _format_provider_capabilities,
     _format_provider_health,
     _run_provider_health_checks,
+    _scan_watchlist_payload,
     app,
 )
 from typer.testing import CliRunner
@@ -342,6 +345,33 @@ class FailingHistoricalProvider(WorkingProvider):
         )
 
 
+@dataclass(frozen=True)
+class ConcurrencyRecordingProvider(WorkingProvider):
+    name: str = "concurrency-recording"
+    lock: threading.Lock = field(default_factory=threading.Lock)
+    active: int = 0
+    max_active: int = 0
+
+    def get_historical_candles(
+        self,
+        symbol: Symbol,
+        *,
+        start: datetime,
+        end: datetime,
+        interval: str,
+    ) -> ProviderResult[tuple[Candle, ...]]:
+        with self.lock:
+            active = self.active + 1
+            object.__setattr__(self, "active", active)
+            object.__setattr__(self, "max_active", max(self.max_active, active))
+        try:
+            time.sleep(0.01)
+            return super().get_historical_candles(symbol, start=start, end=end, interval=interval)
+        finally:
+            with self.lock:
+                object.__setattr__(self, "active", self.active - 1)
+
+
 def test_health_command() -> None:
     result = CliRunner().invoke(app, ["health"])
 
@@ -453,6 +483,33 @@ def test_scan_command_runs_watchlist_against_fixture_provider(
     ]
 
 
+def test_scan_payload_uses_bounded_concurrency_and_keeps_input_order(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
+    provider = ConcurrencyRecordingProvider()
+    monkeypatch.setattr(
+        cli_main, "default_provider_registry", lambda: ProviderRegistry((provider,))
+    )
+    watchlist = tmp_path / "watchlist.yaml"
+    watchlist.write_text(
+        "symbols:\n  - AMD\n  - MSFT\n  - NVDA\n",
+        encoding="utf-8",
+    )
+    watchlist_model = cli_main._load_watchlist_model(watchlist)
+
+    exit_code, payload = _scan_watchlist_payload(
+        watchlist_model=watchlist_model,
+        watchlist=watchlist,
+        provider="concurrency-recording",
+        mode="default",
+        interval="1d",
+        days=120,
+        max_workers=2,
+    )
+
+    assert exit_code == 0
+    assert [result["symbol"] for result in payload["results"]] == ["AMD", "MSFT", "NVDA"]
+    assert provider.max_active == 2
 
 
 def test_scan_command_outputs_markdown_watchlist_report(
@@ -463,12 +520,7 @@ def test_scan_command_outputs_markdown_watchlist_report(
     )
     watchlist = tmp_path / "watchlist.yaml"
     watchlist.write_text(
-        "name: Markdown Watch\n"
-        "tags:\n"
-        "  - default-mode\n"
-        "symbols:\n"
-        "  - AMD\n"
-        "  - MSFT\n",
+        "name: Markdown Watch\ntags:\n  - default-mode\nsymbols:\n  - AMD\n  - MSFT\n",
         encoding="utf-8",
     )
 
@@ -2026,9 +2078,10 @@ def test_report_watchlist_json_uses_fixture_provider(
     assert amd_summary["provider"] == "working"
     assert amd_summary["latest_close"] == "49"
     assert amd_summary["provenance"][0]["provider"] == "working"
-    assert sorted(
-        item["context_type"] for item in amd_summary["unavailable_context"]
-    ) == ["fundamentals", "llm_narrative"]
+    assert sorted(item["context_type"] for item in amd_summary["unavailable_context"]) == [
+        "fundamentals",
+        "llm_narrative",
+    ]
 
 
 def test_report_watchlist_redacts_provider_failure_secrets(
