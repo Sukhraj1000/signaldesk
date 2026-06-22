@@ -1,0 +1,14 @@
+{
+  "deterministic_facts_used": [
+    "facts.symbol=AMD",
+    "facts.provider=local-fixture"
+  ],
+  "risks": [
+    "Deterministic TA only; this is not investment advice."
+  ],
+  "schema_version": "signaldesk.llm_explanation.v1",
+  "summary": "AMD deterministic signal card indicates a fixture-based TA snapshot only.",
+  "unavailable_context": [
+    "LLM provider disabled in default smoke mode."
+  ]
+}
