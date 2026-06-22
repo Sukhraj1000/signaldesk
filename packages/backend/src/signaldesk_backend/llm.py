@@ -55,6 +55,10 @@ _UNTRUSTED_PROVIDER_TEXT_FIELDS = (
     "signal_card.facts.fundamentals.sector",
 )
 
+_EXCLUDED_SIGNAL_CARD_FIELDS = (
+    "signal_card.narrative",
+)
+
 def _require_non_empty_string(value: Any, field: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"LLM explanation field {field} must be a non-empty string")
@@ -116,15 +120,19 @@ def build_ta_llm_prompt_payload(report: Mapping[str, Any]) -> dict[str, Any]:
     plus explicit guardrails and an output schema. It does not add live data,
     provider clients, tool instructions, or free-form hidden context. Provider
     text remains inside the signal card as quoted data and is labeled untrusted
-    so downstream adapters can wrap it with a fixed system/developer prompt.
+    so downstream adapters can wrap it with a fixed system/developer prompt. Prior
+    narrative text is excluded so generated explanation text is never fed back as
+    input instructions for another LLM pass.
     """
 
     signal_card = deepcopy(extract_ta_signal_card(report))
+    signal_card["narrative"] = None
     return {
         "schema_version": LLM_PROMPT_PAYLOAD_SCHEMA_VERSION,
         "task": "explain_ta_signal_card",
         "guardrails": list(_LLM_GUARDRAILS),
         "untrusted_provider_text_fields": list(_UNTRUSTED_PROVIDER_TEXT_FIELDS),
+        "excluded_signal_card_fields": list(_EXCLUDED_SIGNAL_CARD_FIELDS),
         "signal_card": signal_card,
         "output_schema": deepcopy(_OUTPUT_SCHEMA),
     }

@@ -42,7 +42,7 @@ signaldesk llm validate-output path/to/candidate-llm-output.json
 `signaldesk llm prompt-payload` emits `signaldesk.llm_prompt.v1`, containing only:
 
 - explicit guardrails that prohibit fetching market data, inventing prices/levels/catalysts/fundamentals, or making recommendations;
-- the validated canonical `signal_card`;
+- the validated canonical `signal_card`, with any prior `signal_card.narrative` reset to `null` and listed in `excluded_signal_card_fields` so generated narrative text is not fed back as instructions;
 - labels for provider/news fields that must be treated as untrusted quoted data;
 - a strict `signaldesk.llm_explanation.v1` output schema.
 
@@ -77,7 +77,7 @@ The canonical aliases do not introduce new data sources or LLM-derived facts; th
 
 ## Guarded LLM prompt payload
 
-`signaldesk llm prompt-payload <SYMBOL> --provider local-fixture --output json` emits the guarded prompt payload without calling an LLM provider, which gives CI and developers a runtime smoke path for explanation-mode boundaries. Optional LLM explanation mode must use the backend `build_ta_llm_prompt_payload()` helper rather than building prompts directly from provider responses. The helper first validates the canonical `signal_card`, deep-copies that structured card, labels provider/news text fields as untrusted data, and attaches fixed guardrails plus a fail-closed JSON output schema. It does not include provider clients, tools, credentials, or permission to fetch market data.
+`signaldesk llm prompt-payload <SYMBOL> --provider local-fixture --output json` emits the guarded prompt payload without calling an LLM provider, which gives CI and developers a runtime smoke path for explanation-mode boundaries. Optional LLM explanation mode must use the backend `build_ta_llm_prompt_payload()` helper rather than building prompts directly from provider responses. The helper first validates the canonical `signal_card`, deep-copies that structured card, removes any prior narrative text from the prompt input, labels provider/news text fields as untrusted data, and attaches fixed guardrails plus a fail-closed JSON output schema. It does not include provider clients, tools, credentials, or permission to fetch market data.
 
 This preserves the TA-first contract: deterministic code remains the source of truth for prices, levels, events, risks, scores, provenance, and unavailable context. LLM adapters may explain those structured facts only, and invalid/missing provider data must stay visible as unavailable context instead of being converted into recommendations.
 
