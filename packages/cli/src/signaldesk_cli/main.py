@@ -598,6 +598,12 @@ def _fetch_ta_report(
             f"{market_data_provider.name} failed for {requested_symbol.ticker}: {diagnostic}"
         )
 
+    context_payloads = _enhanced_context_payloads(
+        registry=registry,
+        symbol=requested_symbol,
+        provider_mode=provider_mode_payload,
+        as_of=as_of,
+    )
     report = _technical_analysis_report(
         symbol=requested_symbol,
         provider_name=market_data_provider.name,
@@ -606,6 +612,9 @@ def _fetch_ta_report(
         provider_mode=provider_mode_payload,
         as_of=as_of,
         mode_unavailable_context=mode_unavailable_context,
+        enhanced_facts=context_payloads["facts"],
+        enhanced_provenance=context_payloads["provenance"],
+        enhanced_unavailable_context=context_payloads["unavailable_context"],
     )
     validate_ta_signal_card_report(report)
     return report
@@ -1443,6 +1452,160 @@ _TABLE_REPORT_KEYS = (
 )
 
 
+
+def _enhanced_context_payloads(
+    *, registry: ProviderRegistry, symbol: Symbol, provider_mode: dict[str, Any], as_of: datetime
+) -> dict[str, Any]:
+    facts: dict[str, Any] = {}
+    provenance: list[dict[str, Any]] = []
+    unavailable_context: list[dict[str, Any]] = []
+
+    fundamentals_provider = provider_mode.get("fundamentals_provider")
+    if fundamentals_provider:
+        result = _call_enhanced_context_provider(
+            registry,
+            provider_name=str(fundamentals_provider),
+            method_name="get_fundamental_context",
+            symbol=symbol,
+        )
+        if result.ok and result.data is not None:
+            facts["fundamentals"] = _fundamental_context_payload(result.data)
+            provenance.append(
+                _context_provenance_payload(
+                    provider=result.provider,
+                    source="fundamental_context",
+                    symbol=symbol,
+                    generated_at=as_of,
+                    observations=1,
+                )
+            )
+        else:
+            unavailable_context.append(
+                _context_unavailable_payload(
+                    "fundamentals", str(fundamentals_provider), result.error
+                )
+            )
+
+    catalyst_provider = provider_mode.get("catalyst_provider")
+    if catalyst_provider:
+        result = _call_enhanced_context_provider(
+            registry,
+            provider_name=str(catalyst_provider),
+            method_name="get_catalyst_context",
+            symbol=symbol,
+        )
+        if result.ok and result.data is not None:
+            catalyst_payload = _catalyst_context_payload(result.data)
+            facts["catalysts"] = catalyst_payload
+            provenance.append(
+                _context_provenance_payload(
+                    provider=result.provider,
+                    source="catalyst_context",
+                    symbol=symbol,
+                    generated_at=as_of,
+                    observations=len(catalyst_payload["events"]),
+                )
+            )
+        else:
+            unavailable_context.append(
+                _context_unavailable_payload("catalyst", str(catalyst_provider), result.error)
+            )
+
+    return {
+        "facts": facts,
+        "provenance": provenance,
+        "unavailable_context": tuple(unavailable_context),
+    }
+
+
+def _call_enhanced_context_provider(
+    registry: ProviderRegistry, *, provider_name: str, method_name: str, symbol: Symbol
+) -> ProviderResult[Any]:
+    try:
+        provider = registry.get(provider_name)
+    except KeyError as exc:
+        return ProviderResult.failure(provider=provider_name, error=str(exc))
+    method = getattr(provider, method_name, None)
+    if method is None:
+        return ProviderResult.failure(
+            provider=provider_name, error=f"provider does not implement {method_name}"
+        )
+    result = method(symbol)
+    if not isinstance(result, ProviderResult):
+        return ProviderResult.failure(
+            provider=provider_name, error="provider returned invalid context"
+        )
+    return result
+
+
+def _context_unavailable_payload(
+    context_type: str, provider_name: str, reason: str | None
+) -> dict[str, Any]:
+    return {
+        "context_type": context_type,
+        "reason": redact_provider_diagnostic(reason or "provider returned no context"),
+        "provider": provider_name,
+    }
+
+
+def _context_provenance_payload(
+    *, provider: str, source: str, symbol: Symbol, generated_at: datetime, observations: int
+) -> dict[str, Any]:
+    return {
+        "provider": provider,
+        "source": source,
+        "timeframe": "point_in_time",
+        "inputs": [symbol.ticker],
+        "generated_at": generated_at.isoformat(),
+        "observations": observations,
+    }
+
+
+def _optional_decimal_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, Decimal):
+        return _decimal_text(value)
+    return str(value)
+
+
+def _fundamental_context_payload(context: Any) -> dict[str, Any]:
+    return {
+        "symbol": context.symbol.ticker,
+        "provider": context.provider,
+        "generated_at": context.generated_at.isoformat(),
+        "company_name": context.company_name,
+        "exchange": context.exchange,
+        "industry": context.industry,
+        "sector": context.sector,
+        "market_cap": context.market_cap,
+        "currency": context.currency,
+        "price": _optional_decimal_text(context.price),
+        "beta": _optional_decimal_text(context.beta),
+        "pe_ratio": _optional_decimal_text(context.pe_ratio),
+        "eps": _optional_decimal_text(context.eps),
+        "source_url": context.source_url,
+    }
+
+
+def _catalyst_context_payload(context: Any) -> dict[str, Any]:
+    return {
+        "symbol": context.symbol.ticker,
+        "provider": context.provider,
+        "generated_at": context.generated_at.isoformat(),
+        "events": [
+            {
+                "headline": event.headline,
+                "provider": event.provider,
+                "published_at": event.published_at.isoformat() if event.published_at else None,
+                "source": event.source,
+                "url": event.url,
+                "summary": event.summary,
+            }
+            for event in context.events
+        ],
+    }
+
 def _technical_analysis_report(
     *,
     symbol: Symbol,
@@ -1452,6 +1615,9 @@ def _technical_analysis_report(
     provider_mode: dict[str, Any],
     as_of: datetime,
     mode_unavailable_context: tuple[dict[str, Any], ...] = (),
+    enhanced_facts: dict[str, Any] | None = None,
+    enhanced_provenance: list[dict[str, Any]] | None = None,
+    enhanced_unavailable_context: tuple[dict[str, Any], ...] = (),
 ) -> dict[str, Any]:
     closes = tuple(candle.close for candle in candles)
     sma_20 = simple_moving_average(closes, period=20)[-1]
@@ -1490,6 +1656,7 @@ def _technical_analysis_report(
         "latest_timestamp": latest_candle.timestamp.isoformat(),
         "latest_close": _decimal_text(latest_candle.close),
         "latest_volume": latest_candle.volume,
+        **(enhanced_facts or {}),
     }
     indicators = {
         "sma_20": _decimal_text(sma_20),
@@ -1519,17 +1686,26 @@ def _technical_analysis_report(
 
     unavailable_context = [
         *mode_unavailable_context,
-        {
-            "context_type": "fundamentals",
-            "reason": "not available in the default technical-analysis CLI path",
-            "provider": provider_name,
-        },
+        *enhanced_unavailable_context,
+    ]
+    fundamentals_already_unavailable = any(
+        item["context_type"] == "fundamentals" for item in unavailable_context
+    )
+    if "fundamentals" not in facts and not fundamentals_already_unavailable:
+        unavailable_context.append(
+            {
+                "context_type": "fundamentals",
+                "reason": "not available in the default technical-analysis CLI path",
+                "provider": provider_name,
+            }
+        )
+    unavailable_context.append(
         {
             "context_type": "llm_narrative",
             "reason": "--llm none selected; narrative explanations are disabled",
             "provider": None,
-        },
-    ]
+        }
+    )
     fundamentals_unavailable = any(
         item["context_type"] == "fundamentals" for item in unavailable_context
     )
@@ -1601,7 +1777,8 @@ def _technical_analysis_report(
             "inputs": [symbol.ticker],
             "generated_at": as_of.isoformat(),
             "observations": len(candles),
-        }
+        },
+        *(enhanced_provenance or []),
     ]
     risk = {
         "flags": risks,
