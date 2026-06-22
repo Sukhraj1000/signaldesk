@@ -1560,6 +1560,40 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
     assert payload == expected
 
 
+def test_ta_command_outputs_markdown_from_signal_card(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        cli_main, "default_provider_registry", lambda: ProviderRegistry((WorkingProvider(),))
+    )
+
+    result = CliRunner().invoke(
+        app, ["ta", "AMD", "--provider", "working", "--llm", "none", "--output", "markdown"]
+    )
+
+    assert result.exit_code == 0
+    assert "# SignalDesk TA report: AMD" in result.stdout
+    assert "## Facts" in result.stdout
+    assert "- Generated at: `" in result.stdout
+    assert "- Price provider: `working`" in result.stdout
+    assert "- Latest close: `49`" in result.stdout
+    assert "## Deterministic signals" in result.stdout
+    assert "- Trend regime: `unknown`" in result.stdout
+    assert "## Risks" in result.stdout
+    assert "technical analysis only" in result.stdout
+    assert "## Unavailable context" in result.stdout
+    assert (
+        "`fundamentals` via `working`: not available in the default technical-analysis CLI path."
+        in result.stdout
+    )
+    assert "## Provenance" in result.stdout
+    assert (
+        "provider `working`, source `historical_candles`, timeframe `1d`, "
+        "inputs `AMD`, observations `40`"
+        in result.stdout
+    )
+    assert "## Optional narrative" in result.stdout
+    assert "- LLM: `none`" in result.stdout
+
+
 def test_ta_table_output_stays_flat_when_json_contract_sections_are_added(
     monkeypatch: MonkeyPatch,
 ) -> None:
