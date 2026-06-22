@@ -51,6 +51,8 @@ from signaldesk_backend import (
 )
 
 app = typer.Typer(help="SignalDesk command-line interface.")
+
+ENHANCED_CONTEXT_STALE_AFTER = timedelta(days=7)
 providers_app = typer.Typer(help="Inspect configured market-data providers.")
 config_app = typer.Typer(help="Inspect local SignalDesk configuration without exposing secrets.")
 fixtures_app = typer.Typer(help="Generate deterministic local fixture data.")
@@ -1561,6 +1563,11 @@ def _enhanced_context_payloads(
                     symbol=symbol,
                     generated_at=as_of,
                     observations=1,
+                    warnings=_context_timestamp_warnings(
+                        label="fundamental context",
+                        timestamp=result.data.generated_at,
+                        as_of=as_of,
+                    ),
                 )
             )
         else:
@@ -1588,6 +1595,11 @@ def _enhanced_context_payloads(
                     symbol=symbol,
                     generated_at=as_of,
                     observations=len(catalyst_payload["events"]),
+                    warnings=_context_timestamp_warnings(
+                        label="latest catalyst context",
+                        timestamp=_latest_catalyst_timestamp(result.data),
+                        as_of=as_of,
+                    ),
                 )
             )
         else:
@@ -1632,10 +1644,35 @@ def _context_unavailable_payload(
     }
 
 
+def _latest_catalyst_timestamp(context: Any) -> datetime | None:
+    timestamps = [
+        event.published_at
+        for event in getattr(context, "events", ())
+        if getattr(event, "published_at", None) is not None
+    ]
+    return max(timestamps) if timestamps else getattr(context, "generated_at", None)
+
+
+def _context_timestamp_warnings(
+    *, label: str, timestamp: datetime | None, as_of: datetime
+) -> tuple[str, ...]:
+    if timestamp is None:
+        return (f"{label} timestamp is unavailable",)
+    if as_of - timestamp > ENHANCED_CONTEXT_STALE_AFTER:
+        return (f"{label} timestamp is stale: {timestamp.isoformat()}",)
+    return ()
+
+
 def _context_provenance_payload(
-    *, provider: str, source: str, symbol: Symbol, generated_at: datetime, observations: int
+    *,
+    provider: str,
+    source: str,
+    symbol: Symbol,
+    generated_at: datetime,
+    observations: int,
+    warnings: tuple[str, ...] = (),
 ) -> dict[str, Any]:
-    return {
+    payload: dict[str, Any] = {
         "provider": provider,
         "source": source,
         "timeframe": "point_in_time",
@@ -1643,6 +1680,9 @@ def _context_provenance_payload(
         "generated_at": generated_at.isoformat(),
         "observations": observations,
     }
+    if warnings:
+        payload["warnings"] = list(warnings)
+    return payload
 
 
 def _optional_decimal_text(value: Any) -> str | None:

@@ -1246,6 +1246,13 @@ def test_ta_command_enhanced_mode_adds_fmp_context_without_ta_signal_blending(
         "fundamental_context",
         "catalyst_context",
     }
+    provenance_by_source = {item["source"]: item for item in payload["provenance"]}
+    assert provenance_by_source["fundamental_context"]["warnings"] == [
+        "fundamental context timestamp is stale: 2024-02-10T00:00:00+00:00"
+    ]
+    assert provenance_by_source["catalyst_context"]["warnings"] == [
+        "latest catalyst context timestamp is stale: 2024-02-09T13:30:00+00:00"
+    ]
     assert not any(
         item["context_type"] == "fundamentals"
         for item in payload["unavailable_context"]
