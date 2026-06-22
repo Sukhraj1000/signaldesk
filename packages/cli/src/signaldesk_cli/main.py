@@ -405,7 +405,9 @@ def _summarize_unavailable_context(items: list[dict[str, Any]]) -> str:
         return "none"
     return "; ".join(
         "{} via {}: {}".format(
-            item["context_type"], item.get("provider") or "none", item["reason"]
+            item.get("context_type", "unknown"),
+            item.get("provider") or "none",
+            item.get("reason", "unavailable"),
         )
         for item in items
     )
@@ -415,7 +417,9 @@ def _summarize_risk_flags(flags: list[dict[str, Any]]) -> str:
     if not flags:
         return "none"
     return "; ".join(
-        "{} {}: {}".format(flag["severity"], flag["kind"], flag["message"])
+        "{} {}: {}".format(flag.get("severity", "unknown"),
+            flag.get("kind", "unknown"),
+            flag.get("message", "no message provided"),)
         for flag in flags
     )
 
