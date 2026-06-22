@@ -10,10 +10,12 @@ import signaldesk_backend.providers as providers_module
 from signaldesk_backend import (
     Candle,
     CatalystContext,
+    CatalystContextProvider,
     CatalystEvent,
     FallbackProvider,
     FmpProvider,
     FundamentalContext,
+    FundamentalContextProvider,
     LocalCsvProvider,
     LocalFixtureProvider,
     PolygonProvider,
@@ -387,6 +389,20 @@ def test_provider_registry_reports_missing_provider_with_normalized_name() -> No
 
     with pytest.raises(KeyError, match="missing"):
         registry.get("Missing")
+
+
+def test_fmp_provider_implements_enhanced_context_protocols() -> None:
+    provider = FmpProvider(api_key="test-key")
+
+    assert isinstance(provider, FundamentalContextProvider)
+    assert isinstance(provider, CatalystContextProvider)
+
+
+def test_placeholder_provider_does_not_claim_enhanced_context_protocols() -> None:
+    provider = PolygonProvider()
+
+    assert not isinstance(provider, FundamentalContextProvider)
+    assert not isinstance(provider, CatalystContextProvider)
 
 
 def test_fallback_provider_call_returns_first_success_after_failures() -> None:
