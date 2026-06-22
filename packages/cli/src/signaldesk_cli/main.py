@@ -352,13 +352,23 @@ def _format_ta_markdown(report: dict[str, Any]) -> str:
         f"- Invalidation level: `{invalidation_level}`",
         f"- Setup quality score: `{setup_quality_score}`",
         f"- Risk score: `{risk_score}`",
-        "",
-        "## Confirmation and invalidation",
+    ]
+    lines.extend(_format_score_reason_lines(score["breakdowns"]))
+    lines.extend(
+        [
+            "",
+            "## Technical events",
+            *_format_technical_event_lines(card["events"]),
+            "",
+            "## Confirmation and invalidation",
+        ]
+    )
+    lines.extend([
         f"- What confirms it: `{confirmation_level}`",
         f"- What invalidates it: `{invalidation_level}`",
         "",
         "## Risks",
-    ]
+    ])
     for flag in risk["flags"]:
         lines.append(
             f"- `{flag['severity']}` `{flag['kind']}`: {flag['message']} "
@@ -398,6 +408,64 @@ def _format_optional_level(level: dict[str, Any] | None) -> str:
     if level is None:
         return "unavailable"
     return "{} ({})".format(level["price"], level["source_rule"])
+
+
+def _format_score_reason_lines(score_breakdowns: list[dict[str, Any]]) -> list[str]:
+    """Return compact deterministic score reasons for Markdown reports."""
+
+    if not score_breakdowns:
+        return ["- Score reasons: unavailable"]
+    lines = ["- Score reasons:"]
+    for breakdown in score_breakdowns:
+        reasons = breakdown.get("reasons", [])
+        if not reasons:
+            lines.append(
+                "  - `{}` `{}`: no deterministic reason details available.".format(
+                    breakdown.get("category", "unknown"),
+                    breakdown.get("score", "unavailable"),
+                )
+            )
+            continue
+        reason_text = "; ".join(
+            "{} ({})".format(
+                reason.get("message", "no message provided"),
+                reason.get("source", "unknown_source"),
+            )
+            for reason in reasons[:3]
+        )
+        omitted_count = len(reasons) - 3
+        omitted_suffix = f"; {omitted_count} more reason(s) omitted" if omitted_count > 0 else ""
+        lines.append(
+            "  - `{}` `{}`: {}{}".format(
+                breakdown.get("category", "unknown"),
+                breakdown.get("score", "unavailable"),
+                reason_text,
+                omitted_suffix,
+            )
+        )
+    return lines
+
+
+def _format_technical_event_lines(events: tuple[dict[str, Any], ...]) -> list[str]:
+    """Return compact event lines without dumping raw indicator payloads."""
+
+    if not events:
+        return ["- none detected"]
+    lines = []
+    for event in events[:5]:
+        lines.append(
+            "- `{}` `{}` at `{}`: {} (source: `{}`)".format(
+                event.get("severity", "unknown"),
+                event.get("event_type", "unknown_event"),
+                event.get("timestamp", "unknown_time"),
+                event.get("reason", "no reason provided"),
+                event.get("source_rule", "unknown_source"),
+            )
+        )
+    omitted_count = len(events) - 5
+    if omitted_count > 0:
+        lines.append(f"- {omitted_count} more event(s) omitted for compactness")
+    return lines
 
 
 def _summarize_unavailable_context(items: list[dict[str, Any]]) -> str:
