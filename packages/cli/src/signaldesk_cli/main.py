@@ -1230,7 +1230,7 @@ def report_watchlist(
         help="Maximum concurrent symbol fetches for the watchlist report.",
     ),
     report_format: str = typer.Option(
-        "markdown", "--format", help="Report format: markdown or json."
+        "markdown", "--format", help="Report format: markdown, table, or json."
     ),
 ) -> None:
     """Generate a deterministic report for a watchlist."""
@@ -1239,8 +1239,8 @@ def report_watchlist(
         typer.echo("Only --llm none is currently supported.", err=True)
         raise typer.Exit(2)
     normalized_report_format = report_format.strip().lower()
-    if normalized_report_format not in {"markdown", "md", "json"}:
-        typer.echo("--format must be 'markdown' or 'json'.", err=True)
+    if normalized_report_format not in {"markdown", "md", "table", "json"}:
+        typer.echo("--format must be 'markdown', 'table', or 'json'.", err=True)
         raise typer.Exit(2)
     try:
         watchlist_model = _load_watchlist_model(watchlist)
@@ -1258,6 +1258,9 @@ def report_watchlist(
         raise typer.Exit(2) from exc
     if normalized_report_format == "json":
         typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+    elif normalized_report_format == "table":
+        for line in _format_scan_table(payload):
+            typer.echo(line)
     else:
         typer.echo(_format_report_markdown(payload), nl=False)
     if exit_code:
