@@ -52,6 +52,13 @@ The v1 JSON keeps early flat and grouped fields for compatibility, then adds can
 The canonical aliases do not introduce new data sources or LLM-derived facts; they regroup already-computed deterministic output and unavailable-context metadata. The top-level compatibility fields remain available while downstream adapters migrate to `signal_card`.
 
 
+
+## Guarded LLM prompt payload
+
+Optional LLM explanation mode must use the backend `build_ta_llm_prompt_payload()` helper rather than building prompts directly from provider responses. The helper first validates the canonical `signal_card`, deep-copies that structured card, labels provider/news text fields as untrusted data, and attaches fixed guardrails plus a fail-closed JSON output schema. It does not include provider clients, tools, credentials, or permission to fetch market data.
+
+This preserves the TA-first contract: deterministic code remains the source of truth for prices, levels, events, risks, scores, provenance, and unavailable context. LLM adapters may explain those structured facts only, and invalid/missing provider data must stay visible as unavailable context instead of being converted into recommendations.
+
 ## Watchlist scan JSON
 
 `signaldesk scan --watchlist <path> --output json` emits a deterministic watchlist scan payload for ranked multi-symbol TA workflows. The payload is assembled from the same canonical TA signal-card summaries as `signaldesk ta`; the scan command does not introduce separate market-data facts or LLM-derived conclusions.
