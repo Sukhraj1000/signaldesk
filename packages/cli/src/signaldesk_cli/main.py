@@ -883,6 +883,15 @@ def _format_report_markdown(payload: dict[str, Any]) -> str:
                 f"- Latest close: `{summary['latest_close']}`",
                 f"- Latest timestamp: `{summary['latest_timestamp']}`",
                 "",
+                "#### Setup",
+                "- What is the setup? `{}` trend regime with setup quality `{}` "
+                "and risk `{}`.".format(
+                    summary["trend_regime"]["regime"],
+                    summary["setup_quality_score"],
+                    summary["risk_score"],
+                ),
+                "- Why it matters: {}".format(summary["trend_regime"]["reason"]),
+                "",
                 "#### Deterministic signals",
                 "- Trend regime: `{}` — {}".format(
                     summary["trend_regime"]["regime"], summary["trend_regime"]["reason"]
@@ -891,6 +900,10 @@ def _format_report_markdown(payload: dict[str, Any]) -> str:
                 f"- Invalidation level: `{invalidation_level}`",
                 f"- Setup quality score: `{summary['setup_quality_score']}`",
                 f"- Risk score: `{summary['risk_score']}`",
+                "",
+                "#### Confirmation and invalidation",
+                f"- What confirms it: `{confirmation_level}`",
+                f"- What invalidates it: `{invalidation_level}`",
                 "",
                 "#### Risks",
             ]
