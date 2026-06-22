@@ -791,6 +791,66 @@ def _watchlist_scan_summary(
     }
 
 
+WATCHLIST_REPORT_SCHEMA_VERSION = "signaldesk.watchlist_report.v1"
+
+
+def _watchlist_report_provenance(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return compact report-level provenance for successful signal cards."""
+
+    provenance_items: list[dict[str, Any]] = []
+    for result in results:
+        if result["status"] != "ok":
+            continue
+        summary = result["summary"]
+        for provenance in summary["provenance"]:
+            provenance_items.append(
+                {
+                    "symbol": summary["symbol"],
+                    "provider": provenance["provider"],
+                    "source": provenance["source"],
+                    "timeframe": provenance["timeframe"],
+                    "generated_at": provenance.get("generated_at")
+                    or summary["generated_at"],
+                    "observations": provenance["observations"],
+                }
+            )
+    return provenance_items
+
+
+def _watchlist_report_payload(
+    *,
+    watchlist: Path,
+    watchlist_model: dict[str, Any],
+    scanned_at: datetime,
+    provider_mode: dict[str, Any],
+    symbols: tuple[str, ...],
+    results: list[dict[str, Any]],
+    ranked_setups: list[dict[str, Any]],
+    failed_symbols: list[dict[str, Any]],
+    skipped_symbols: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Return the stable JSON/Markdown payload for watchlist reports."""
+
+    return {
+        "schema_version": WATCHLIST_REPORT_SCHEMA_VERSION,
+        "report_type": "watchlist",
+        "generated_at": scanned_at.isoformat(),
+        "watchlist": str(watchlist),
+        "watchlist_model": watchlist_model,
+        "scanned_at": scanned_at.isoformat(),
+        "provider_mode": provider_mode,
+        "symbols": list(symbols),
+        "results": results,
+        "ranked_setups": ranked_setups,
+        "failed_symbols": failed_symbols,
+        "skipped_symbols": skipped_symbols,
+        "summary": _watchlist_scan_summary(
+            results, ranked_setups, failed_symbols, skipped_symbols
+        ),
+        "provenance": _watchlist_report_provenance(results),
+    }
+
+
 def _scan_watchlist_payload(
     *,
     watchlist_model: dict[str, Any],
@@ -822,20 +882,17 @@ def _scan_watchlist_payload(
         ]
         failed_symbols: list[dict[str, Any]] = []
         ranked_setups: list[dict[str, Any]] = []
-        return 0, {
-            "watchlist": str(watchlist),
-            "watchlist_model": watchlist_model,
-            "scanned_at": scanned_at.isoformat(),
-            "provider_mode": provider_mode,
-            "symbols": list(symbols),
-            "results": skipped_symbols,
-            "ranked_setups": ranked_setups,
-            "failed_symbols": failed_symbols,
-            "skipped_symbols": skipped_symbols,
-            "summary": _watchlist_scan_summary(
-                skipped_symbols, ranked_setups, failed_symbols, skipped_symbols
-            ),
-        }
+        return 0, _watchlist_report_payload(
+            watchlist=watchlist,
+            watchlist_model=watchlist_model,
+            scanned_at=scanned_at,
+            provider_mode=provider_mode,
+            symbols=symbols,
+            results=skipped_symbols,
+            ranked_setups=ranked_setups,
+            failed_symbols=failed_symbols,
+            skipped_symbols=skipped_symbols,
+        )
 
     exit_code = 0
     bounded_workers = max(1, min(max(1, max_workers), len(symbols)))
@@ -875,20 +932,17 @@ def _scan_watchlist_payload(
     failed_symbols = [result for result in results if result["status"] != "ok"]
     skipped_symbols = []
 
-    return exit_code, {
-        "watchlist": str(watchlist),
-        "watchlist_model": watchlist_model,
-        "scanned_at": scanned_at.isoformat(),
-        "provider_mode": provider_mode,
-        "symbols": list(symbols),
-        "results": results,
-        "ranked_setups": ranked_setups,
-        "failed_symbols": failed_symbols,
-        "skipped_symbols": skipped_symbols,
-        "summary": _watchlist_scan_summary(
-            results, ranked_setups, failed_symbols, skipped_symbols
-        ),
-    }
+    return exit_code, _watchlist_report_payload(
+        watchlist=watchlist,
+        watchlist_model=watchlist_model,
+        scanned_at=scanned_at,
+        provider_mode=provider_mode,
+        symbols=symbols,
+        results=results,
+        ranked_setups=ranked_setups,
+        failed_symbols=failed_symbols,
+        skipped_symbols=skipped_symbols,
+    )
 
 
 def _scan_symbol_result(
@@ -957,6 +1011,12 @@ def _format_report_markdown(payload: dict[str, Any]) -> str:
     lines = [
         "# SignalDesk watchlist report",
         "",
+        (
+            "- Schema version: "
+            + chr(96)
+            + str(payload.get("schema_version", WATCHLIST_REPORT_SCHEMA_VERSION))
+            + chr(96)
+        ),
         f"- Watchlist: `{payload['watchlist']}`",
         f"- Watchlist name: `{payload['watchlist_model']['name']}`",
         f"- Watchlist tags: `{', '.join(payload['watchlist_model']['tags']) or 'none'}`",

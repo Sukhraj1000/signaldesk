@@ -541,6 +541,7 @@ def test_scan_command_outputs_markdown_watchlist_report(
 
     assert result.exit_code == 0
     assert "# SignalDesk watchlist report" in result.stdout
+    assert "- Schema version: `signaldesk.watchlist_report.v1`" in result.stdout
     assert "- Watchlist name: `Markdown Watch`" in result.stdout
     assert "| 1 | AMD | ok | working | 49 | unknown | 50 | 60 |" in result.stdout
     assert "| 2 | MSFT | ok | working | 49 | unknown | 50 | 60 |" in result.stdout
@@ -2251,6 +2252,9 @@ def test_report_watchlist_json_uses_fixture_provider(
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
+    assert payload["schema_version"] == "signaldesk.watchlist_report.v1"
+    assert payload["report_type"] == "watchlist"
+    assert payload["generated_at"] == payload["scanned_at"]
     assert payload["watchlist"] == str(watchlist)
     assert payload["provider_mode"] == {
         "mode": "explicit",
@@ -2263,6 +2267,24 @@ def test_report_watchlist_json_uses_fixture_provider(
     assert payload["symbols"] == ["AMD", "MSFT"]
     assert [result["status"] for result in payload["results"]] == ["ok", "ok"]
     assert [result["rank"] for result in payload["ranked_setups"]] == [1, 2]
+    assert payload["provenance"] == [
+        {
+            "symbol": "AMD",
+            "provider": "working",
+            "source": "historical_candles",
+            "timeframe": "1d",
+            "generated_at": payload["results"][0]["summary"]["generated_at"],
+            "observations": 40,
+        },
+        {
+            "symbol": "MSFT",
+            "provider": "working",
+            "source": "historical_candles",
+            "timeframe": "1d",
+            "generated_at": payload["results"][1]["summary"]["generated_at"],
+            "observations": 40,
+        },
+    ]
     assert [result["symbol"] for result in payload["ranked_setups"]] == ["AMD", "MSFT"]
     assert payload["failed_symbols"] == []
     amd_summary = payload["results"][0]["summary"]
