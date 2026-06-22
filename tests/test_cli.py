@@ -1576,6 +1576,15 @@ def test_ta_command_outputs_markdown_from_signal_card(monkeypatch: MonkeyPatch) 
     assert result.exit_code == 0
     assert "# SignalDesk TA report: AMD" in result.stdout
     assert "## Facts" in result.stdout
+    assert "## Report boundaries" in result.stdout
+    assert (
+        "Facts, deterministic signals, risks, unavailable context, and optional "
+        "narrative are rendered separately." in result.stdout
+    )
+    assert (
+        "This report is not investment advice and does not include trade execution "
+        "instructions." in result.stdout
+    )
     assert "- Generated at: `" in result.stdout
     assert "- Schema version: `signaldesk.ta.v1`" in result.stdout
     assert "- Price provider: `working`" in result.stdout
@@ -2158,6 +2167,15 @@ def test_report_watchlist_markdown_separates_signal_card_sections(
     )
 
     assert result.exit_code == 0
+    assert "## Report boundaries" in result.stdout
+    assert (
+        "Facts, deterministic signals, risks, unavailable context, and optional "
+        "narrative are rendered separately." in result.stdout
+    )
+    assert (
+        "This report is not investment advice and does not include trade execution "
+        "instructions." in result.stdout
+    )
     assert "## Signal cards" in result.stdout
     assert "### AMD" in result.stdout
     assert "#### Facts" in result.stdout

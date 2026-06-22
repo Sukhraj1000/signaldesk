@@ -15,6 +15,8 @@ Default-mode examples should work without paid keys by using `yfinance`, `local-
 
 ## Required report sections
 
+Human-readable reports should include an explicit **Report boundaries** note that says facts, deterministic signals, risks, unavailable context, and optional narrative are rendered separately; missing enhanced provider or LLM context is unavailable context, not a silent all-clear; and reports are not investment advice or trade execution instructions.
+
 Human-readable reports should keep these sections separate:
 
 1. **Facts**: symbol, timeframe, provider, timestamps, latest close, candle count, and schema version.
