@@ -37,3 +37,8 @@ The v1 JSON keeps early flat and grouped fields for compatibility, then adds can
 - `signal_card`: one canonical nested card object that groups `identity`, `provider_mode`, `facts`, `trend`, `levels`, `events`, `risk`, `score`, `provenance`, `unavailable_context`, and LLM narrative metadata for renderers that should consume a single object.
 
 The canonical aliases do not introduce new data sources or LLM-derived facts; they regroup already-computed deterministic output and unavailable-context metadata. The top-level compatibility fields remain available while downstream adapters migrate to `signal_card`.
+
+
+## Watchlist report JSON
+
+`signaldesk report --watchlist <path> --format json` emits the same deterministic watchlist payload used by the Markdown report renderer. The JSON object includes `watchlist`, `scanned_at`, `provider_mode`, requested `symbols`, and per-symbol `results`. Successful results include a `summary` with provider, deterministic TA summary fields, provenance, and unavailable context; failed results include a redacted `error` string. This keeps report automation machine-readable without introducing extra data sources or LLM-derived facts.

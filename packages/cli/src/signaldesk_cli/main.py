@@ -602,16 +602,18 @@ def report_watchlist(
     llm: str = typer.Option("none", help="LLM provider. Only 'none' is currently supported."),
     interval: str = typer.Option("1d", help="Historical candle interval."),
     days: int = typer.Option(120, min=1, help="Number of calendar days of history to request."),
-    report_format: str = typer.Option("markdown", "--format", help="Report format: markdown."),
+    report_format: str = typer.Option(
+        "markdown", "--format", help="Report format: markdown or json."
+    ),
 ) -> None:
-    """Generate a deterministic Markdown report for a watchlist."""
+    """Generate a deterministic report for a watchlist."""
 
     if llm.strip().lower() != "none":
         typer.echo("Only --llm none is currently supported.", err=True)
         raise typer.Exit(2)
     normalized_report_format = report_format.strip().lower()
-    if normalized_report_format not in {"markdown", "md"}:
-        typer.echo("--format must be 'markdown'.", err=True)
+    if normalized_report_format not in {"markdown", "md", "json"}:
+        typer.echo("--format must be 'markdown' or 'json'.", err=True)
         raise typer.Exit(2)
     try:
         symbols = _load_watchlist_symbols(watchlist)
@@ -626,7 +628,10 @@ def report_watchlist(
     except (KeyError, ValueError) as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(2) from exc
-    typer.echo(_format_report_markdown(payload), nl=False)
+    if normalized_report_format == "json":
+        typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+    else:
+        typer.echo(_format_report_markdown(payload), nl=False)
     if exit_code:
         raise typer.Exit(exit_code)
 
