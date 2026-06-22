@@ -1656,6 +1656,53 @@ def test_ta_table_output_stays_flat_when_json_contract_sections_are_added(
     assert "unavailable_context\t" not in result.stdout
 
 
+def test_ta_table_output_summarizes_nested_signal_card_values(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        cli_main, "default_provider_registry", lambda: ProviderRegistry((SwingingProvider(),))
+    )
+
+    result = CliRunner().invoke(app, ["ta", "AMD", "--provider", "swinging", "--llm", "none"])
+
+    assert result.exit_code == 0
+    rows = dict(line.split(chr(9), 1) for line in result.stdout.strip().splitlines())
+    assert rows["trend_regime"].startswith("unknown:")
+    assert rows["volatility_regime"].startswith("unknown:")
+    assert rows["volume_regime"].startswith("normal_volume:")
+    assert rows["technical_events"].startswith("bullish reclaimed_moving_average at ")
+    assert rows["latest_swing_high"].endswith("(unknown_source)")
+    assert rows["latest_swing_low"].endswith("(unknown_source)")
+    assert rows["confirmation_level"].endswith("(nearest_resistance_above_latest_close)")
+    assert rows["invalidation_level"].endswith("(nearest_support_below_latest_close)")
+    for key in (
+        "trend_regime",
+        "volatility_regime",
+        "volume_regime",
+        "technical_events",
+        "latest_swing_high",
+        "latest_swing_low",
+        "confirmation_level",
+        "invalidation_level",
+    ):
+        assert "{" not in rows[key]
+        assert "[" not in rows[key]
+
+
+def test_ta_table_level_summary_keeps_rows_flat() -> None:
+    summary = cli_main._format_optional_table_level(
+        {
+            "price": "12" + chr(9) + "05",
+            "source_rule": "swing" + chr(10) + "high",
+        }
+    )
+
+    assert summary == "12 05 (swing high)"
+    assert chr(9) not in summary
+    assert chr(10) not in summary
+    assert chr(13) not in summary
+
+
 def test_ta_table_provenance_summary_keeps_rows_flat() -> None:
     summary = cli_main._summarize_provenance(
         [
