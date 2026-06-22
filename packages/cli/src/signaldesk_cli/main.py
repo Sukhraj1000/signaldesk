@@ -819,7 +819,6 @@ def _rank_scan_setups(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
         for rank, result in enumerate(sorted(successful_results, key=sort_key), start=1)
     ]
 
-
 def _format_report_markdown(payload: dict[str, Any]) -> str:
     lines = [
         "# SignalDesk watchlist report",
@@ -867,6 +866,54 @@ def _format_report_markdown(payload: dict[str, Any]) -> str:
         lines.append(f"|  | {result['symbol']} | failed |  |  |  |  | {result['error']} |")
     for result in payload["skipped_symbols"]:
         lines.append(f"|  | {result['symbol']} | skipped |  |  |  |  | {result['reason']} |")
+
+    lines.extend(["", "## Signal cards"])
+    for result in payload["ranked_setups"]:
+        summary = result["summary"]
+        confirmation_level = _format_optional_level(summary["confirmation_level"])
+        invalidation_level = _format_optional_level(summary["invalidation_level"])
+        lines.extend(
+            [
+                "",
+                f"### {summary['symbol']}",
+                "",
+                "#### Facts",
+                f"- Provider: `{summary['provider']}`",
+                f"- Timeframe: `{summary['interval']}`",
+                f"- Latest close: `{summary['latest_close']}`",
+                f"- Latest timestamp: `{summary['latest_timestamp']}`",
+                "",
+                "#### Deterministic signals",
+                "- Trend regime: `{}` — {}".format(
+                    summary["trend_regime"]["regime"], summary["trend_regime"]["reason"]
+                ),
+                f"- Confirmation level: `{confirmation_level}`",
+                f"- Invalidation level: `{invalidation_level}`",
+                f"- Setup quality score: `{summary['setup_quality_score']}`",
+                f"- Risk score: `{summary['risk_score']}`",
+                "",
+                "#### Risks",
+            ]
+        )
+        if summary["risk_flags"]:
+            for flag in summary["risk_flags"]:
+                lines.append(
+                    f"- `{flag['severity']}` `{flag['kind']}`: {flag['message']} "
+                    f"(source: `{flag['source']}`)"
+                )
+        else:
+            lines.append("- none")
+        lines.extend(["", "#### Unavailable context"])
+        if summary["unavailable_context"]:
+            for item in summary["unavailable_context"]:
+                provider_name = item.get("provider") or "none"
+                details = item.get("details")
+                suffix = f" Details: {details}" if details else ""
+                lines.append(
+                    f"- `{item['context_type']}` via `{provider_name}`: {item['reason']}{suffix}"
+                )
+        else:
+            lines.append("- none")
     lines.append("")
     lines.append("## Provenance")
     for result in payload["results"]:

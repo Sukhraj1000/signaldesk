@@ -2122,6 +2122,37 @@ def test_report_watchlist_markdown_uses_fixture_provider(
     assert "## Provenance" in result.stdout
     assert "provider `working`" in result.stdout
 
+def test_report_watchlist_markdown_separates_signal_card_sections(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        cli_main, "default_provider_registry", lambda: ProviderRegistry((WorkingProvider(),))
+    )
+    watchlist = tmp_path / "watchlist.yaml"
+    watchlist.write_text("symbols:\n  - AMD\n", encoding="utf-8")
+
+    result = CliRunner().invoke(
+        app,
+        ["report", "--watchlist", str(watchlist), "--provider", "working", "--format", "markdown"],
+    )
+
+    assert result.exit_code == 0
+    assert "## Signal cards" in result.stdout
+    assert "### AMD" in result.stdout
+    assert "#### Facts" in result.stdout
+    assert "#### Deterministic signals" in result.stdout
+    assert "#### Risks" in result.stdout
+    assert "#### Unavailable context" in result.stdout
+    assert "- Latest close: `49`" in result.stdout
+    assert "- Trend regime: `unknown`" in result.stdout
+    assert (
+        "- `fundamentals` via `working`: not available in the default technical-analysis CLI path"
+        in result.stdout
+    )
+    assert (
+        "- `llm_narrative` via `none`: --llm none selected; narrative explanations are disabled"
+        in result.stdout
+    )
 
 def test_report_watchlist_json_uses_fixture_provider(
     monkeypatch: MonkeyPatch, tmp_path: Path
