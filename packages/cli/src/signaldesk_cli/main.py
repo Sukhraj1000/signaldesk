@@ -624,6 +624,8 @@ def _scan_result_summary(report: dict[str, Any]) -> dict[str, Any]:
         "confirmation_level": card["levels"]["confirmation"],
         "invalidation_level": card["levels"]["invalidation"],
         "risk_flags": card["risk"]["flags"],
+        "score_breakdowns": card["score"]["breakdowns"],
+        "technical_events": card["events"],
         "unavailable_context": card["unavailable_context"],
         "setup_quality_score": setup_scores[0]["score"] if setup_scores else None,
         "risk_score": risk_scores[0]["score"] if risk_scores else None,
@@ -992,6 +994,14 @@ def _format_report_markdown(payload: dict[str, Any]) -> str:
                 f"- Invalidation level: `{invalidation_level}`",
                 f"- Setup quality score: `{summary['setup_quality_score']}`",
                 f"- Risk score: `{summary['risk_score']}`",
+            ]
+        )
+        lines.extend(_format_score_reason_lines(summary["score_breakdowns"]))
+        lines.extend(
+            [
+                "",
+                "#### Technical events",
+                *_format_technical_event_lines(summary["technical_events"]),
                 "",
                 "#### Confirmation and invalidation",
                 f"- What confirms it: `{confirmation_level}`",
