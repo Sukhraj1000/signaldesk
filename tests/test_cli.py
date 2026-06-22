@@ -1295,6 +1295,9 @@ def test_ta_command_reports_enhanced_mode_unavailable_context_when_fmp_key_missi
             "details": None,
         },
     ]
+    assert [
+        item["context_type"] for item in payload["unavailable_context"]
+    ].count("fundamentals") == 1
 
 
 def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(

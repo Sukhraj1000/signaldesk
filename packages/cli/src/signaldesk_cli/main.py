@@ -1688,7 +1688,10 @@ def _technical_analysis_report(
         *mode_unavailable_context,
         *enhanced_unavailable_context,
     ]
-    if "fundamentals" not in facts:
+    fundamentals_already_unavailable = any(
+        item["context_type"] == "fundamentals" for item in unavailable_context
+    )
+    if "fundamentals" not in facts and not fundamentals_already_unavailable:
         unavailable_context.append(
             {
                 "context_type": "fundamentals",
