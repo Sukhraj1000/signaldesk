@@ -453,6 +453,63 @@ def test_scan_command_runs_watchlist_against_fixture_provider(
     ]
 
 
+
+def test_scan_command_includes_watchlist_metadata_and_skips_disabled_watchlists(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        cli_main, "default_provider_registry", lambda: ProviderRegistry((WorkingProvider(),))
+    )
+    watchlist = tmp_path / "watchlist.yaml"
+    watchlist.write_text(
+        "name: Growth Watch\n"
+        "tags:\n"
+        "  - momentum\n"
+        "  - default-mode\n"
+        "asset_class: equity\n"
+        "provider_preference: local-fixture\n"
+        "enabled: false\n"
+        "notes: Disabled during review.\n"
+        "symbols:\n"
+        "  - amd\n"
+        "  - AMD\n"
+        "  - MSFT\n",
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(
+        app,
+        ["scan", "--watchlist", str(watchlist), "--provider", "working", "--output", "json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["watchlist_model"] == {
+        "name": "Growth Watch",
+        "tags": ["momentum", "default-mode"],
+        "asset_class": "equity",
+        "provider_preference": "local-fixture",
+        "enabled": False,
+        "notes": "Disabled during review.",
+        "symbols": ["AMD", "MSFT"],
+    }
+    assert payload["ranked_setups"] == []
+    assert payload["failed_symbols"] == []
+    assert payload["skipped_symbols"] == [
+        {"symbol": "AMD", "status": "skipped", "reason": "watchlist is disabled"},
+        {"symbol": "MSFT", "status": "skipped", "reason": "watchlist is disabled"},
+    ]
+
+    table_result = CliRunner().invoke(
+        app, ["scan", "--watchlist", str(watchlist), "--provider", "working"]
+    )
+
+    assert table_result.exit_code == 0
+    assert "AMD\tskipped" in table_result.stdout
+    assert "MSFT\tskipped" in table_result.stdout
+    assert "watchlist is disabled" in table_result.stdout
+
+
 def test_scan_command_reports_watchlist_errors(tmp_path: Path) -> None:
     missing_result = CliRunner().invoke(
         app, ["scan", "--watchlist", str(tmp_path / "missing.yaml")]
