@@ -153,6 +153,16 @@ def test_build_ta_llm_prompt_payload_includes_fail_closed_output_schema() -> Non
     ]
 
 
+
+def test_build_ta_llm_prompt_payload_schema_rejects_blank_strings() -> None:
+    payload = build_ta_llm_prompt_payload(_report_with_untrusted_provider_text())
+    output_schema = payload["output_schema"]
+
+    assert output_schema["properties"]["summary"]["pattern"] == r"\S"
+    for field in ("deterministic_facts_used", "risks", "unavailable_context"):
+        assert output_schema["properties"][field]["items"]["pattern"] == r"\S"
+
+
 def test_build_ta_llm_prompt_payload_rejects_unvalidated_card_drift() -> None:
     report = _report_with_untrusted_provider_text()
     report["signal_card"] = {**report["signal_card"], "facts": {"symbol": "AMD"}}
@@ -218,3 +228,9 @@ def test_validate_llm_explanation_output_rejects_invented_or_non_string_items() 
 
     with pytest.raises(ValueError, match="summary"):
         validate_llm_explanation_output({**valid, "summary": ""})
+
+    with pytest.raises(ValueError, match="summary"):
+        validate_llm_explanation_output({**valid, "summary": "   "})
+
+    with pytest.raises(ValueError, match="risks"):
+        validate_llm_explanation_output({**valid, "risks": ["   "]})

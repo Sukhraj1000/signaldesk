@@ -30,18 +30,18 @@ _OUTPUT_SCHEMA: dict[str, Any] = {
     ],
     "properties": {
         "schema_version": {"const": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION},
-        "summary": {"type": "string", "minLength": 1},
+        "summary": {"type": "string", "minLength": 1, "pattern": r"\S"},
         "deterministic_facts_used": {
             "type": "array",
-            "items": {"type": "string", "minLength": 1},
+            "items": {"type": "string", "minLength": 1, "pattern": r"\S"},
         },
         "risks": {
             "type": "array",
-            "items": {"type": "string", "minLength": 1},
+            "items": {"type": "string", "minLength": 1, "pattern": r"\S"},
         },
         "unavailable_context": {
             "type": "array",
-            "items": {"type": "string", "minLength": 1},
+            "items": {"type": "string", "minLength": 1, "pattern": r"\S"},
         },
     },
 }
@@ -56,7 +56,7 @@ _UNTRUSTED_PROVIDER_TEXT_FIELDS = (
 )
 
 def _require_non_empty_string(value: Any, field: str) -> str:
-    if not isinstance(value, str) or not value:
+    if not isinstance(value, str) or not value.strip():
         raise ValueError(f"LLM explanation field {field} must be a non-empty string")
     return value
 
@@ -66,7 +66,7 @@ def _require_string_list(value: Any, field: str) -> list[str]:
         raise ValueError(f"LLM explanation field {field} must be a list of strings")
     strings: list[str] = []
     for index, item in enumerate(value):
-        if not isinstance(item, str) or not item:
+        if not isinstance(item, str) or not item.strip():
             raise ValueError(
                 f"LLM explanation field {field}[{index}] must be a non-empty string"
             )
