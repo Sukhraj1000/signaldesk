@@ -12,7 +12,7 @@ from decimal import Decimal, InvalidOperation
 from functools import partial
 from importlib import import_module
 from pathlib import Path
-from typing import Any, Protocol, cast
+from typing import Any, Protocol, cast, runtime_checkable
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
@@ -152,6 +152,46 @@ class MarketDataProvider(Protocol):
 
     def health_check(self) -> ProviderResult[str]:
         """Return a lightweight provider health status without exposing secrets."""
+        ...
+
+
+@runtime_checkable
+class FundamentalContextProvider(Protocol):
+    """Provider contract for optional enhanced fundamental context.
+
+    Fundamental facts are provider-sourced context only. Implementations must keep
+    them separate from deterministic price/TA signals and return explicit
+    ProviderResult failures when credentials or data are unavailable.
+    """
+
+    @property
+    def name(self) -> str:
+        """Human-readable provider name used as the registry key."""
+        ...
+
+    def get_fundamental_context(
+        self, symbol: Symbol
+    ) -> ProviderResult[FundamentalContext]:
+        """Fetch structured company facts with provider attribution."""
+        ...
+
+
+@runtime_checkable
+class CatalystContextProvider(Protocol):
+    """Provider contract for optional enhanced catalyst context.
+
+    Catalyst facts are provider-sourced context only. Implementations must keep
+    them separate from deterministic price/TA signals and return explicit
+    ProviderResult failures when credentials or data are unavailable.
+    """
+
+    @property
+    def name(self) -> str:
+        """Human-readable provider name used as the registry key."""
+        ...
+
+    def get_catalyst_context(self, symbol: Symbol) -> ProviderResult[CatalystContext]:
+        """Fetch structured catalyst events with provider attribution."""
         ...
 
 

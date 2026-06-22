@@ -56,8 +56,10 @@ from signaldesk_backend.models import (
     UnavailableContext,
 )
 from signaldesk_backend.providers import (
+    CatalystContextProvider,
     FallbackProvider,
     FmpProvider,
+    FundamentalContextProvider,
     LocalCsvProvider,
     LocalFixtureProvider,
     MarketDataProvider,
@@ -86,6 +88,7 @@ from signaldesk_backend.signal_cards import (
 __all__ = [
     "Candle",
     "CatalystContext",
+    "CatalystContextProvider",
     "CatalystEvent",
     "ConfirmationInvalidationLevel",
     "ConfirmationInvalidationLevels",
@@ -94,6 +97,7 @@ __all__ = [
     "FibonacciRetracementLevel",
     "FmpProvider",
     "FundamentalContext",
+    "FundamentalContextProvider",
     "KeyLevels",
     "LevelZone",
     "LocalCsvProvider",
