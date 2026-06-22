@@ -627,6 +627,7 @@ def _scan_result_summary(report: dict[str, Any]) -> dict[str, Any]:
     risk_scores = [score for score in card["score"]["breakdowns"] if score["category"] == "risk"]
     return {
         "schema_version": card["identity"]["schema_version"],
+        "signal_card": card,
         "generated_at": card["identity"]["generated_at"],
         "symbol": card["identity"]["symbol"],
         "provider": card["facts"]["provider"],

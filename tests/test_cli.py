@@ -2228,6 +2228,7 @@ def test_report_watchlist_json_uses_fixture_provider(
     assert [result["symbol"] for result in payload["ranked_setups"]] == ["AMD", "MSFT"]
     assert payload["failed_symbols"] == []
     amd_summary = payload["results"][0]["summary"]
+    signal_card = amd_summary["signal_card"]
     assert amd_summary["symbol"] == "AMD"
     assert amd_summary["provider"] == "working"
     assert amd_summary["latest_close"] == "49"
@@ -2235,6 +2236,10 @@ def test_report_watchlist_json_uses_fixture_provider(
     assert amd_summary["provenance"][0]["generated_at"] == payload["scanned_at"]
     assert amd_summary["llm"] == "none"
     assert amd_summary["narrative"] is None
+    assert signal_card["identity"]["symbol"] == amd_summary["symbol"]
+    assert signal_card["facts"]["latest_close"] == amd_summary["latest_close"]
+    assert signal_card["risk"]["unavailable_context"] == amd_summary["unavailable_context"]
+    assert signal_card["score"]["breakdowns"] == amd_summary["score_breakdowns"]
     assert sorted(item["context_type"] for item in amd_summary["unavailable_context"]) == [
         "fundamentals",
         "llm_narrative",
