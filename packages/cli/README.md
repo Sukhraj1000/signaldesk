@@ -72,6 +72,18 @@ Future provider configuration can build on these resolved roles to split price, 
 
 `signaldesk scan --watchlist watchlists/default.yaml` reads a small YAML watchlist with a top-level `symbols:` list and renders deterministic TA summaries for each symbol from the same canonical signal-card object used by `signaldesk ta`. Use `--output json` for machine-readable summaries that preserve provider/provenance and unavailable context. For no-network smoke checks, run with `--provider local-fixture` or set `SIGNALDESK_DEFAULT_PRICE_PROVIDER=local-fixture`.
 
+
+## Reporting outputs
+
+`signaldesk ta` supports `--output json`, `--output table`, and `--output markdown`. JSON keeps the full canonical `signal_card`; table and Markdown render compact human-readable views from that same object. `signaldesk report --watchlist ... --format markdown` uses the scan payload to render watchlist-level signal cards without re-running analysis logic.
+
+Markdown reports include generation timestamp, schema version, provenance, unavailable context, deterministic setup/confirmation/invalidation details, risks, and optional narrative state. See `../../docs/reporting.md` for the renderer contract.
+
+```bash
+signaldesk ta AMD --provider local-fixture --llm none --output markdown
+signaldesk report --watchlist watchlists/default.yaml --provider local-fixture --format markdown
+```
+
 ## Runtime checks
 
 Every CLI-affecting PR should run:
