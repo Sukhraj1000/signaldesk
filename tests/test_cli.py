@@ -2140,7 +2140,13 @@ def test_report_watchlist_markdown_separates_signal_card_sections(
     assert "## Signal cards" in result.stdout
     assert "### AMD" in result.stdout
     assert "#### Facts" in result.stdout
+    assert "#### Setup" in result.stdout
+    assert "- What is the setup? `unknown` trend regime" in result.stdout
+    assert "- Why it matters:" in result.stdout
     assert "#### Deterministic signals" in result.stdout
+    assert "#### Confirmation and invalidation" in result.stdout
+    assert "- What confirms it: `unavailable`" in result.stdout
+    assert "- What invalidates it: `unavailable`" in result.stdout
     assert "#### Risks" in result.stdout
     assert "#### Unavailable context" in result.stdout
     assert "- Latest close: `49`" in result.stdout
