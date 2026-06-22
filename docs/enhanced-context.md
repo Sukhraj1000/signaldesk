@@ -14,7 +14,7 @@ SignalDesk is TA-first in default mode. Enhanced context adds provider-sourced c
 Enhanced context is rendered alongside, not inside, deterministic TA facts:
 
 - `facts.fundamentals` contains provider-sourced company facts such as company name, sector, industry, market cap, valuation metrics, and the provider/source URL when available.
-- `facts.catalysts` contains provider-sourced catalyst events such as headline, source, URL, summary, and publication timestamp.
+- `facts.catalysts` contains provider-sourced catalyst events such as headline, source, URL, summary, and publication timestamp. For FMP, this includes stock-news rows and earnings-calendar rows when the provider returns them.
 - `provenance` records enhanced-context source, provider, generated timestamp, and warnings.
 - `unavailable_context` records missing credentials, unsupported roles, empty provider payloads, disabled LLM narrative, or other absent context.
 - `risks` and `scores` may reference unavailable fundamentals/catalysts as scope limits, but they must not invent facts or silently infer that no catalyst exists.

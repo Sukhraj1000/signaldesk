@@ -166,10 +166,12 @@ class FakeFmpUrlopen:
         self.body = body
         self.status = status
         self.request_url: str | None = None
+        self.request_urls: list[str] = []
         self.timeout: float | None = None
 
     def __call__(self, request: object, *, timeout: float) -> FakeFmpResponse:
         self.request_url = cast(Any, request).full_url
+        self.request_urls.append(self.request_url)
         self.timeout = timeout
         return FakeFmpResponse(self.body, status=self.status)
 
@@ -177,6 +179,18 @@ class FakeFmpUrlopen:
 class ExplodingFmpUrlopen:
     def __call__(self, request: object, *, timeout: float) -> FakeFmpResponse:
         raise TimeoutError("secret transport detail")
+
+
+class SequencedFmpUrlopen:
+    def __init__(self, bodies: tuple[bytes, ...]) -> None:
+        self._bodies = list(bodies)
+        self.requests: list[object] = []
+
+    def __call__(self, request: object, *, timeout: float) -> FakeFmpResponse:
+        self.requests.append(request)
+        if not self._bodies:
+            raise TimeoutError("no response queued")
+        return FakeFmpResponse(self._bodies.pop(0))
 
 
 class RecordingProvider(FakeProvider):
@@ -943,11 +957,42 @@ def test_fmp_provider_translates_mocked_catalyst_context() -> None:
             ),
         ),
     )
-    assert opener.request_url is not None
-    assert "stock_news" in opener.request_url
-    assert "tickers=AMD" in opener.request_url
-    assert "limit=10" in opener.request_url
-    assert "apikey=test-key" in opener.request_url
+    assert opener.request_urls
+    assert "stock_news" in opener.request_urls[0]
+    assert "tickers=AMD" in opener.request_urls[0]
+    assert "limit=10" in opener.request_urls[0]
+    assert "apikey=test-key" in opener.request_urls[0]
+
+
+def test_fmp_provider_adds_earnings_calendar_to_catalyst_context() -> None:
+    opener = SequencedFmpUrlopen(
+        (
+            b"[]",
+            b'[{"symbol":"AMD","date":"2024-04-30","epsEstimated":"0.61","revenueEstimated":"5600000000"}]',
+        )
+    )
+    provider = FmpProvider(api_key="test-key", _urlopen=opener, timeout_seconds=2.5)
+
+    result = provider.get_catalyst_context(Symbol("amd"))
+
+    assert result.ok
+    assert result.data is not None
+    assert result.data.events == (
+        CatalystEvent(
+            headline="AMD earnings scheduled for 2024-04-30",
+            provider="fmp",
+            published_at=datetime(2024, 4, 30, tzinfo=UTC),
+            source="FMP earnings calendar",
+            summary="estimated EPS 0.61; estimated revenue 5600000000",
+        ),
+    )
+    requested_urls = [cast(Any, request).full_url for request in opener.requests]
+    assert requested_urls[0].startswith(
+        "https://financialmodelingprep.com/api/v3/stock_news?"
+    )
+    assert requested_urls[1].startswith(
+        "https://financialmodelingprep.com/api/v3/historical/earning_calendar/AMD?"
+    )
 
 
 def test_fmp_provider_reports_missing_or_invalid_fundamental_context_safely() -> None:
