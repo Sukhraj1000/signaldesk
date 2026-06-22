@@ -36,6 +36,7 @@ Current no-network inspection commands are:
 
 ```bash
 signaldesk llm prompt-payload AMD --provider local-fixture --output json
+signaldesk llm chat-messages AMD --provider local-fixture --output json
 signaldesk llm validate-output path/to/candidate-llm-output.json
 ```
 
@@ -45,6 +46,8 @@ signaldesk llm validate-output path/to/candidate-llm-output.json
 - the validated canonical `signal_card`, with any prior `signal_card.narrative` reset to `null` and listed in `excluded_signal_card_fields` so generated narrative text is not fed back as instructions;
 - labels for provider/news fields that must be treated as untrusted quoted data;
 - a strict `signaldesk.llm_explanation.v1` output schema.
+
+`signaldesk llm chat-messages` wraps the same guarded payload in OpenAI-compatible `system`/`user` messages for adapter smoke checks, without exposing tools, provider clients, hidden market context, or credentials.
 
 `signaldesk llm validate-output` is a fail-closed boundary for candidate LLM JSON. It accepts only the schema-versioned explanation object with `summary`, `deterministic_facts_used`, `risks`, and `unavailable_context`; unexpected fields such as recommendations are rejected. Validation errors are intentionally generic so hostile or provider-sourced text from an invalid LLM response is not echoed back into terminal output, logs, or reports.
 

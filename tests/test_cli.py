@@ -172,8 +172,6 @@ class FmpRolesProvider(WorkingProvider):
         )
 
 
-
-
 @dataclass(frozen=True)
 class EnhancedContextProvider(FmpRolesProvider):
     def get_fundamental_context(self, symbol: Symbol) -> ProviderResult[FundamentalContext]:
@@ -214,6 +212,7 @@ class EnhancedContextProvider(FmpRolesProvider):
                 ),
             ),
         )
+
 
 @dataclass(frozen=True)
 class SwingingProvider(WorkingProvider):
@@ -682,16 +681,11 @@ def test_scan_uses_watchlist_provider_preference_when_provider_is_omitted(
     )
     watchlist = tmp_path / "watchlist.yaml"
     watchlist.write_text(
-        "name: Preferred Provider Watch\n"
-        "provider_preference: working\n"
-        "symbols:\n"
-        "  - AMD\n",
+        "name: Preferred Provider Watch\nprovider_preference: working\nsymbols:\n  - AMD\n",
         encoding="utf-8",
     )
 
-    result = CliRunner().invoke(
-        app, ["scan", "--watchlist", str(watchlist), "--output", "json"]
-    )
+    result = CliRunner().invoke(app, ["scan", "--watchlist", str(watchlist), "--output", "json"])
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
@@ -1261,8 +1255,7 @@ def test_ta_command_enhanced_mode_adds_fmp_context_without_ta_signal_blending(
         "latest catalyst context timestamp is stale: 2024-02-09T13:30:00+00:00"
     ]
     assert not any(
-        item["context_type"] == "fundamentals"
-        for item in payload["unavailable_context"]
+        item["context_type"] == "fundamentals" for item in payload["unavailable_context"]
     )
     assert payload["deterministic_signals"]["events"] == payload["events"]
 
@@ -1778,8 +1771,7 @@ def test_ta_command_outputs_markdown_from_signal_card(monkeypatch: MonkeyPatch) 
     assert "## Provenance" in result.stdout
     assert (
         "provider `working`, source `historical_candles`, timeframe `1d`, "
-        "inputs `AMD`, generated at `"
-        in result.stdout
+        "inputs `AMD`, generated at `" in result.stdout
     )
     assert "observations `40`" in result.stdout
     assert "## Optional narrative" in result.stdout
@@ -1813,8 +1805,7 @@ def test_ta_table_output_stays_flat_when_json_contract_sections_are_added(
     assert (
         "unavailable_context_summary\tfundamentals via working: not available in the "
         "default technical-analysis CLI path; catalyst via working: not available in the "
-        "default technical-analysis CLI path"
-        in result.stdout
+        "default technical-analysis CLI path" in result.stdout
     )
     assert "facts\t" not in result.stdout
     assert "deterministic_signals\t" not in result.stdout
@@ -2426,6 +2417,7 @@ def test_report_watchlist_markdown_uses_fixture_provider(
     assert "## Provenance" in result.stdout
     assert "provider `working`" in result.stdout
 
+
 def test_report_watchlist_markdown_separates_signal_card_sections(
     monkeypatch: MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -2474,8 +2466,7 @@ def test_report_watchlist_markdown_separates_signal_card_sections(
     assert "- Schema version: `signaldesk.ta.v1`" in result.stdout
     assert (
         "- Provenance: provider `working`, source `historical_candles`, timeframe `1d`, "
-        "inputs `AMD`, generated at `"
-        in result.stdout
+        "inputs `AMD`, generated at `" in result.stdout
     )
     assert "- Trend regime: `unknown`" in result.stdout
     assert (
@@ -2527,8 +2518,7 @@ def test_report_watchlist_markdown_renders_enhanced_context_facts(
         "sector `Technology`, industry `Semiconductors`"
     ) in result.stdout
     assert (
-        "- Catalysts: `1` event(s) via `fmp`; latest "
-        "`AMD announces data center update`"
+        "- Catalysts: `1` event(s) via `fmp`; latest `AMD announces data center update`"
     ) in result.stdout
     assert "- Trend regime: `unknown`" in result.stdout
     assert "#### Unavailable context" in result.stdout
@@ -2590,6 +2580,7 @@ def test_report_watchlist_table_uses_fixture_provider(
     assert "1\tAMD\tok\tworking\t49\tunknown" in result.stdout
     assert "2\tMSFT\tok\tworking\t49\tunknown" in result.stdout
     assert "summary\t\t\t\t\tok=2 failed=0 skipped=0 total=2" in result.stdout
+
 
 def test_report_watchlist_json_uses_fixture_provider(
     monkeypatch: MonkeyPatch, tmp_path: Path
@@ -2820,6 +2811,33 @@ def test_llm_prompt_payload_command_rejects_non_json_output(monkeypatch: MonkeyP
     assert result.exit_code == 2
     assert "--output must be 'json'." in result.stderr
 
+
+def test_llm_chat_messages_command_wraps_payload_without_tools(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        cli_main, "default_provider_registry", lambda: ProviderRegistry((WorkingProvider(),))
+    )
+    result = CliRunner().invoke(
+        app, ["llm", "chat-messages", "AMD", "--provider", "working", "--output", "json"]
+    )
+    assert result.exit_code == 0
+    messages = json.loads(result.stdout)
+    assert [message["role"] for message in messages] == ["system", "user"]
+    assert all(set(message) == {"role", "content"} for message in messages)
+    assert "Do not fetch market data" in messages[0]["content"]
+    assert "output_schema" in messages[1]["content"]
+    assert "provider_client" not in result.stdout
+    assert '"tools":' not in result.stdout
+
+
+def test_llm_chat_messages_command_rejects_non_json_output(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        cli_main, "default_provider_registry", lambda: ProviderRegistry((WorkingProvider(),))
+    )
+    result = CliRunner().invoke(
+        app, ["llm", "chat-messages", "AMD", "--provider", "working", "--output", "table"]
+    )
+    assert result.exit_code == 2
+    assert "--output must be 'json'." in result.stderr
 
 
 def test_llm_validate_output_accepts_schema_valid_json(tmp_path: Path) -> None:

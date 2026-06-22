@@ -23,6 +23,7 @@ from signaldesk_backend import (
     assemble_ta_signal_card_report,
     assess_technical_analysis_risks,
     average_true_range,
+    build_openai_compatible_chat_messages,
     build_ta_llm_prompt_payload,
     calculate_fibonacci_retracement_levels,
     classify_trend_regime,
@@ -326,9 +327,7 @@ def _format_ta_markdown(report: dict[str, Any]) -> str:
     provider_mode = card["provider_mode"]
     unavailable_context = card["unavailable_context"]
 
-    setup_scores = [
-        item for item in score["breakdowns"] if item["category"] == "setup_quality"
-    ]
+    setup_scores = [item for item in score["breakdowns"] if item["category"] == "setup_quality"]
     risk_scores = [item for item in score["breakdowns"] if item["category"] == "risk"]
     trend_regime = trend["regimes"]["trend"]
     generated_at = identity["generated_at"]
@@ -374,12 +373,14 @@ def _format_ta_markdown(report: dict[str, Any]) -> str:
             "## Confirmation and invalidation",
         ]
     )
-    lines.extend([
-        f"- What confirms it: `{confirmation_level}`",
-        f"- What invalidates it: `{invalidation_level}`",
-        "",
-        "## Risks",
-    ])
+    lines.extend(
+        [
+            f"- What confirms it: `{confirmation_level}`",
+            f"- What invalidates it: `{invalidation_level}`",
+            "",
+            "## Risks",
+        ]
+    )
     for flag in risk["flags"]:
         lines.append(
             f"- `{flag['severity']}` `{flag['kind']}`: {flag['message']} "
@@ -528,6 +529,7 @@ def _summarize_enhanced_context(facts: dict[str, Any]) -> str:
             summaries.append(f"catalysts via {provider}: 0 event(s)")
     return "; ".join(summaries) if summaries else "none"
 
+
 def _format_score_reason_lines(score_breakdowns: list[dict[str, Any]]) -> list[str]:
     """Return compact deterministic score reasons for Markdown reports."""
 
@@ -616,9 +618,11 @@ def _summarize_risk_flags(flags: list[dict[str, Any]]) -> str:
     if not flags:
         return "none"
     return "; ".join(
-        "{} {}: {}".format(flag.get("severity", "unknown"),
+        "{} {}: {}".format(
+            flag.get("severity", "unknown"),
             flag.get("kind", "unknown"),
-            flag.get("message", "no message provided"),)
+            flag.get("message", "no message provided"),
+        )
         for flag in flags
     )
 
@@ -885,6 +889,47 @@ def llm_prompt_payload(
     typer.echo(json.dumps(payload, indent=2, sort_keys=True))
 
 
+@llm_app.command("chat-messages")
+def llm_chat_messages(
+    symbol: str,
+    provider: str | None = typer.Option(
+        None,
+        help=(
+            "Registered market-data provider to use. When omitted, SignalDesk "
+            "uses --mode role resolution."
+        ),
+    ),
+    mode: str = typer.Option("default", help="Provider role mode: default or enhanced."),
+    interval: str = typer.Option("1d", help="Historical candle interval."),
+    days: int = typer.Option(120, min=1, help="Number of calendar days of history to request."),
+    output: str = typer.Option("json", help="Output format: json."),
+) -> None:
+    """Render guarded OpenAI-compatible chat messages without calling an LLM."""
+    if output.strip().lower() != "json":
+        typer.echo("--output must be 'json'.", err=True)
+        raise typer.Exit(2)
+    registry = default_provider_registry()
+    try:
+        report = _fetch_ta_report(
+            registry,
+            symbol=symbol,
+            provider=provider,
+            mode=mode,
+            interval=interval,
+            days=days,
+            as_of=datetime.now(UTC),
+        )
+        payload = build_ta_llm_prompt_payload(report)
+        messages = build_openai_compatible_chat_messages(payload)
+    except (KeyError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from exc
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
+    typer.echo(json.dumps(messages, indent=2, sort_keys=True))
+
+
 @llm_app.command("validate-output")
 def llm_validate_output(
     path: Path = typer.Argument(  # noqa: B008
@@ -1035,8 +1080,7 @@ def _watchlist_report_provenance(results: list[dict[str, Any]]) -> list[dict[str
                     "source": provenance["source"],
                     "timeframe": provenance["timeframe"],
                     "inputs": provenance.get("inputs", []),
-                    "generated_at": provenance.get("generated_at")
-                    or summary["generated_at"],
+                    "generated_at": provenance.get("generated_at") or summary["generated_at"],
                     "observations": provenance["observations"],
                 }
             )
@@ -1070,9 +1114,7 @@ def _watchlist_report_payload(
         "ranked_setups": ranked_setups,
         "failed_symbols": failed_symbols,
         "skipped_symbols": skipped_symbols,
-        "summary": _watchlist_scan_summary(
-            results, ranked_setups, failed_symbols, skipped_symbols
-        ),
+        "summary": _watchlist_scan_summary(results, ranked_setups, failed_symbols, skipped_symbols),
         "provenance": _watchlist_report_provenance(results),
     }
 
@@ -1217,6 +1259,7 @@ def _rank_scan_setups(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
         {**result, "rank": rank}
         for rank, result in enumerate(sorted(successful_results, key=sort_key), start=1)
     ]
+
 
 def _format_card_provenance_fact_lines(summary: dict[str, Any]) -> list[str]:
     """Return per-card provenance facts so each card is standalone."""
@@ -1487,9 +1530,7 @@ def _ta_table_report_values(report: dict[str, Any]) -> dict[str, Any]:
         "what_confirms": confirmation_level,
         "what_invalidates": invalidation_level,
         "risk_summary": _summarize_risk_flags(card["risk"]["flags"]),
-        "unavailable_context_summary": _summarize_unavailable_context(
-            card["unavailable_context"]
-        ),
+        "unavailable_context_summary": _summarize_unavailable_context(card["unavailable_context"]),
         "sma_20": moving_averages["sma_20"],
         "ema_20": moving_averages["ema_20"],
         "rsi_14": momentum["rsi_14"],
@@ -1519,9 +1560,9 @@ def _summarize_provenance(provenance_items: list[dict[str, Any]]) -> str:
         return "none"
     summary_lines = []
     for provenance in provenance_items[:3]:
-        inputs = ",".join(
-            _flat_table_cell_text(item) for item in provenance.get("inputs", [])
-        ) or "none"
+        inputs = (
+            ",".join(_flat_table_cell_text(item) for item in provenance.get("inputs", [])) or "none"
+        )
         summary_lines.append(
             "{}:{}:{} inputs={} observations={}".format(
                 _flat_table_cell_text(provenance.get("provider", "unknown")),
@@ -1815,6 +1856,7 @@ def _catalyst_context_payload(context: Any) -> dict[str, Any]:
             for event in context.events
         ],
     }
+
 
 def _technical_analysis_report(
     *,
