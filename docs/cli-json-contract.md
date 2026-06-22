@@ -28,6 +28,28 @@ Default mode remains useful without paid keys. Enhanced provider or LLM fields m
 
 The golden CLI test in `tests/test_cli.py` protects the current `signaldesk.ta.v1` shape with fixture-backed data, so CI does not require live provider network or paid credentials.
 
+## LLM prompt and output validation contracts
+
+LLM explanation mode is intentionally adapter-only around canonical signal cards. The deterministic TA and scan paths remain complete when `--llm none` is selected, and missing narrative stays in `unavailable_context` rather than being treated as an all-clear.
+
+Current no-network inspection commands are:
+
+```bash
+signaldesk llm prompt-payload AMD --provider local-fixture --output json
+signaldesk llm validate-output path/to/candidate-llm-output.json
+```
+
+`signaldesk llm prompt-payload` emits `signaldesk.llm_prompt.v1`, containing only:
+
+- explicit guardrails that prohibit fetching market data, inventing prices/levels/catalysts/fundamentals, or making recommendations;
+- the validated canonical `signal_card`;
+- labels for provider/news fields that must be treated as untrusted quoted data;
+- a strict `signaldesk.llm_explanation.v1` output schema.
+
+`signaldesk llm validate-output` is a fail-closed boundary for candidate LLM JSON. It accepts only the schema-versioned explanation object with `summary`, `deterministic_facts_used`, `risks`, and `unavailable_context`; unexpected fields such as recommendations are rejected. Validation errors are intentionally generic so hostile or provider-sourced text from an invalid LLM response is not echoed back into terminal output, logs, or reports.
+
+Future OpenAI-compatible or local LLM adapters should call these same backend contracts before and after provider invocation. They must not receive provider clients, tool handles, hidden market context, credentials, or authority to override unavailable context from external text.
+
 ## TA and watchlist Markdown reports
 
 `signaldesk ta <SYMBOL> --llm none --output markdown` renders a compact human-readable report from the same canonical `signal_card` object used by JSON output. The Markdown report separates facts, deterministic signals, risks, unavailable context, provenance, and optional narrative state. It includes the generated timestamp, price provider, latest observed close, explicit missing enhanced/LLM context, and provider/source/timeframe/input/generated-at provenance without introducing LLM-derived facts or extra provider data.
