@@ -343,7 +343,18 @@ def _fetch_ta_report(
     return report
 
 
-def _load_watchlist_symbols(path: Path) -> tuple[str, ...]:
+def _yaml_scalar(value: str) -> str | bool | None:
+    normalized = value.strip().strip("'\"")
+    if normalized.lower() in {"true", "yes", "on"}:
+        return True
+    if normalized.lower() in {"false", "no", "off"}:
+        return False
+    if normalized.lower() in {"null", "none", "~", ""}:
+        return None
+    return normalized
+
+
+def _load_watchlist_model(path: Path) -> dict[str, Any]:
     if not path.is_file():
         raise ValueError(f"watchlist file not found: {path}")
     try:
@@ -351,28 +362,59 @@ def _load_watchlist_symbols(path: Path) -> tuple[str, ...]:
     except OSError as exc:
         raise ValueError(f"watchlist file could not be read: {path}") from exc
 
+    metadata: dict[str, Any] = {
+        "name": path.stem,
+        "tags": [],
+        "asset_class": "equity",
+        "provider_preference": None,
+        "enabled": True,
+        "notes": None,
+    }
     symbols: list[str] = []
-    in_symbols = False
+    current_list: str | None = None
     for raw_line in raw_lines:
         line_without_comment = raw_line.split("#", 1)[0].rstrip()
         stripped = line_without_comment.strip()
         if not stripped:
             continue
-        if stripped == "symbols:":
-            in_symbols = True
+        if stripped.startswith("-"):
+            item = stripped[1:].strip().strip("'\"")
+            if current_list == "symbols" and item:
+                symbols.append(Symbol(item).ticker)
+            elif current_list == "tags" and item:
+                metadata["tags"].append(item)
             continue
-        if stripped.endswith(":") and not stripped.startswith("-"):
-            in_symbols = False
+        current_list = None
+        if ":" not in stripped:
             continue
-        if not in_symbols or not stripped.startswith("-"):
+        key, value = stripped.split(":", 1)
+        normalized_key = key.strip().replace("-", "_")
+        if normalized_key in {"symbols", "tags"} and not value.strip():
+            current_list = normalized_key
             continue
-        symbol = stripped[1:].strip().strip("'\"")
-        if symbol:
-            symbols.append(Symbol(symbol).ticker)
+        if normalized_key in metadata:
+            metadata[normalized_key] = _yaml_scalar(value)
+
     if not symbols:
         raise ValueError(f"watchlist file has no symbols: {path}")
-    return tuple(dict.fromkeys(symbols))
+    if not isinstance(metadata["enabled"], bool):
+        raise ValueError(f"watchlist enabled must be true or false: {path}")
 
+    metadata["symbols"] = list(dict.fromkeys(symbols))
+    metadata["tags"] = list(dict.fromkeys(str(tag) for tag in metadata["tags"] if str(tag)))
+    metadata["asset_class"] = str(metadata["asset_class"] or "equity").strip().lower()
+    metadata["name"] = str(metadata["name"] or path.stem).strip()
+    metadata["provider_preference"] = (
+        str(metadata["provider_preference"]).strip()
+        if metadata["provider_preference"] is not None
+        else None
+    )
+    metadata["notes"] = str(metadata["notes"]).strip() if metadata["notes"] else None
+    return metadata
+
+
+def _load_watchlist_symbols(path: Path) -> tuple[str, ...]:
+    return tuple(_load_watchlist_model(path)["symbols"])
 
 def _scan_result_summary(report: dict[str, Any]) -> dict[str, Any]:
     card = extract_ta_signal_card(report)
@@ -451,14 +493,14 @@ def scan_watchlist(
         raise typer.Exit(2)
 
     try:
-        symbols = _load_watchlist_symbols(watchlist)
+        watchlist_model = _load_watchlist_model(watchlist)
     except ValueError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(2) from exc
 
     try:
         exit_code, payload = _scan_watchlist_payload(
-            symbols=symbols,
+            watchlist_model=watchlist_model,
             watchlist=watchlist,
             provider=provider,
             mode=mode,
@@ -491,7 +533,7 @@ def _explicit_provider_mode_payload(registry: ProviderRegistry, provider: str) -
 
 def _scan_watchlist_payload(
     *,
-    symbols: tuple[str, ...],
+    watchlist_model: dict[str, Any],
     watchlist: Path,
     provider: str | None,
     mode: str,
@@ -500,12 +542,34 @@ def _scan_watchlist_payload(
 ) -> tuple[int, dict[str, Any]]:
     registry = default_provider_registry()
     scanned_at = datetime.now(UTC)
+    symbols = tuple(watchlist_model["symbols"])
     provider_mode = (
         _provider_mode_payload(mode)
         if provider is None or not provider.strip()
         else _explicit_provider_mode_payload(registry, provider)
     )
     results: list[dict[str, Any]] = []
+    if not watchlist_model["enabled"]:
+        skipped_symbols = [
+            {
+                "symbol": symbol,
+                "status": "skipped",
+                "reason": "watchlist is disabled",
+            }
+            for symbol in symbols
+        ]
+        return 0, {
+            "watchlist": str(watchlist),
+            "watchlist_model": watchlist_model,
+            "scanned_at": scanned_at.isoformat(),
+            "provider_mode": provider_mode,
+            "symbols": list(symbols),
+            "results": skipped_symbols,
+            "ranked_setups": [],
+            "failed_symbols": [],
+            "skipped_symbols": skipped_symbols,
+        }
+
     exit_code = 0
     for symbol in symbols:
         try:
@@ -535,12 +599,14 @@ def _scan_watchlist_payload(
 
     return exit_code, {
         "watchlist": str(watchlist),
+        "watchlist_model": watchlist_model,
         "scanned_at": scanned_at.isoformat(),
         "provider_mode": provider_mode,
         "symbols": list(symbols),
         "results": results,
         "ranked_setups": ranked_setups,
         "failed_symbols": list(failed_symbols),
+        "skipped_symbols": [],
     }
 
 
@@ -568,6 +634,10 @@ def _format_report_markdown(payload: dict[str, Any]) -> str:
         "# SignalDesk watchlist report",
         "",
         f"- Watchlist: `{payload['watchlist']}`",
+        f"- Watchlist name: `{payload['watchlist_model']['name']}`",
+        f"- Watchlist tags: `{', '.join(payload['watchlist_model']['tags']) or 'none'}`",
+        f"- Asset class: `{payload['watchlist_model']['asset_class']}`",
+        f"- Enabled: `{str(payload['watchlist_model']['enabled']).lower()}`",
         f"- Generated at: `{payload['scanned_at']}`",
         f"- Provider mode: `{payload['provider_mode']['mode']}`",
         f"- Price provider: `{payload['provider_mode']['price_provider']}`",
@@ -595,6 +665,8 @@ def _format_report_markdown(payload: dict[str, Any]) -> str:
         )
     for result in payload["failed_symbols"]:
         lines.append(f"|  | {result['symbol']} | failed |  |  |  |  | {result['error']} |")
+    for result in payload["skipped_symbols"]:
+        lines.append(f"|  | {result['symbol']} | skipped |  |  |  |  | {result['reason']} |")
     lines.append("")
     lines.append("## Provenance")
     for result in payload["results"]:
@@ -639,9 +711,9 @@ def report_watchlist(
         typer.echo("--format must be 'markdown' or 'json'.", err=True)
         raise typer.Exit(2)
     try:
-        symbols = _load_watchlist_symbols(watchlist)
+        watchlist_model = _load_watchlist_model(watchlist)
         exit_code, payload = _scan_watchlist_payload(
-            symbols=symbols,
+            watchlist_model=watchlist_model,
             watchlist=watchlist,
             provider=provider,
             mode=mode,
