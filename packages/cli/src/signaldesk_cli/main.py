@@ -341,6 +341,7 @@ def _format_ta_markdown(report: dict[str, Any]) -> str:
         f"- Price provider: `{provider_mode['price_provider']}`",
         f"- Candles: `{facts['candles']}`",
         f"- Latest close: `{facts['latest_close']}` at `{facts['latest_timestamp']}`",
+        *_markdown_report_boundary_lines(),
         "",
         "## Setup",
         f"- What is the setup? `{trend_regime['regime']}` trend regime with setup quality "
@@ -399,6 +400,27 @@ def _format_optional_level(level: dict[str, Any] | None) -> str:
     if level is None:
         return "unavailable"
     return "{} ({})".format(level["price"], level["source_rule"])
+
+
+def _markdown_report_boundary_lines() -> list[str]:
+    """Return user-facing boundaries shared by Markdown report renderers."""
+
+    return [
+        "",
+        "## Report boundaries",
+        (
+            "- Facts, deterministic signals, risks, unavailable context, and optional "
+            "narrative are rendered separately."
+        ),
+        (
+            "- Missing enhanced provider or LLM context is unavailable context, not a "
+            "silent all-clear."
+        ),
+        (
+            "- This report is not investment advice and does not include trade "
+            "execution instructions."
+        ),
+    ]
 
 
 def _format_provenance_markdown_line(
@@ -1041,6 +1063,7 @@ def _format_report_markdown(payload: dict[str, Any]) -> str:
             lines.append(f"  - {_unavailable_context_text(item)}")
     else:
         lines.append("- Unavailable context: none")
+    lines.extend(_markdown_report_boundary_lines())
     lines.extend(
         [
             "",
