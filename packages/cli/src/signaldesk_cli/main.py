@@ -461,6 +461,8 @@ def _format_scan_table(payload: dict[str, Any]) -> tuple[str, ...]:
         )
     for result in payload["failed_symbols"]:
         lines.append(f"	{result['symbol']}	failed						{result['error']}")
+    for result in payload["skipped_symbols"]:
+        lines.append(f"\t{result["symbol"]}\tskipped\t\t\t\t\t\t{result["reason"]}")
     return tuple(lines)
 
 

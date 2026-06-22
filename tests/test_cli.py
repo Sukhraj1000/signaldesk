@@ -500,6 +500,15 @@ def test_scan_command_includes_watchlist_metadata_and_skips_disabled_watchlists(
         {"symbol": "MSFT", "status": "skipped", "reason": "watchlist is disabled"},
     ]
 
+    table_result = CliRunner().invoke(
+        app, ["scan", "--watchlist", str(watchlist), "--provider", "working"]
+    )
+
+    assert table_result.exit_code == 0
+    assert "AMD\tskipped" in table_result.stdout
+    assert "MSFT\tskipped" in table_result.stdout
+    assert "watchlist is disabled" in table_result.stdout
+
 
 def test_scan_command_reports_watchlist_errors(tmp_path: Path) -> None:
     missing_result = CliRunner().invoke(
