@@ -422,6 +422,9 @@ def test_scan_command_runs_watchlist_against_fixture_provider(
         "unavailable_context": [],
     }
     assert [item["status"] for item in payload["results"]] == ["ok", "ok"]
+    assert [item["symbol"] for item in payload["ranked_setups"]] == ["AMD", "MSFT"]
+    assert [item["rank"] for item in payload["ranked_setups"]] == [1, 2]
+    assert payload["failed_symbols"] == []
     first_summary = payload["results"][0]["summary"]
     assert first_summary["schema_version"] == "signaldesk.ta.v1"
     assert first_summary["symbol"] == "AMD"
@@ -462,6 +465,50 @@ def test_scan_command_reports_watchlist_errors(tmp_path: Path) -> None:
 
     assert directory_result.exit_code == 2
     assert "watchlist file not found" in directory_result.stderr
+
+
+def test_scan_payload_ranks_successes_and_splits_failures(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        cli_main,
+        "default_provider_registry",
+        lambda: ProviderRegistry((WorkingProvider(), FailingHistoricalProvider())),
+    )
+    watchlist = tmp_path / "watchlist.yaml"
+    watchlist.write_text("symbols:\n  - MSFT\n  - AMD\n", encoding="utf-8")
+
+    success_result = CliRunner().invoke(
+        app,
+        ["scan", "--watchlist", str(watchlist), "--provider", "working", "--output", "json"],
+    )
+
+    assert success_result.exit_code == 0
+    success_payload = json.loads(success_result.stdout)
+    assert [item["rank"] for item in success_payload["ranked_setups"]] == [1, 2]
+    assert [item["symbol"] for item in success_payload["ranked_setups"]] == ["AMD", "MSFT"]
+    assert success_payload["failed_symbols"] == []
+
+    failure_result = CliRunner().invoke(
+        app,
+        [
+            "scan",
+            "--watchlist",
+            str(watchlist),
+            "--provider",
+            "failing-history",
+            "--output",
+            "json",
+        ],
+    )
+
+    assert failure_result.exit_code == 1
+    failure_payload = json.loads(failure_result.stdout)
+    assert failure_payload["ranked_setups"] == []
+    assert [item["symbol"] for item in failure_payload["failed_symbols"]] == ["MSFT", "AMD"]
+    assert all(item["status"] == "failed" for item in failure_payload["failed_symbols"])
+    assert "apikey=<redacted>" in failure_payload["failed_symbols"][0]["error"]
+    assert "secret" not in json.dumps(failure_payload)
 
 
 def test_config_inspect_helpers_redact_secrets_from_payload() -> None:
@@ -1841,8 +1888,8 @@ def test_report_watchlist_markdown_uses_fixture_provider(
 
     assert result.exit_code == 0
     assert "# SignalDesk watchlist report" in result.stdout
-    assert "| AMD | ok | working | 49 | unknown | 50 | 60 |" in result.stdout
-    assert "| MSFT | ok | working | 49 | unknown | 50 | 60 |" in result.stdout
+    assert "| 1 | AMD | ok | working | 49 | unknown | 50 | 60 |" in result.stdout
+    assert "| 2 | MSFT | ok | working | 49 | unknown | 50 | 60 |" in result.stdout
     assert "## Provenance" in result.stdout
     assert "provider `working`" in result.stdout
 
@@ -1874,6 +1921,9 @@ def test_report_watchlist_json_uses_fixture_provider(
     }
     assert payload["symbols"] == ["AMD", "MSFT"]
     assert [result["status"] for result in payload["results"]] == ["ok", "ok"]
+    assert [result["rank"] for result in payload["ranked_setups"]] == [1, 2]
+    assert [result["symbol"] for result in payload["ranked_setups"]] == ["AMD", "MSFT"]
+    assert payload["failed_symbols"] == []
     amd_summary = payload["results"][0]["summary"]
     assert amd_summary["symbol"] == "AMD"
     assert amd_summary["provider"] == "working"
