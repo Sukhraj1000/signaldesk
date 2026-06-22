@@ -2348,6 +2348,42 @@ def test_ta_json_schema_documents_required_signal_card_sections(
     ] == golden_contract["score_breakdown_categories"]
     assert schema["$defs"]["risk"]["required"] == ["flags", "unavailable_context"]
     assert schema["$defs"]["score"]["required"] == ["breakdowns"]
+    assert schema["$defs"]["facts"]["properties"]["fundamentals"] == {
+        "$ref": "#/$defs/fundamental_context"
+    }
+    assert schema["$defs"]["facts"]["properties"]["catalysts"] == {
+        "$ref": "#/$defs/catalyst_context"
+    }
+    assert schema["$defs"]["fundamental_context"]["required"] == [
+        "symbol",
+        "provider",
+        "generated_at",
+        "company_name",
+        "exchange",
+        "industry",
+        "sector",
+        "market_cap",
+        "currency",
+        "price",
+        "beta",
+        "pe_ratio",
+        "eps",
+        "source_url",
+    ]
+    assert schema["$defs"]["catalyst_context"]["required"] == [
+        "symbol",
+        "provider",
+        "generated_at",
+        "events",
+    ]
+    assert schema["$defs"]["catalyst_event"]["required"] == [
+        "headline",
+        "provider",
+        "published_at",
+        "source",
+        "url",
+        "summary",
+    ]
 
 
 def test_report_watchlist_markdown_uses_fixture_provider(

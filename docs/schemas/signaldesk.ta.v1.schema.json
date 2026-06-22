@@ -1,11 +1,91 @@
 {
   "$defs": {
+    "catalyst_context": {
+      "additionalProperties": false,
+      "properties": {
+        "events": {
+          "items": {
+            "$ref": "#/$defs/catalyst_event"
+          },
+          "type": "array"
+        },
+        "generated_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "provider": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "symbol": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "symbol",
+        "provider",
+        "generated_at",
+        "events"
+      ],
+      "type": "object"
+    },
+    "catalyst_event": {
+      "additionalProperties": false,
+      "properties": {
+        "headline": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "provider": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "published_at": {
+          "format": "date-time",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "summary": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "headline",
+        "provider",
+        "published_at",
+        "source",
+        "url",
+        "summary"
+      ],
+      "type": "object"
+    },
     "facts": {
       "additionalProperties": true,
       "properties": {
         "candles": {
           "minimum": 1,
           "type": "integer"
+        },
+        "catalysts": {
+          "$ref": "#/$defs/catalyst_context"
         },
         "data_end": {
           "format": "date-time",
@@ -14,6 +94,9 @@
         "data_start": {
           "format": "date-time",
           "type": "string"
+        },
+        "fundamentals": {
+          "$ref": "#/$defs/fundamental_context"
         },
         "interval": {
           "minLength": 1,
@@ -88,6 +171,107 @@
         "swing_start",
         "swing_end",
         "source_rule"
+      ],
+      "type": "object"
+    },
+    "fundamental_context": {
+      "additionalProperties": false,
+      "properties": {
+        "beta": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "company_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "currency": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "eps": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "exchange": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "generated_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "industry": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "market_cap": {
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "pe_ratio": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "price": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "provider": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "sector": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "symbol": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "symbol",
+        "provider",
+        "generated_at",
+        "company_name",
+        "exchange",
+        "industry",
+        "sector",
+        "market_cap",
+        "currency",
+        "price",
+        "beta",
+        "pe_ratio",
+        "eps",
+        "source_url"
       ],
       "type": "object"
     },
