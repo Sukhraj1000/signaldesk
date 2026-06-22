@@ -1205,8 +1205,6 @@ def test_ta_command_resolves_enhanced_mode_price_provider(monkeypatch: MonkeyPat
     }
 
 
-
-
 def test_ta_command_enhanced_mode_adds_fmp_context_without_ta_signal_blending(
     monkeypatch: MonkeyPatch,
 ) -> None:
@@ -2437,6 +2435,44 @@ def test_report_watchlist_markdown_separates_signal_card_sections(
     assert "- LLM: `none`" in result.stdout
     assert "- Narrative: unavailable" in result.stdout
 
+
+def test_report_watchlist_markdown_renders_enhanced_context_facts(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        cli_main,
+        "default_provider_registry",
+        lambda: ProviderRegistry(
+            (WorkingProvider(name="local-fixture"), EnhancedContextProvider())
+        ),
+    )
+    watchlist = tmp_path / "watchlist.yaml"
+    watchlist.write_text("symbols:\n  - AMD\n", encoding="utf-8")
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "report",
+            "--watchlist",
+            str(watchlist),
+            "--mode",
+            "enhanced",
+            "--format",
+            "markdown",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert (
+        "- Fundamentals: `Advanced Micro Devices, Inc.` via `fmp`; "
+        "sector `Technology`, industry `Semiconductors`"
+    ) in result.stdout
+    assert (
+        "- Catalysts: `1` event(s) via `fmp`; latest "
+        "`AMD announces data center update`"
+    ) in result.stdout
+    assert "- Trend regime: `unknown`" in result.stdout
+    assert "#### Unavailable context" in result.stdout
 
 
 def test_report_watchlist_markdown_keeps_provider_mode_unavailable_details() -> None:

@@ -443,7 +443,6 @@ def _format_provenance_markdown_line(
     )
 
 
-
 def _markdown_inline_code_text(value: object) -> str:
     """Return provider text safe for Markdown inline-code output."""
 
@@ -1159,6 +1158,18 @@ def _format_card_provenance_fact_lines(summary: dict[str, Any]) -> list[str]:
     ]
 
 
+def _format_report_enhanced_fact_lines(summary: dict[str, Any]) -> list[str]:
+    """Return provider-sourced enhanced facts for a watchlist signal card."""
+
+    signal_card = summary.get("signal_card")
+    if not isinstance(signal_card, dict):
+        return []
+    facts = signal_card.get("facts")
+    if not isinstance(facts, dict):
+        return []
+    return _format_enhanced_fact_lines(facts)
+
+
 def _format_report_markdown(payload: dict[str, Any]) -> str:
     lines = [
         "# SignalDesk watchlist report",
@@ -1231,6 +1242,7 @@ def _format_report_markdown(payload: dict[str, Any]) -> str:
                 f"- Generated at: `{summary['generated_at']}`",
                 f"- Schema version: `{summary['schema_version']}`",
                 *_format_card_provenance_fact_lines(summary),
+                *_format_report_enhanced_fact_lines(summary),
                 "",
                 "#### Setup",
                 "- What is the setup? `{}` trend regime with setup quality `{}` "
@@ -1536,7 +1548,6 @@ _TABLE_REPORT_KEYS = (
     "invalidation_level",
     "llm",
 )
-
 
 
 def _enhanced_context_payloads(
