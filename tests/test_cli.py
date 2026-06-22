@@ -2325,6 +2325,27 @@ def test_report_watchlist_markdown_keeps_provider_mode_unavailable_details() -> 
         "Details: Set FMP_API_KEY to enable enhanced fundamentals."
     ) in markdown
 
+
+def test_report_watchlist_table_uses_fixture_provider(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        cli_main, "default_provider_registry", lambda: ProviderRegistry((WorkingProvider(),))
+    )
+    watchlist = tmp_path / "watchlist.yaml"
+    watchlist.write_text("symbols:\n  - AMD\n  - MSFT\n", encoding="utf-8")
+
+    result = CliRunner().invoke(
+        app,
+        ["report", "--watchlist", str(watchlist), "--provider", "working", "--format", "table"],
+    )
+
+    assert result.exit_code == 0
+    assert "rank\tsymbol\tstatus\tprovider\tlatest_close\ttrend_regime" in result.stdout
+    assert "1\tAMD\tok\tworking\t49\tunknown" in result.stdout
+    assert "2\tMSFT\tok\tworking\t49\tunknown" in result.stdout
+    assert "summary\t\t\t\t\tok=2 failed=0 skipped=0 total=2" in result.stdout
+
 def test_report_watchlist_json_uses_fixture_provider(
     monkeypatch: MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -2436,7 +2457,7 @@ def test_report_watchlist_rejects_unsupported_format_and_llm() -> None:
     )
 
     assert bad_format.exit_code == 2
-    assert "--format must be 'markdown' or 'json'." in bad_format.stderr
+    assert "--format must be 'markdown', 'table', or 'json'." in bad_format.stderr
     assert bad_llm.exit_code == 2
     assert "Only --llm none is currently supported." in bad_llm.stderr
 

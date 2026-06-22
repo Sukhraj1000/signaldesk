@@ -9,6 +9,7 @@ SignalDesk reports are renderers over canonical signal-card objects. The backend
 - `signaldesk ta SYMBOL --output markdown` emits a readable single-symbol Markdown report.
 - `signaldesk scan --watchlist PATH --output json` emits a `signaldesk.watchlist_report.v1` payload with per-symbol summaries that retain each canonical `signal_card`.
 - `signaldesk report --watchlist PATH --format markdown` emits a watchlist Markdown report from the same schema-versioned scan payload.
+- `signaldesk report --watchlist PATH --format table` emits a compact terminal table from the same schema-versioned scan payload.
 - `signaldesk report --watchlist PATH --format json` emits the same `signaldesk.watchlist_report.v1` payload, including top-level report provenance for successful symbols.
 
 Default-mode examples should work without paid keys by using `yfinance`, `local-fixture`, or `local-csv` providers. Enhanced providers such as FMP may add richer context when credentials are available, but missing enhanced context must remain explicit unavailable context.
@@ -53,6 +54,7 @@ When adding a new renderer:
 signaldesk ta AMD --provider local-fixture --llm none --output markdown
 signaldesk ta AMD --provider local-fixture --llm none --output table
 signaldesk report --watchlist watchlists/default.yaml --provider local-fixture --format markdown
+signaldesk report --watchlist watchlists/default.yaml --provider local-fixture --format table
 ```
 
 For live default-mode checks, use `--provider yfinance` when network access is allowed. Paid/enhanced provider checks should be reported separately and must not be required for the default TA workflow.
