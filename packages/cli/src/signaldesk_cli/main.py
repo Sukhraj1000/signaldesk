@@ -634,6 +634,8 @@ def _scan_result_summary(report: dict[str, Any]) -> dict[str, Any]:
         "score_breakdowns": card["score"]["breakdowns"],
         "technical_events": card["events"],
         "unavailable_context": card["unavailable_context"],
+        "llm": card["llm"],
+        "narrative": card["narrative"],
         "setup_quality_score": setup_scores[0]["score"] if setup_scores else None,
         "risk_score": risk_scores[0]["score"] if risk_scores else None,
         "provenance": card["provenance"],
@@ -1036,6 +1038,15 @@ def _format_report_markdown(payload: dict[str, Any]) -> str:
                 )
         else:
             lines.append("- none")
+        narrative = summary.get("narrative") or "unavailable"
+        lines.extend(
+            [
+                "",
+                "#### Optional narrative",
+                "- LLM: " + chr(96) + str(summary["llm"]) + chr(96),
+                f"- Narrative: {narrative}",
+            ]
+        )
     lines.append("")
     lines.append("## Provenance")
     for result in payload["results"]:
