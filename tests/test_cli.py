@@ -1580,6 +1580,11 @@ def test_ta_command_outputs_markdown_from_signal_card(monkeypatch: MonkeyPatch) 
     assert "- Why it matters:" in result.stdout
     assert "## Deterministic signals" in result.stdout
     assert "- Trend regime: `unknown`" in result.stdout
+    assert "- Score reasons:" in result.stdout
+    assert "`setup_quality` `50`" in result.stdout
+    assert "deterministic baseline" in result.stdout
+    assert "## Technical events" in result.stdout
+    assert "- none detected" in result.stdout
     assert "## Confirmation and invalidation" in result.stdout
     assert "- What confirms it: `unavailable`" in result.stdout
     assert "- What invalidates it: `unavailable`" in result.stdout
