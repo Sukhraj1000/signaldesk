@@ -455,6 +455,7 @@ def test_scan_command_runs_watchlist_against_fixture_provider(
     assert [item["symbol"] for item in payload["ranked_setups"]] == ["AMD", "MSFT"]
     assert [item["rank"] for item in payload["ranked_setups"]] == [1, 2]
     assert payload["failed_symbols"] == []
+    assert payload["summary"] == {"total": 2, "ok": 2, "failed": 0, "skipped": 0}
     first_summary = payload["results"][0]["summary"]
     assert first_summary["schema_version"] == "signaldesk.ta.v1"
     assert first_summary["symbol"] == "AMD"
@@ -542,6 +543,8 @@ def test_scan_command_outputs_markdown_watchlist_report(
     assert "- Watchlist name: `Markdown Watch`" in result.stdout
     assert "| 1 | AMD | ok | working | 49 | unknown | 50 | 60 |" in result.stdout
     assert "| 2 | MSFT | ok | working | 49 | unknown | 50 | 60 |" in result.stdout
+    assert "- Symbols scanned: `2`" in result.stdout
+    assert "- Failed symbols: `0`" in result.stdout
     assert "## Provenance" in result.stdout
     assert "provider `working`" in result.stdout
 
@@ -587,6 +590,7 @@ def test_scan_command_includes_watchlist_metadata_and_skips_disabled_watchlists(
     }
     assert payload["ranked_setups"] == []
     assert payload["failed_symbols"] == []
+    assert payload["summary"] == {"total": 2, "ok": 0, "failed": 0, "skipped": 2}
     assert payload["skipped_symbols"] == [
         {"symbol": "AMD", "status": "skipped", "reason": "watchlist is disabled"},
         {"symbol": "MSFT", "status": "skipped", "reason": "watchlist is disabled"},
@@ -600,6 +604,7 @@ def test_scan_command_includes_watchlist_metadata_and_skips_disabled_watchlists(
     assert "AMD\tskipped" in table_result.stdout
     assert "MSFT\tskipped" in table_result.stdout
     assert "watchlist is disabled" in table_result.stdout
+    assert "ok=0 failed=0 skipped=2 total=2" in table_result.stdout
 
 
 def test_scan_command_reports_watchlist_errors(tmp_path: Path) -> None:
@@ -687,6 +692,7 @@ def test_scan_payload_ranks_successes_and_splits_failures(
     assert failure_result.exit_code == 1
     failure_payload = json.loads(failure_result.stdout)
     assert failure_payload["ranked_setups"] == []
+    assert failure_payload["summary"] == {"total": 2, "ok": 0, "failed": 2, "skipped": 0}
     assert [item["symbol"] for item in failure_payload["failed_symbols"]] == ["MSFT", "AMD"]
     assert all(item["status"] == "failed" for item in failure_payload["failed_symbols"])
     assert "apikey=<redacted>" in failure_payload["failed_symbols"][0]["error"]
