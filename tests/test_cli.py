@@ -2177,6 +2177,13 @@ def test_report_watchlist_markdown_separates_signal_card_sections(
     assert "#### Risks" in result.stdout
     assert "#### Unavailable context" in result.stdout
     assert "- Latest close: `49`" in result.stdout
+    assert "- Generated at: `" in result.stdout
+    assert "- Schema version: `signaldesk.ta.v1`" in result.stdout
+    assert (
+        "- Provenance: provider `working`, source `historical_candles`, timeframe `1d`, "
+        "inputs `AMD`, generated at `"
+        in result.stdout
+    )
     assert "- Trend regime: `unknown`" in result.stdout
     assert (
         "- `fundamentals` via `working`: not available in the default technical-analysis CLI path"
