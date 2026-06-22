@@ -1252,6 +1252,29 @@ def test_ta_command_enhanced_mode_adds_fmp_context_without_ta_signal_blending(
     )
     assert payload["deterministic_signals"]["events"] == payload["events"]
 
+    table_result = CliRunner().invoke(
+        app, ["ta", "AMD", "--mode", "enhanced", "--llm", "none", "--output", "table"]
+    )
+    assert table_result.exit_code == 0
+    assert (
+        "enhanced_context_summary\tfundamentals via fmp: Advanced Micro Devices, Inc. "
+        "(Technology/Semiconductors); catalysts via fmp: 1 event(s), latest AMD announces "
+        "data center update"
+    ) in table_result.stdout
+
+    markdown_result = CliRunner().invoke(
+        app, ["ta", "AMD", "--mode", "enhanced", "--llm", "none", "--output", "markdown"]
+    )
+    assert markdown_result.exit_code == 0
+    assert (
+        "- Fundamentals: `Advanced Micro Devices, Inc.` via `fmp`; sector `Technology`, "
+        "industry `Semiconductors`"
+    ) in markdown_result.stdout
+    assert (
+        "- Catalysts: `1` event(s) via `fmp`; latest `AMD announces data center update`"
+        in markdown_result.stdout
+    )
+
 def test_ta_command_reports_enhanced_mode_unavailable_context_when_fmp_key_missing(
     monkeypatch: MonkeyPatch,
 ) -> None:

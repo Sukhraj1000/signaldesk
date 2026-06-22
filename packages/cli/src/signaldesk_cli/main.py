@@ -341,6 +341,7 @@ def _format_ta_markdown(report: dict[str, Any]) -> str:
         f"- Price provider: `{provider_mode['price_provider']}`",
         f"- Candles: `{facts['candles']}`",
         f"- Latest close: `{facts['latest_close']}` at `{facts['latest_timestamp']}`",
+        *_format_enhanced_fact_lines(facts),
         *_markdown_report_boundary_lines(),
         "",
         "## Setup",
@@ -439,6 +440,70 @@ def _format_provenance_markdown_line(
         f"generated at `{generated_at}`, observations `{provenance['observations']}`"
     )
 
+
+
+def _format_enhanced_fact_lines(facts: dict[str, Any]) -> list[str]:
+    lines: list[str] = []
+    fundamentals = facts.get("fundamentals")
+    if isinstance(fundamentals, dict):
+        company_name = fundamentals.get("company_name") or fundamentals.get("symbol") or "unknown"
+        provider = fundamentals.get("provider") or "unknown"
+        sector = fundamentals.get("sector") or "sector unavailable"
+        industry = fundamentals.get("industry") or "industry unavailable"
+        lines.append(
+            f"- Fundamentals: `{company_name}` via `{provider}`; "
+            f"sector `{sector}`, industry `{industry}`"
+        )
+    catalysts = facts.get("catalysts")
+    if isinstance(catalysts, dict):
+        events = catalysts.get("events")
+        event_items = events if isinstance(events, list) else []
+        event_count = len(event_items)
+        provider = catalysts.get("provider") or "unknown"
+        if event_count:
+            first_event = event_items[0]
+            headline = (
+                first_event.get("headline", "headline unavailable")
+                if isinstance(first_event, dict)
+                else "headline unavailable"
+            )
+            lines.append(
+                f"- Catalysts: `{event_count}` event(s) via `{provider}`; latest `{headline}`"
+            )
+        else:
+            lines.append(f"- Catalysts: `0` event(s) via `{provider}`")
+    return lines
+
+
+def _summarize_enhanced_context(facts: dict[str, Any]) -> str:
+    summaries: list[str] = []
+    fundamentals = facts.get("fundamentals")
+    if isinstance(fundamentals, dict):
+        company_name = _flat_table_cell_text(
+            fundamentals.get("company_name") or fundamentals.get("symbol") or "unknown"
+        )
+        provider = _flat_table_cell_text(fundamentals.get("provider") or "unknown")
+        sector = _flat_table_cell_text(fundamentals.get("sector") or "sector unavailable")
+        industry = _flat_table_cell_text(fundamentals.get("industry") or "industry unavailable")
+        summaries.append(f"fundamentals via {provider}: {company_name} ({sector}/{industry})")
+    catalysts = facts.get("catalysts")
+    if isinstance(catalysts, dict):
+        events = catalysts.get("events")
+        event_items = events if isinstance(events, list) else []
+        event_count = len(event_items)
+        provider = _flat_table_cell_text(catalysts.get("provider") or "unknown")
+        if event_count:
+            first_event = event_items[0]
+            headline_value = (
+                first_event.get("headline", "headline unavailable")
+                if isinstance(first_event, dict)
+                else "headline unavailable"
+            )
+            headline = _flat_table_cell_text(headline_value)
+            summaries.append(f"catalysts via {provider}: {event_count} event(s), latest {headline}")
+        else:
+            summaries.append(f"catalysts via {provider}: 0 event(s)")
+    return "; ".join(summaries) if summaries else "none"
 
 def _format_score_reason_lines(score_breakdowns: list[dict[str, Any]]) -> list[str]:
     """Return compact deterministic score reasons for Markdown reports."""
@@ -717,6 +782,7 @@ def _scan_result_summary(report: dict[str, Any]) -> dict[str, Any]:
         "score_breakdowns": card["score"]["breakdowns"],
         "technical_events": card["events"],
         "unavailable_context": card["unavailable_context"],
+        "enhanced_context_summary": _summarize_enhanced_context(card["facts"]),
         "llm": card["llm"],
         "narrative": card["narrative"],
         "setup_quality_score": setup_scores[0]["score"] if setup_scores else None,
@@ -1306,6 +1372,7 @@ def _ta_table_report_values(report: dict[str, Any]) -> dict[str, Any]:
         "latest_close": facts["latest_close"],
         "generated_at": identity["generated_at"],
         "provenance_summary": _summarize_provenance(card["provenance"]),
+        "enhanced_context_summary": _summarize_enhanced_context(facts),
         "setup": "{} trend; setup_quality={}; risk={}".format(
             trend_regime["regime"],
             setup_scores[0]["score"] if setup_scores else "unavailable",
@@ -1425,6 +1492,7 @@ _TABLE_REPORT_KEYS = (
     "latest_close",
     "generated_at",
     "provenance_summary",
+    "enhanced_context_summary",
     "setup",
     "why_it_matters",
     "what_confirms",
