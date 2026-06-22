@@ -1298,20 +1298,28 @@ def _summarize_provenance(provenance_items: list[dict[str, Any]]) -> str:
         return "none"
     summary_lines = []
     for provenance in provenance_items[:3]:
-        inputs = ",".join(provenance.get("inputs", [])) or "none"
+        inputs = ",".join(
+            _flat_table_cell_text(item) for item in provenance.get("inputs", [])
+        ) or "none"
         summary_lines.append(
             "{}:{}:{} inputs={} observations={}".format(
-                provenance.get("provider", "unknown"),
-                provenance.get("source", "unknown"),
-                provenance.get("timeframe", "unknown"),
+                _flat_table_cell_text(provenance.get("provider", "unknown")),
+                _flat_table_cell_text(provenance.get("source", "unknown")),
+                _flat_table_cell_text(provenance.get("timeframe", "unknown")),
                 inputs,
-                provenance.get("observations", "unknown"),
+                _flat_table_cell_text(provenance.get("observations", "unknown")),
             )
         )
     omitted_count = len(provenance_items) - 3
     if omitted_count > 0:
         summary_lines.append(f"{omitted_count} more provenance item(s) omitted")
     return "; ".join(summary_lines)
+
+
+def _flat_table_cell_text(value: object) -> str:
+    """Return text that cannot split terminal table rows or columns."""
+
+    return str(value).replace(chr(9), chr(32)).replace(chr(13), chr(32)).replace(chr(10), chr(32))
 
 
 def _resolve_ta_provider(
