@@ -2775,3 +2775,47 @@ def test_fixtures_generate_rejects_invalid_options(tmp_path: Path) -> None:
     assert "--output must be 'table' or 'json'." in bad_output.stderr
     assert bad_date.exit_code == 2
     assert "--as-of must use YYYY-MM-DD format" in bad_date.stderr
+
+
+def test_llm_prompt_payload_command_emits_guarded_structured_json(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        cli_main, "default_provider_registry", lambda: ProviderRegistry((WorkingProvider(),))
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "llm",
+            "prompt-payload",
+            "AMD",
+            "--provider",
+            "working",
+            "--output",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["schema_version"] == "signaldesk.llm_prompt.v1"
+    assert payload["task"] == "explain_ta_signal_card"
+    assert payload["signal_card"]["identity"]["symbol"] == "AMD"
+    assert payload["signal_card"]["facts"]["provider"] == "working"
+    assert payload["signal_card"]["llm"] == "none"
+    assert "Do not fetch market data" in "\n".join(payload["guardrails"])
+    assert payload["output_schema"]["additionalProperties"] is False
+    assert "tools" not in payload
+    assert "provider_client" not in payload
+
+
+def test_llm_prompt_payload_command_rejects_non_json_output(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        cli_main, "default_provider_registry", lambda: ProviderRegistry((WorkingProvider(),))
+    )
+
+    result = CliRunner().invoke(
+        app, ["llm", "prompt-payload", "AMD", "--provider", "working", "--output", "table"]
+    )
+
+    assert result.exit_code == 2
+    assert "--output must be 'json'." in result.stderr

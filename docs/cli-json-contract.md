@@ -55,7 +55,7 @@ The canonical aliases do not introduce new data sources or LLM-derived facts; th
 
 ## Guarded LLM prompt payload
 
-Optional LLM explanation mode must use the backend `build_ta_llm_prompt_payload()` helper rather than building prompts directly from provider responses. The helper first validates the canonical `signal_card`, deep-copies that structured card, labels provider/news text fields as untrusted data, and attaches fixed guardrails plus a fail-closed JSON output schema. It does not include provider clients, tools, credentials, or permission to fetch market data.
+`signaldesk llm prompt-payload <SYMBOL> --provider local-fixture --output json` emits the guarded prompt payload without calling an LLM provider, which gives CI and developers a runtime smoke path for explanation-mode boundaries. Optional LLM explanation mode must use the backend `build_ta_llm_prompt_payload()` helper rather than building prompts directly from provider responses. The helper first validates the canonical `signal_card`, deep-copies that structured card, labels provider/news text fields as untrusted data, and attaches fixed guardrails plus a fail-closed JSON output schema. It does not include provider clients, tools, credentials, or permission to fetch market data.
 
 This preserves the TA-first contract: deterministic code remains the source of truth for prices, levels, events, risks, scores, provenance, and unavailable context. LLM adapters may explain those structured facts only, and invalid/missing provider data must stay visible as unavailable context instead of being converted into recommendations.
 

@@ -23,6 +23,7 @@ from signaldesk_backend import (
     assemble_ta_signal_card_report,
     assess_technical_analysis_risks,
     average_true_range,
+    build_ta_llm_prompt_payload,
     calculate_fibonacci_retracement_levels,
     classify_trend_regime,
     classify_volatility_regime,
@@ -56,9 +57,13 @@ ENHANCED_CONTEXT_STALE_AFTER = timedelta(days=7)
 providers_app = typer.Typer(help="Inspect configured market-data providers.")
 config_app = typer.Typer(help="Inspect local SignalDesk configuration without exposing secrets.")
 fixtures_app = typer.Typer(help="Generate deterministic local fixture data.")
+llm_app = typer.Typer(
+    help="Inspect guarded optional LLM explanation payloads without calling an LLM."
+)
 app.add_typer(providers_app, name="providers")
 app.add_typer(config_app, name="config")
 app.add_typer(fixtures_app, name="fixtures")
+app.add_typer(llm_app, name="llm")
 
 
 @app.callback()
@@ -836,6 +841,47 @@ def _format_scan_table(payload: dict[str, Any]) -> tuple[str, ...]:
         + "ok={ok} failed={failed} skipped={skipped} total={total}".format(**summary)
     )
     return tuple(lines)
+
+
+@llm_app.command("prompt-payload")
+def llm_prompt_payload(
+    symbol: str,
+    provider: str | None = typer.Option(
+        None,
+        help=(
+            "Registered market-data provider to use. When omitted, SignalDesk "
+            "uses --mode role resolution."
+        ),
+    ),
+    mode: str = typer.Option("default", help="Provider role mode: default or enhanced."),
+    interval: str = typer.Option("1d", help="Historical candle interval."),
+    days: int = typer.Option(120, min=1, help="Number of calendar days of history to request."),
+    output: str = typer.Option("json", help="Output format: json."),
+) -> None:
+    if output.strip().lower() != "json":
+        typer.echo("--output must be 'json'.", err=True)
+        raise typer.Exit(2)
+
+    registry = default_provider_registry()
+    try:
+        report = _fetch_ta_report(
+            registry,
+            symbol=symbol,
+            provider=provider,
+            mode=mode,
+            interval=interval,
+            days=days,
+            as_of=datetime.now(UTC),
+        )
+        payload = build_ta_llm_prompt_payload(report)
+    except (KeyError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from exc
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
+
+    typer.echo(json.dumps(payload, indent=2, sort_keys=True))
 
 
 @app.command("scan")
