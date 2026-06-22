@@ -491,6 +491,7 @@ def test_scan_command_outputs_markdown_watchlist_report(
     assert "| 1 | AMD | ok | working | 49 | unknown | 50 | 60 |" in result.stdout
     assert "| 2 | MSFT | ok | working | 49 | unknown | 50 | 60 |" in result.stdout
     assert "## Provenance" in result.stdout
+    assert "provider `working`" in result.stdout
 
 
 def test_scan_command_includes_watchlist_metadata_and_skips_disabled_watchlists(

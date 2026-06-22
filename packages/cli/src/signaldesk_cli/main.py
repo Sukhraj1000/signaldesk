@@ -491,7 +491,7 @@ def scan_watchlist(
         raise typer.Exit(2)
     output_format = output.strip().lower()
     if output_format not in {"table", "json", "markdown", "md"}:
-        typer.echo("--output must be 'table', 'json', or 'markdown'.", err=True)
+        typer.echo("--output must be 'table', 'json', 'markdown', or 'md'.", err=True)
         raise typer.Exit(2)
 
     try:
