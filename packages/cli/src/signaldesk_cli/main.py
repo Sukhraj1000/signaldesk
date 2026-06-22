@@ -262,7 +262,7 @@ def technical_analysis(
     llm: str = typer.Option("none", help="LLM provider. Only 'none' is currently supported."),
     interval: str = typer.Option("1d", help="Historical candle interval."),
     days: int = typer.Option(120, min=1, help="Number of calendar days of history to request."),
-    output: str = typer.Option("table", help="Output format: table or json."),
+    output: str = typer.Option("table", help="Output format: table, json, or markdown."),
 ) -> None:
     """Fetch candles and run deterministic technical analysis for one symbol."""
 
@@ -271,8 +271,8 @@ def technical_analysis(
         raise typer.Exit(2)
 
     output_format = output.strip().lower()
-    if output_format not in {"table", "json"}:
-        typer.echo("--output must be 'table' or 'json'.", err=True)
+    if output_format not in {"table", "json", "markdown", "md"}:
+        typer.echo("--output must be 'table', 'json', 'markdown', or 'md'.", err=True)
         raise typer.Exit(2)
 
     registry = default_provider_registry()
@@ -297,9 +297,93 @@ def technical_analysis(
     if output_format == "json":
         typer.echo(json.dumps(report, indent=2, sort_keys=True))
         return
+    if output_format in {"markdown", "md"}:
+        typer.echo(_format_ta_markdown(report), nl=False)
+        return
 
     for key, value in _ta_table_report_values(report).items():
         typer.echo(f"{key}\t{value}")
+
+
+def _format_ta_markdown(report: dict[str, Any]) -> str:
+    """Render a compact Markdown report from the canonical TA signal card."""
+
+    card = extract_ta_signal_card(report)
+    identity = card["identity"]
+    facts = card["facts"]
+    trend = card["trend"]
+    levels = card["levels"]
+    risk = card["risk"]
+    score = card["score"]
+    provider_mode = card["provider_mode"]
+    unavailable_context = card["unavailable_context"]
+
+    setup_scores = [
+        item for item in score["breakdowns"] if item["category"] == "setup_quality"
+    ]
+    risk_scores = [item for item in score["breakdowns"] if item["category"] == "risk"]
+    trend_regime = trend["regimes"]["trend"]
+    generated_at = identity["generated_at"]
+
+    lines = [
+        f"# SignalDesk TA report: {identity['symbol']}",
+        "",
+        "## Facts",
+        f"- Generated at: `{generated_at}`",
+        f"- Symbol: `{identity['symbol']}`",
+        f"- Timeframe: `{identity['timeframe']}`",
+        f"- Provider mode: `{provider_mode['mode']}`",
+        f"- Price provider: `{provider_mode['price_provider']}`",
+        f"- Candles: `{facts['candles']}`",
+        f"- Latest close: `{facts['latest_close']}` at `{facts['latest_timestamp']}`",
+        "",
+        "## Deterministic signals",
+        f"- Trend regime: `{trend_regime['regime']}` — {trend_regime['reason']}",
+        f"- Confirmation level: `{_format_optional_level(levels['confirmation'])}`",
+        f"- Invalidation level: `{_format_optional_level(levels['invalidation'])}`",
+        f"- Setup quality score: `{setup_scores[0]['score'] if setup_scores else 'unavailable'}`",
+        f"- Risk score: `{risk_scores[0]['score'] if risk_scores else 'unavailable'}`",
+        "",
+        "## Risks",
+    ]
+    for flag in risk["flags"]:
+        lines.append(
+            f"- `{flag['severity']}` `{flag['kind']}`: {flag['message']} "
+            f"(source: `{flag['source']}`)"
+        )
+    lines.extend(["", "## Unavailable context"])
+    if unavailable_context:
+        for item in unavailable_context:
+            provider_name = item.get("provider") or "none"
+            details = item.get("details")
+            suffix = f" Details: {details}" if details else ""
+            lines.append(
+                f"- `{item['context_type']}` via `{provider_name}`: {item['reason']}.{suffix}"
+            )
+    else:
+        lines.append("- none")
+    lines.extend(["", "## Provenance"])
+    for provenance in card["provenance"]:
+        inputs = ", ".join(provenance.get("inputs", [])) or "none"
+        lines.append(
+            "- provider `{}`, source `{}`, timeframe `{}`, inputs `{}`, observations `{}`".format(
+                provenance["provider"],
+                provenance["source"],
+                provenance["timeframe"],
+                inputs,
+                provenance["observations"],
+            )
+        )
+    lines.extend(
+        ["", "## Optional narrative", f"- LLM: `{card['llm']}`", "- Narrative: unavailable"]
+    )
+    return "\n".join(lines) + "\n"
+
+
+def _format_optional_level(level: dict[str, Any] | None) -> str:
+    if level is None:
+        return "unavailable"
+    return "{} ({})".format(level["price"], level["source_rule"])
 
 
 def _fetch_ta_report(
