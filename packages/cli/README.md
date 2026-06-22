@@ -66,7 +66,7 @@ Each configured provider must be registered, advertise the requested role, and b
 
 `signaldesk providers check` stays safe by avoiding live network probes for providers whose capabilities mark `live_check=false`. Stooq is no-key and default-tier, but its health row reports `not checked` because public endpoint availability is proven only when a candle fetch runs. Use `signaldesk providers check --output json` for machine-readable status rows shaped as `provider`, `status`, `result`, and `warnings`; diagnostic text is redacted before it is printed.
 
-Future provider configuration can build on these resolved roles to split price, catalyst, fundamentals, and LLM providers.
+Enhanced signal-card behavior is documented in `../../docs/enhanced-context.md`. Future provider configuration can build on these resolved roles to split price, catalyst, fundamentals, and LLM providers.
 
 `signaldesk fixtures generate` writes deterministic `local-csv` compatible OHLCV CSV files for demos, docs, and no-network provider experiments without committing live market-data dumps. Use `--output json` for machine-readable file paths and row counts.
 
