@@ -388,19 +388,9 @@ def _format_ta_markdown(report: dict[str, Any]) -> str:
         lines.append("- none")
     lines.extend(["", "## Provenance"])
     for provenance in card["provenance"]:
-        inputs = ", ".join(provenance.get("inputs", [])) or "none"
-        generated_at = provenance.get("generated_at") or identity["generated_at"]
         lines.append(
-            (
-                "- provider `{}`, source `{}`, timeframe `{}`, inputs `{}`, "
-                "generated at `{}`, observations `{}`"
-            ).format(
-                provenance["provider"],
-                provenance["source"],
-                provenance["timeframe"],
-                inputs,
-                generated_at,
-                provenance["observations"],
+            _format_provenance_markdown_line(
+                provenance, fallback_generated_at=identity["generated_at"]
             )
         )
     narrative = card.get("narrative") or "unavailable"
@@ -414,6 +404,23 @@ def _format_optional_level(level: dict[str, Any] | None) -> str:
     if level is None:
         return "unavailable"
     return "{} ({})".format(level["price"], level["source_rule"])
+
+
+def _format_provenance_markdown_line(
+    provenance: dict[str, Any],
+    *,
+    fallback_generated_at: str = "unavailable",
+    prefix: str = "",
+) -> str:
+    """Return compact provenance with inputs for Markdown signal cards."""
+
+    inputs = ", ".join(provenance.get("inputs", [])) or "none"
+    generated_at = provenance.get("generated_at") or fallback_generated_at
+    return (
+        f"- {prefix}provider `{provenance['provider']}`, source `{provenance['source']}`, "
+        f"timeframe `{provenance['timeframe']}`, inputs `{inputs}`, "
+        f"generated at `{generated_at}`, observations `{provenance['observations']}`"
+    )
 
 
 def _format_score_reason_lines(score_breakdowns: list[dict[str, Any]]) -> list[str]:
@@ -922,6 +929,21 @@ def _rank_scan_setups(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
         for rank, result in enumerate(sorted(successful_results, key=sort_key), start=1)
     ]
 
+def _format_card_provenance_fact_lines(summary: dict[str, Any]) -> list[str]:
+    """Return per-card provenance facts so each card is standalone."""
+
+    if not summary["provenance"]:
+        return ["- Provenance: unavailable"]
+    return [
+        _format_provenance_markdown_line(
+            provenance,
+            fallback_generated_at=summary["generated_at"],
+            prefix="Provenance: ",
+        )
+        for provenance in summary["provenance"]
+    ]
+
+
 def _format_report_markdown(payload: dict[str, Any]) -> str:
     lines = [
         "# SignalDesk watchlist report",
@@ -985,6 +1007,9 @@ def _format_report_markdown(payload: dict[str, Any]) -> str:
                 f"- Timeframe: `{summary['interval']}`",
                 f"- Latest close: `{summary['latest_close']}`",
                 f"- Latest timestamp: `{summary['latest_timestamp']}`",
+                f"- Generated at: `{summary['generated_at']}`",
+                f"- Schema version: `{summary['schema_version']}`",
+                *_format_card_provenance_fact_lines(summary),
                 "",
                 "#### Setup",
                 "- What is the setup? `{}` trend regime with setup quality `{}` "
@@ -1055,16 +1080,10 @@ def _format_report_markdown(payload: dict[str, Any]) -> str:
         summary = result["summary"]
         for provenance in summary["provenance"]:
             lines.append(
-                (
-                    "- {}: provider `{}`, source `{}`, timeframe `{}`, "
-                    "generated at `{}`, observations `{}`"
-                ).format(
-                    summary["symbol"],
-                    provenance["provider"],
-                    provenance["source"],
-                    provenance["timeframe"],
-                    provenance.get("generated_at", "unavailable"),
-                    provenance["observations"],
+                _format_provenance_markdown_line(
+                    provenance,
+                    fallback_generated_at=summary["generated_at"],
+                    prefix=f"{summary['symbol']}: ",
                 )
             )
     return "\n".join(lines) + "\n"
