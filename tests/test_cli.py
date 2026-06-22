@@ -12,6 +12,9 @@ import signaldesk_cli.main as cli_main
 from pytest import MonkeyPatch
 from signaldesk_backend import (
     Candle,
+    CatalystContext,
+    CatalystEvent,
+    FundamentalContext,
     ProviderCapability,
     ProviderRegistry,
     ProviderResult,
@@ -168,6 +171,49 @@ class FmpRolesProvider(WorkingProvider):
             ),
         )
 
+
+
+
+@dataclass(frozen=True)
+class EnhancedContextProvider(FmpRolesProvider):
+    def get_fundamental_context(self, symbol: Symbol) -> ProviderResult[FundamentalContext]:
+        return ProviderResult.success(
+            provider=self.name,
+            data=FundamentalContext(
+                symbol=symbol,
+                provider=self.name,
+                generated_at=datetime(2024, 2, 10, tzinfo=UTC),
+                company_name="Advanced Micro Devices, Inc.",
+                exchange="NASDAQ",
+                industry="Semiconductors",
+                sector="Technology",
+                market_cap=123456789,
+                currency="USD",
+                price=Decimal("101.25"),
+                pe_ratio=Decimal("42.5"),
+                source_url="https://financialmodelingprep.com/profile/AMD",
+            ),
+        )
+
+    def get_catalyst_context(self, symbol: Symbol) -> ProviderResult[CatalystContext]:
+        return ProviderResult.success(
+            provider=self.name,
+            data=CatalystContext(
+                symbol=symbol,
+                provider=self.name,
+                generated_at=datetime(2024, 2, 10, tzinfo=UTC),
+                events=(
+                    CatalystEvent(
+                        headline="AMD announces data center update",
+                        provider=self.name,
+                        published_at=datetime(2024, 2, 9, 13, 30, tzinfo=UTC),
+                        source="FMP News",
+                        url="https://example.test/amd-news",
+                        summary="Structured catalyst summary from provider payload.",
+                    ),
+                ),
+            ),
+        )
 
 @dataclass(frozen=True)
 class SwingingProvider(WorkingProvider):
@@ -1158,6 +1204,53 @@ def test_ta_command_resolves_enhanced_mode_price_provider(monkeypatch: MonkeyPat
         "llm_provider": None,
     }
 
+
+
+
+def test_ta_command_enhanced_mode_adds_fmp_context_without_ta_signal_blending(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        cli_main,
+        "default_provider_registry",
+        lambda: ProviderRegistry((WorkingProvider(name="yfinance"), EnhancedContextProvider())),
+    )
+
+    result = CliRunner().invoke(
+        app, ["ta", "AMD", "--mode", "enhanced", "--llm", "none", "--output", "json"]
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    facts = payload["facts"]
+    assert facts["provider"] == "fmp"
+    assert facts["fundamentals"] == {
+        "symbol": "AMD",
+        "provider": "fmp",
+        "generated_at": "2024-02-10T00:00:00+00:00",
+        "company_name": "Advanced Micro Devices, Inc.",
+        "exchange": "NASDAQ",
+        "industry": "Semiconductors",
+        "sector": "Technology",
+        "market_cap": 123456789,
+        "currency": "USD",
+        "price": "101.25",
+        "beta": None,
+        "pe_ratio": "42.5",
+        "eps": None,
+        "source_url": "https://financialmodelingprep.com/profile/AMD",
+    }
+    assert facts["catalysts"]["events"][0]["headline"] == "AMD announces data center update"
+    assert {item["source"] for item in payload["provenance"]} == {
+        "historical_candles",
+        "fundamental_context",
+        "catalyst_context",
+    }
+    assert not any(
+        item["context_type"] == "fundamentals"
+        for item in payload["unavailable_context"]
+    )
+    assert payload["deterministic_signals"]["events"] == payload["events"]
 
 def test_ta_command_reports_enhanced_mode_unavailable_context_when_fmp_key_missing(
     monkeypatch: MonkeyPatch,
