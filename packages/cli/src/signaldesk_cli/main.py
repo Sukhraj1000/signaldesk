@@ -542,6 +542,19 @@ def _explicit_provider_mode_payload(registry: ProviderRegistry, provider: str) -
     }
 
 
+def _watchlist_price_provider_preference(
+    watchlist_model: dict[str, Any], provider: str | None
+) -> str | None:
+    explicit_provider = provider.strip() if provider is not None else ""
+    if explicit_provider:
+        return explicit_provider
+    preference = watchlist_model.get("provider_preference")
+    if preference is None:
+        return None
+    normalized_preference = str(preference).strip()
+    return normalized_preference or None
+
+
 def _scan_watchlist_payload(
     *,
     watchlist_model: dict[str, Any],
@@ -555,10 +568,11 @@ def _scan_watchlist_payload(
     registry = default_provider_registry()
     scanned_at = datetime.now(UTC)
     symbols = tuple(watchlist_model["symbols"])
+    price_provider = _watchlist_price_provider_preference(watchlist_model, provider)
     provider_mode = (
         _provider_mode_payload(mode)
-        if provider is None or not provider.strip()
-        else _explicit_provider_mode_payload(registry, provider)
+        if price_provider is None
+        else _explicit_provider_mode_payload(registry, price_provider)
     )
     results: list[dict[str, Any]] = []
     if not watchlist_model["enabled"]:
@@ -591,7 +605,7 @@ def _scan_watchlist_payload(
                 _scan_symbol_result,
                 registry,
                 symbol=symbol,
-                provider=provider,
+                provider=price_provider,
                 mode=mode,
                 interval=interval,
                 days=days,

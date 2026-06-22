@@ -616,6 +616,39 @@ def test_scan_command_reports_watchlist_errors(tmp_path: Path) -> None:
     assert "watchlist file not found" in directory_result.stderr
 
 
+def test_scan_uses_watchlist_provider_preference_when_provider_is_omitted(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        cli_main, "default_provider_registry", lambda: ProviderRegistry((WorkingProvider(),))
+    )
+    watchlist = tmp_path / "watchlist.yaml"
+    watchlist.write_text(
+        "name: Preferred Provider Watch\n"
+        "provider_preference: working\n"
+        "symbols:\n"
+        "  - AMD\n",
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(
+        app, ["scan", "--watchlist", str(watchlist), "--output", "json"]
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["provider_mode"] == {
+        "mode": "explicit",
+        "price_provider": "working",
+        "fundamentals_provider": None,
+        "catalyst_provider": None,
+        "llm_provider": None,
+        "unavailable_context": [],
+    }
+    assert payload["watchlist_model"]["provider_preference"] == "working"
+    assert payload["results"][0]["summary"]["provider"] == "working"
+
+
 def test_scan_payload_ranks_successes_and_splits_failures(
     monkeypatch: MonkeyPatch, tmp_path: Path
 ) -> None:
