@@ -442,14 +442,29 @@ def _format_provenance_markdown_line(
 
 
 
+def _markdown_inline_code_text(value: object) -> str:
+    """Return provider text safe for Markdown inline-code output."""
+
+    flat_text = _flat_table_cell_text(value)
+    control_safe_text = "".join(
+        character if ord(character) >= 32 and ord(character) != 127 else " "
+        for character in flat_text
+    )
+    return control_safe_text.replace("`", r"\`")
+
+
 def _format_enhanced_fact_lines(facts: dict[str, Any]) -> list[str]:
     lines: list[str] = []
     fundamentals = facts.get("fundamentals")
     if isinstance(fundamentals, dict):
-        company_name = fundamentals.get("company_name") or fundamentals.get("symbol") or "unknown"
-        provider = fundamentals.get("provider") or "unknown"
-        sector = fundamentals.get("sector") or "sector unavailable"
-        industry = fundamentals.get("industry") or "industry unavailable"
+        company_name = _markdown_inline_code_text(
+            fundamentals.get("company_name") or fundamentals.get("symbol") or "unknown"
+        )
+        provider = _markdown_inline_code_text(fundamentals.get("provider") or "unknown")
+        sector = _markdown_inline_code_text(fundamentals.get("sector") or "sector unavailable")
+        industry = _markdown_inline_code_text(
+            fundamentals.get("industry") or "industry unavailable"
+        )
         lines.append(
             f"- Fundamentals: `{company_name}` via `{provider}`; "
             f"sector `{sector}`, industry `{industry}`"
@@ -459,14 +474,15 @@ def _format_enhanced_fact_lines(facts: dict[str, Any]) -> list[str]:
         events = catalysts.get("events")
         event_items = events if isinstance(events, list) else []
         event_count = len(event_items)
-        provider = catalysts.get("provider") or "unknown"
+        provider = _markdown_inline_code_text(catalysts.get("provider") or "unknown")
         if event_count:
             first_event = event_items[0]
-            headline = (
+            headline_value = (
                 first_event.get("headline", "headline unavailable")
                 if isinstance(first_event, dict)
                 else "headline unavailable"
             )
+            headline = _markdown_inline_code_text(headline_value)
             lines.append(
                 f"- Catalysts: `{event_count}` event(s) via `{provider}`; latest `{headline}`"
             )

@@ -1275,6 +1275,30 @@ def test_ta_command_enhanced_mode_adds_fmp_context_without_ta_signal_blending(
         in markdown_result.stdout
     )
 
+
+def test_enhanced_markdown_fact_lines_sanitize_provider_text() -> None:
+    lines = cli_main._format_enhanced_fact_lines(
+        {
+            "fundamentals": {
+                "company_name": "Name`with\x1b[31mcontrols",
+                "provider": "fmp`provider",
+                "sector": "Tech\nSector",
+                "industry": "Semi\x7fconductors",
+            },
+            "catalysts": {
+                "provider": "news\x1bfeed",
+                "events": [{"headline": "Headline`with\tcontrol"}],
+            },
+        }
+    )
+
+    assert lines == [
+        r"- Fundamentals: `Name\`with [31mcontrols` via `fmp\`provider`; "
+        "sector `Tech Sector`, industry `Semi conductors`",
+        r"- Catalysts: `1` event(s) via `news feed`; latest `Headline\`with control`",
+    ]
+
+
 def test_ta_command_reports_enhanced_mode_unavailable_context_when_fmp_key_missing(
     monkeypatch: MonkeyPatch,
 ) -> None:
