@@ -1,6 +1,7 @@
 import csv
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -132,9 +133,7 @@ def fixtures_generate(
         help="Directory for generated local CSV fixture files.",
     ),
     days: int = typer.Option(60, min=1, max=60, help="Number of daily candles to write."),
-    as_of: str = typer.Option(
-        "2024-12-31", help="Final fixture candle date in YYYY-MM-DD format."
-    ),
+    as_of: str = typer.Option("2024-12-31", help="Final fixture candle date in YYYY-MM-DD format."),
     output: str = typer.Option("table", help="Output format: table or json."),
 ) -> None:
     """Generate deterministic CSV fixtures compatible with the local-csv provider."""
@@ -416,6 +415,7 @@ def _load_watchlist_model(path: Path) -> dict[str, Any]:
 def _load_watchlist_symbols(path: Path) -> tuple[str, ...]:
     return tuple(_load_watchlist_model(path)["symbols"])
 
+
 def _scan_result_summary(report: dict[str, Any]) -> dict[str, Any]:
     card = extract_ta_signal_card(report)
     setup_scores = [
@@ -462,7 +462,7 @@ def _format_scan_table(payload: dict[str, Any]) -> tuple[str, ...]:
     for result in payload["failed_symbols"]:
         lines.append(f"	{result['symbol']}	failed						{result['error']}")
     for result in payload["skipped_symbols"]:
-        lines.append(f"\t{result["symbol"]}\tskipped\t\t\t\t\t\t{result["reason"]}")
+        lines.append(f"\t{result['symbol']}\tskipped\t\t\t\t\t\t{result['reason']}")
     return tuple(lines)
 
 
@@ -483,6 +483,12 @@ def scan_watchlist(
     interval: str = typer.Option("1d", help="Historical candle interval."),
     days: int = typer.Option(120, min=1, help="Number of calendar days of history to request."),
     output: str = typer.Option("table", help="Output format: table, json, or markdown."),
+    max_workers: int = typer.Option(
+        4,
+        min=1,
+        max=16,
+        help="Maximum concurrent symbol fetches for the watchlist scan.",
+    ),
 ) -> None:
     """Run deterministic TA summaries for every symbol in a watchlist."""
 
@@ -508,6 +514,7 @@ def scan_watchlist(
             mode=mode,
             interval=interval,
             days=days,
+            max_workers=max_workers,
         )
     except (KeyError, ValueError) as exc:
         typer.echo(str(exc), err=True)
@@ -543,6 +550,7 @@ def _scan_watchlist_payload(
     mode: str,
     interval: str,
     days: int,
+    max_workers: int = 4,
 ) -> tuple[int, dict[str, Any]]:
     registry = default_provider_registry()
     scanned_at = datetime.now(UTC)
@@ -575,9 +583,12 @@ def _scan_watchlist_payload(
         }
 
     exit_code = 0
-    for symbol in symbols:
-        try:
-            report = _fetch_ta_report(
+    bounded_workers = min(max(1, max_workers), len(symbols))
+    results_by_symbol: dict[str, dict[str, Any]] = {}
+    with ThreadPoolExecutor(max_workers=bounded_workers) as executor:
+        future_to_symbol = {
+            executor.submit(
+                _scan_symbol_result,
                 registry,
                 symbol=symbol,
                 provider=provider,
@@ -585,18 +596,25 @@ def _scan_watchlist_payload(
                 interval=interval,
                 days=days,
                 as_of=scanned_at,
-            )
-        except RuntimeError as exc:
-            exit_code = 1
-            results.append(
-                {
+            ): symbol
+            for symbol in symbols
+        }
+        for future in as_completed(future_to_symbol):
+            symbol = future_to_symbol[future]
+            try:
+                result = future.result()
+            except Exception as exc:  # pragma: no cover - defensive provider isolation
+                result = {
                     "symbol": symbol,
                     "status": "failed",
-                    "error": redact_provider_diagnostic(str(exc)),
+                    "error": redact_provider_diagnostic(
+                        f"provider raised {type(exc).__name__}: {exc}"
+                    ),
                 }
-            )
-            continue
-        results.append({"symbol": symbol, "status": "ok", "summary": _scan_result_summary(report)})
+            if result["status"] != "ok":
+                exit_code = 1
+            results_by_symbol[symbol] = result
+    results = [results_by_symbol[symbol] for symbol in symbols]
 
     ranked_setups = _rank_scan_setups(results)
     failed_symbols = tuple(result for result in results if result["status"] != "ok")
@@ -612,6 +630,35 @@ def _scan_watchlist_payload(
         "failed_symbols": list(failed_symbols),
         "skipped_symbols": [],
     }
+
+
+def _scan_symbol_result(
+    registry: ProviderRegistry,
+    *,
+    symbol: str,
+    provider: str | None,
+    mode: str,
+    interval: str,
+    days: int,
+    as_of: datetime,
+) -> dict[str, Any]:
+    try:
+        report = _fetch_ta_report(
+            registry,
+            symbol=symbol,
+            provider=provider,
+            mode=mode,
+            interval=interval,
+            days=days,
+            as_of=as_of,
+        )
+    except RuntimeError as exc:
+        return {
+            "symbol": symbol,
+            "status": "failed",
+            "error": redact_provider_diagnostic(str(exc)),
+        }
+    return {"symbol": symbol, "status": "ok", "summary": _scan_result_summary(report)}
 
 
 def _rank_scan_setups(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -701,6 +748,12 @@ def report_watchlist(
     llm: str = typer.Option("none", help="LLM provider. Only 'none' is currently supported."),
     interval: str = typer.Option("1d", help="Historical candle interval."),
     days: int = typer.Option(120, min=1, help="Number of calendar days of history to request."),
+    max_workers: int = typer.Option(
+        4,
+        min=1,
+        max=16,
+        help="Maximum concurrent symbol fetches for the watchlist report.",
+    ),
     report_format: str = typer.Option(
         "markdown", "--format", help="Report format: markdown or json."
     ),
@@ -723,6 +776,7 @@ def report_watchlist(
             mode=mode,
             interval=interval,
             days=days,
+            max_workers=max_workers,
         )
     except (KeyError, ValueError) as exc:
         typer.echo(str(exc), err=True)

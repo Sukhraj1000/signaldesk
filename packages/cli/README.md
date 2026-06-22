@@ -20,7 +20,7 @@ signaldesk providers list
 signaldesk providers mode
 signaldesk providers check
 signaldesk ta AMD --llm none --output json
-signaldesk scan --watchlist watchlists/default.yaml --provider local-fixture --output json
+signaldesk scan --watchlist watchlists/default.yaml --provider local-fixture --max-workers 4 --output json
 signaldesk report --watchlist watchlists/default.yaml --provider local-fixture --format json
 signaldesk fixtures generate --symbol AMD --output-dir fixtures/local --output json
 ```
@@ -31,8 +31,13 @@ Default mode uses `yfinance` for price data when `--provider` is omitted:
 
 ```bash
 signaldesk ta AMD --llm none --output json
-signaldesk scan --watchlist watchlists/default.yaml --provider local-fixture --output json
+signaldesk scan --watchlist watchlists/default.yaml --provider local-fixture --max-workers 4 --output json
 ```
+
+
+Watchlist scan/report commands fetch symbols with bounded concurrency. Use `--max-workers`
+(1-16, default 4) to tune parallel price fetches while keeping ranked output deterministic
+and preserving failed/skipped symbols in the payload.
 
 The provider can still be passed explicitly for reproducible live checks:
 
