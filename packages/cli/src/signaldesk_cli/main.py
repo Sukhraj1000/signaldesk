@@ -535,6 +535,39 @@ def _summarize_risk_flags(flags: list[dict[str, Any]]) -> str:
     )
 
 
+def _format_optional_table_level(level: dict[str, Any] | None) -> str:
+    if level is None:
+        return "unavailable"
+    source_rule = level.get("source_rule") or level.get("source") or "unknown_source"
+    return "{} ({})".format(level.get("price", "unavailable"), source_rule)
+
+
+def _summarize_regime(regime: dict[str, Any]) -> str:
+    return "{}: {}".format(
+        _flat_table_cell_text(regime.get("regime", "unknown")),
+        _flat_table_cell_text(regime.get("reason", "no reason provided")),
+    )
+
+
+def _summarize_technical_events(events: tuple[dict[str, Any], ...]) -> str:
+    if not events:
+        return "none detected"
+    summaries = []
+    for event in events[:3]:
+        summaries.append(
+            "{} {} at {}: {}".format(
+                _flat_table_cell_text(event.get("severity", "unknown")),
+                _flat_table_cell_text(event.get("event_type", "unknown_event")),
+                _flat_table_cell_text(event.get("timestamp", "unknown_time")),
+                _flat_table_cell_text(event.get("reason", "no reason provided")),
+            )
+        )
+    omitted_count = len(events) - 3
+    if omitted_count > 0:
+        summaries.append(f"{omitted_count} more event(s) omitted")
+    return "; ".join(summaries)
+
+
 def _fetch_ta_report(
     registry: ProviderRegistry,
     *,
@@ -1278,14 +1311,14 @@ def _ta_table_report_values(report: dict[str, Any]) -> dict[str, Any]:
         "atr_14": volatility["atr_14"],
         "volume_average_20": volume["volume_average_20"],
         "relative_volume_20": volume["relative_volume_20"],
-        "trend_regime": regimes["trend"],
-        "volatility_regime": regimes["volatility"],
-        "volume_regime": regimes["volume"],
-        "technical_events": card["events"],
-        "latest_swing_high": levels["resistance"],
-        "latest_swing_low": levels["support"],
-        "confirmation_level": levels["confirmation"],
-        "invalidation_level": levels["invalidation"],
+        "trend_regime": _summarize_regime(regimes["trend"]),
+        "volatility_regime": _summarize_regime(regimes["volatility"]),
+        "volume_regime": _summarize_regime(regimes["volume"]),
+        "technical_events": _summarize_technical_events(card["events"]),
+        "latest_swing_high": _format_optional_table_level(levels["resistance"]),
+        "latest_swing_low": _format_optional_table_level(levels["support"]),
+        "confirmation_level": confirmation_level,
+        "invalidation_level": invalidation_level,
         "llm": card["llm"],
     }
     return {key: values[key] for key in _TABLE_REPORT_KEYS}
