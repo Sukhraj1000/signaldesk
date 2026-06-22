@@ -12,7 +12,7 @@ from signaldesk_backend import (
 def _report_with_untrusted_provider_text() -> dict[str, Any]:
     unavailable_context = [
         {
-            "context_type": "llm_narrative",
+            "context_type": "llm_explanation",
             "reason": "LLM provider disabled",
             "provider": None,
         }

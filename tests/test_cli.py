@@ -529,7 +529,7 @@ def test_scan_command_runs_watchlist_against_fixture_provider(
             "provider": "working",
         },
         {
-            "context_type": "llm_narrative",
+            "context_type": "llm_explanation",
             "reason": "--llm none selected; narrative explanations are disabled",
             "provider": None,
         },
@@ -1654,7 +1654,7 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
                 "provider": "working",
             },
             {
-                "context_type": "llm_narrative",
+                "context_type": "llm_explanation",
                 "reason": "--llm none selected; narrative explanations are disabled",
                 "provider": None,
             },
@@ -2487,7 +2487,7 @@ def test_report_watchlist_markdown_separates_signal_card_sections(
         in result.stdout
     )
     assert (
-        "- `llm_narrative` via `none`: --llm none selected; narrative explanations are disabled"
+        "- `llm_explanation` via `none`: --llm none selected; narrative explanations are disabled"
         in result.stdout
     )
     assert "#### Optional narrative" in result.stdout
@@ -2660,7 +2660,7 @@ def test_report_watchlist_json_uses_fixture_provider(
     assert sorted(item["context_type"] for item in amd_summary["unavailable_context"]) == [
         "catalyst",
         "fundamentals",
-        "llm_narrative",
+        "llm_explanation",
     ]
 
 
