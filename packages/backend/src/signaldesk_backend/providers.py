@@ -1321,12 +1321,17 @@ class FmpProvider:
         return self._parse_fundamental_context(symbol, response.data)
 
     def get_catalyst_context(self, symbol: Symbol) -> ProviderResult[CatalystContext]:
-        """Fetch structured news catalysts from FMP without treating them as TA facts."""
+        """Fetch structured news and earnings catalysts from FMP.
+
+        Earnings rows are provider-sourced context, not deterministic TA signals.
+        If the supplemental earnings endpoint is unavailable, preserve the news-only
+        catalyst behavior rather than dropping usable attributed news facts.
+        """
 
         api_key = self._api_key()
         if api_key is None:
             return self._missing_key_failure()
-        response = self._fetch_json(
+        news_response = self._fetch_json(
             "stock_news",
             {
                 "tickers": symbol.ticker,
@@ -1334,11 +1339,19 @@ class FmpProvider:
                 "apikey": api_key,
             },
         )
-        if not response.ok:
+        if not news_response.ok:
             return ProviderResult.failure(
-                provider=self.name, error=response.error or "fmp request failed"
+                provider=self.name, error=news_response.error or "fmp request failed"
             )
-        return self._parse_catalyst_context(symbol, response.data)
+        earnings_response = self._fetch_json(
+            f"historical/earning_calendar/{symbol.ticker}",
+            {
+                "limit": "4",
+                "apikey": api_key,
+            },
+        )
+        earnings_payload = earnings_response.data if earnings_response.ok else None
+        return self._parse_catalyst_context(symbol, news_response.data, earnings_payload)
 
     def health_check(self) -> ProviderResult[str]:
         """Report FMP credential readiness without making a live API call."""
@@ -1445,7 +1458,7 @@ class FmpProvider:
             )
 
     def _parse_catalyst_context(
-        self, symbol: Symbol, payload: Any
+        self, symbol: Symbol, payload: Any, earnings_payload: Any | None = None
     ) -> ProviderResult[CatalystContext]:
         if not isinstance(payload, list):
             return ProviderResult.failure(provider=self.name, error="fmp catalyst data was invalid")
@@ -1458,6 +1471,7 @@ class FmpProvider:
                 event = self._row_to_catalyst_event(row)
                 if event is not None:
                     events.append(event)
+            events.extend(self._earnings_rows_to_catalyst_events(earnings_payload))
         except (TypeError, ValueError):
             return ProviderResult.failure(provider=self.name, error="fmp catalyst data was invalid")
 
@@ -1489,6 +1503,44 @@ class FmpProvider:
             source=self._optional_text(row.get("site")),
             url=self._optional_text(row.get("url")),
             summary=self._optional_text(row.get("text")),
+        )
+
+    def _earnings_rows_to_catalyst_events(self, payload: Any | None) -> list[CatalystEvent]:
+        if payload is None:
+            return []
+        if not isinstance(payload, list):
+            return []
+
+        events: list[CatalystEvent] = []
+        for row in payload:
+            if not isinstance(row, dict):
+                continue
+            event = self._row_to_earnings_catalyst_event(row)
+            if event is not None:
+                events.append(event)
+        return events
+
+    def _row_to_earnings_catalyst_event(self, row: dict[str, Any]) -> CatalystEvent | None:
+        report_date = self._optional_datetime(row.get("date"))
+        if report_date is None:
+            return None
+        symbol = self._optional_text(row.get("symbol"))
+        headline_symbol = symbol or "company"
+        eps = self._finite_decimal_from_value(row.get("epsEstimated"))
+        revenue = self._finite_decimal_from_value(row.get("revenueEstimated"))
+        summary_parts = []
+        if eps is not None:
+            summary_parts.append(f"estimated EPS {eps}")
+        if revenue is not None:
+            summary_parts.append(f"estimated revenue {revenue}")
+        summary = "; ".join(summary_parts) or None
+        return CatalystEvent(
+            headline=f"{headline_symbol} earnings scheduled for {report_date.date().isoformat()}",
+            provider=self.name,
+            published_at=report_date,
+            source="FMP earnings calendar",
+            url=None,
+            summary=summary,
         )
 
     def _parse_candles(self, symbol: Symbol, payload: Any) -> ProviderResult[tuple[Candle, ...]]:
