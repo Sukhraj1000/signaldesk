@@ -46,6 +46,7 @@
   ],
   "required_unavailable_context_types": [
     "fundamentals",
+    "catalyst",
     "llm_narrative"
   ],
   "score_breakdown_categories": [

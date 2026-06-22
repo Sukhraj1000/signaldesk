@@ -524,6 +524,11 @@ def test_scan_command_runs_watchlist_against_fixture_provider(
             "provider": "working",
         },
         {
+            "context_type": "catalyst",
+            "reason": "not available in the default technical-analysis CLI path",
+            "provider": "working",
+        },
+        {
             "context_type": "llm_narrative",
             "reason": "--llm none selected; narrative explanations are disabled",
             "provider": None,
@@ -1135,6 +1140,10 @@ def test_ta_command_runs_against_default_local_fixture_without_network(
             "observations": 60,
         }
     ]
+    assert {item["context_type"] for item in payload["unavailable_context"]} >= {
+        "fundamentals",
+        "catalyst",
+    }
 
 
 def test_ta_command_runs_provider_to_indicator_bridge(monkeypatch: MonkeyPatch) -> None:
@@ -1347,9 +1356,9 @@ def test_ta_command_reports_enhanced_mode_unavailable_context_when_fmp_key_missi
             "details": None,
         },
     ]
-    assert [
-        item["context_type"] for item in payload["unavailable_context"]
-    ].count("fundamentals") == 1
+    unavailable_types = [item["context_type"] for item in payload["unavailable_context"]]
+    assert unavailable_types.count("fundamentals") == 1
+    assert unavailable_types.count("catalyst") == 1
 
 
 def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
@@ -1640,6 +1649,11 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
                 "provider": "working",
             },
             {
+                "context_type": "catalyst",
+                "reason": "not available in the default technical-analysis CLI path",
+                "provider": "working",
+            },
+            {
                 "context_type": "llm_narrative",
                 "reason": "--llm none selected; narrative explanations are disabled",
                 "provider": None,
@@ -1757,6 +1771,10 @@ def test_ta_command_outputs_markdown_from_signal_card(monkeypatch: MonkeyPatch) 
         "`fundamentals` via `working`: not available in the default technical-analysis CLI path."
         in result.stdout
     )
+    assert (
+        "`catalyst` via `working`: not available in the default technical-analysis CLI path."
+        in result.stdout
+    )
     assert "## Provenance" in result.stdout
     assert (
         "provider `working`, source `historical_candles`, timeframe `1d`, "
@@ -1794,6 +1812,7 @@ def test_ta_table_output_stays_flat_when_json_contract_sections_are_added(
     assert "risk_summary\t" in result.stdout
     assert (
         "unavailable_context_summary\tfundamentals via working: not available in the "
+        "default technical-analysis CLI path; catalyst via working: not available in the "
         "default technical-analysis CLI path"
         in result.stdout
     )
@@ -2464,6 +2483,10 @@ def test_report_watchlist_markdown_separates_signal_card_sections(
         in result.stdout
     )
     assert (
+        "- `catalyst` via `working`: not available in the default technical-analysis CLI path"
+        in result.stdout
+    )
+    assert (
         "- `llm_narrative` via `none`: --llm none selected; narrative explanations are disabled"
         in result.stdout
     )
@@ -2635,6 +2658,7 @@ def test_report_watchlist_json_uses_fixture_provider(
     assert signal_card["risk"]["unavailable_context"] == amd_summary["unavailable_context"]
     assert signal_card["score"]["breakdowns"] == amd_summary["score_breakdowns"]
     assert sorted(item["context_type"] for item in amd_summary["unavailable_context"]) == [
+        "catalyst",
         "fundamentals",
         "llm_narrative",
     ]

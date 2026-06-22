@@ -1834,6 +1834,17 @@ def _technical_analysis_report(
                 "provider": provider_name,
             }
         )
+    catalyst_already_unavailable = any(
+        item["context_type"] == "catalyst" for item in unavailable_context
+    )
+    if "catalysts" not in facts and not catalyst_already_unavailable:
+        unavailable_context.append(
+            {
+                "context_type": "catalyst",
+                "reason": "not available in the default technical-analysis CLI path",
+                "provider": provider_name,
+            }
+        )
     unavailable_context.append(
         {
             "context_type": "llm_narrative",
