@@ -159,3 +159,62 @@ def test_build_ta_llm_prompt_payload_rejects_unvalidated_card_drift() -> None:
 
     with pytest.raises(ValueError, match="facts"):
         build_ta_llm_prompt_payload(report)
+
+
+
+def test_validate_llm_explanation_output_accepts_minimal_schema() -> None:
+    from signaldesk_backend import validate_llm_explanation_output
+
+    output = {
+        "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
+        "summary": "AMD shows an uptrend based only on the signal card.",
+        "deterministic_facts_used": ["trend.regimes.trend=uptrend"],
+        "risks": ["Deterministic TA only."],
+        "unavailable_context": ["LLM provider disabled"],
+    }
+
+    validated = validate_llm_explanation_output(output)
+
+    assert validated == output
+    assert validated is not output
+
+
+def test_validate_llm_explanation_output_fails_closed_on_extra_or_missing_fields() -> None:
+    from signaldesk_backend import validate_llm_explanation_output
+
+    valid = {
+        "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
+        "summary": "AMD shows an uptrend based only on the signal card.",
+        "deterministic_facts_used": ["trend.regimes.trend=uptrend"],
+        "risks": ["Deterministic TA only."],
+        "unavailable_context": ["LLM provider disabled"],
+    }
+
+    with pytest.raises(ValueError, match="unexpected"):
+        validate_llm_explanation_output({**valid, "recommendation": "buy now"})
+
+    missing_summary = dict(valid)
+    missing_summary.pop("summary")
+    with pytest.raises(ValueError, match="summary"):
+        validate_llm_explanation_output(missing_summary)
+
+
+def test_validate_llm_explanation_output_rejects_invented_or_non_string_items() -> None:
+    from signaldesk_backend import validate_llm_explanation_output
+
+    valid = {
+        "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
+        "summary": "AMD shows an uptrend based only on the signal card.",
+        "deterministic_facts_used": ["trend.regimes.trend=uptrend"],
+        "risks": ["Deterministic TA only."],
+        "unavailable_context": ["LLM provider disabled"],
+    }
+
+    with pytest.raises(ValueError, match="schema_version"):
+        validate_llm_explanation_output({**valid, "schema_version": "wrong"})
+
+    with pytest.raises(ValueError, match="deterministic_facts_used"):
+        validate_llm_explanation_output({**valid, "deterministic_facts_used": [123]})
+
+    with pytest.raises(ValueError, match="summary"):
+        validate_llm_explanation_output({**valid, "summary": ""})

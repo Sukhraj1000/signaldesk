@@ -38,6 +38,7 @@ from signaldesk_backend.llm import (
     LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
     LLM_PROMPT_PAYLOAD_SCHEMA_VERSION,
     build_ta_llm_prompt_payload,
+    validate_llm_explanation_output,
 )
 from signaldesk_backend.models import (
     Candle,
@@ -168,6 +169,7 @@ __all__ = [
     "relative_volume",
     "score_technical_analysis",
     "simple_moving_average",
+    "validate_llm_explanation_output",
     "validate_ta_signal_card_report",
     "volume_moving_average",
 ]
