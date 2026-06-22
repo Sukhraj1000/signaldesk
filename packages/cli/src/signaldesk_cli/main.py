@@ -583,7 +583,7 @@ def _scan_watchlist_payload(
         }
 
     exit_code = 0
-    bounded_workers = min(max(1, max_workers), len(symbols))
+    bounded_workers = max(1, min(max(1, max_workers), len(symbols)))
     results_by_symbol: dict[str, dict[str, Any]] = {}
     with ThreadPoolExecutor(max_workers=bounded_workers) as executor:
         future_to_symbol = {
