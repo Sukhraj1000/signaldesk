@@ -213,3 +213,64 @@ def test_schema_required_sections_match_canonical_card_contract() -> None:
     assert [section for section in expected_sections if section not in payload] == []
     assert [section for section in expected_sections if section not in payload["signal_card"]] == []
     assert all(payload["signal_card"][section] == payload[section] for section in expected_sections)
+
+def test_schema_defines_enhanced_context_as_separate_provider_sourced_facts() -> None:
+    schema_path = (
+        Path(__file__).resolve().parents[1] / "docs/schemas/signaldesk.ta.v1.schema.json"
+    )
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+
+    fact_properties = schema["$defs"]["facts"]["properties"]
+    fundamental_context = schema["$defs"]["fundamental_context"]
+    catalyst_context = schema["$defs"]["catalyst_context"]
+    catalyst_event = schema["$defs"]["catalyst_event"]
+
+    assert fact_properties["fundamentals"] == {"$ref": "#/$defs/fundamental_context"}
+    assert fact_properties["catalysts"] == {"$ref": "#/$defs/catalyst_context"}
+    assert fundamental_context["additionalProperties"] is False
+    assert catalyst_context["additionalProperties"] is False
+    assert catalyst_event["additionalProperties"] is False
+    assert fundamental_context["required"] == [
+        "symbol",
+        "provider",
+        "generated_at",
+        "company_name",
+        "exchange",
+        "industry",
+        "sector",
+        "market_cap",
+        "currency",
+        "price",
+        "beta",
+        "pe_ratio",
+        "eps",
+        "source_url",
+    ]
+    assert catalyst_context["required"] == ["symbol", "provider", "generated_at", "events"]
+    assert catalyst_event["required"] == [
+        "headline",
+        "provider",
+        "published_at",
+        "source",
+        "url",
+        "summary",
+    ]
+
+
+def test_schema_keeps_enhanced_context_out_of_deterministic_sections() -> None:
+    schema_path = (
+        Path(__file__).resolve().parents[1] / "docs/schemas/signaldesk.ta.v1.schema.json"
+    )
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+
+    for section_name in ("trend", "levels", "risk", "score"):
+        section_schema = schema["$defs"][section_name]
+        assert "fundamentals" not in section_schema.get("properties", {})
+        assert "catalysts" not in section_schema.get("properties", {})
+
+    provider_mode = schema["$defs"]["provider_mode"]
+    assert provider_mode["properties"]["fundamentals_provider"] == {
+        "type": ["string", "null"]
+    }
+    assert provider_mode["properties"]["catalyst_provider"] == {"type": ["string", "null"]}
+
