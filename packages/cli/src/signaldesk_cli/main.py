@@ -378,12 +378,7 @@ def _format_ta_markdown(report: dict[str, Any]) -> str:
     lines.extend(["", "## Unavailable context"])
     if unavailable_context:
         for item in unavailable_context:
-            provider_name = item.get("provider") or "none"
-            details = item.get("details")
-            suffix = f" Details: {details}" if details else ""
-            lines.append(
-                f"- `{item['context_type']}` via `{provider_name}`: {item['reason']}.{suffix}"
-            )
+            lines.append(f"- {_unavailable_context_text(item)}")
     else:
         lines.append("- none")
     lines.extend(["", "## Provenance"])
@@ -481,14 +476,27 @@ def _format_technical_event_lines(events: tuple[dict[str, Any], ...]) -> list[st
     return lines
 
 
+def _unavailable_context_text(item: dict[str, Any]) -> str:
+    provider_name = item.get("provider") or "none"
+    details = item.get("details")
+    suffix = f" Details: {details}" if details else ""
+    return "`{}` via `{}`: {}.{}".format(
+        item.get("context_type", "unknown"),
+        provider_name,
+        item.get("reason", "unavailable"),
+        suffix,
+    )
+
+
 def _summarize_unavailable_context(items: list[dict[str, Any]]) -> str:
     if not items:
         return "none"
     return "; ".join(
-        "{} via {}: {}".format(
+        "{} via {}: {}{}".format(
             item.get("context_type", "unknown"),
             item.get("provider") or "none",
             item.get("reason", "unavailable"),
+            f" Details: {item['details']}" if item.get("details") else "",
         )
         for item in items
     )
@@ -970,8 +978,7 @@ def _format_report_markdown(payload: dict[str, Any]) -> str:
     if payload["provider_mode"].get("unavailable_context"):
         lines.append("- Unavailable context:")
         for item in payload["provider_mode"]["unavailable_context"]:
-            provider_name = item.get("provider") or "none"
-            lines.append(f"  - `{item['context_type']}` via `{provider_name}`: {item['reason']}")
+            lines.append(f"  - {_unavailable_context_text(item)}")
     else:
         lines.append("- Unavailable context: none")
     lines.extend(
@@ -1056,12 +1063,7 @@ def _format_report_markdown(payload: dict[str, Any]) -> str:
         lines.extend(["", "#### Unavailable context"])
         if summary["unavailable_context"]:
             for item in summary["unavailable_context"]:
-                provider_name = item.get("provider") or "none"
-                details = item.get("details")
-                suffix = f" Details: {details}" if details else ""
-                lines.append(
-                    f"- `{item['context_type']}` via `{provider_name}`: {item['reason']}{suffix}"
-                )
+                lines.append(f"- {_unavailable_context_text(item)}")
         else:
             lines.append("- none")
         narrative = summary.get("narrative") or "unavailable"
