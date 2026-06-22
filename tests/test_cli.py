@@ -2159,6 +2159,13 @@ def test_report_watchlist_markdown_separates_signal_card_sections(
     assert "- What is the setup? `unknown` trend regime" in result.stdout
     assert "- Why it matters:" in result.stdout
     assert "#### Deterministic signals" in result.stdout
+    assert "- Score reasons:" in result.stdout
+    assert (
+        "`setup_quality` `50`: Setup quality starts from a neutral deterministic baseline."
+        in result.stdout
+    )
+    assert "#### Technical events" in result.stdout
+    assert "- none detected" in result.stdout
     assert "#### Confirmation and invalidation" in result.stdout
     assert "- What confirms it: `unavailable`" in result.stdout
     assert "- What invalidates it: `unavailable`" in result.stdout
