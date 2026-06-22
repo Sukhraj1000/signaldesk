@@ -463,6 +463,11 @@ def _format_scan_table(payload: dict[str, Any]) -> tuple[str, ...]:
         lines.append(f"	{result['symbol']}	failed						{result['error']}")
     for result in payload["skipped_symbols"]:
         lines.append(f"\t{result['symbol']}\tskipped\t\t\t\t\t\t{result['reason']}")
+    summary = payload["summary"]
+    lines.append(
+        "summary\t\t\t\t\t"
+        + "ok={ok} failed={failed} skipped={skipped} total={total}".format(**summary)
+    )
     return tuple(lines)
 
 
@@ -555,6 +560,20 @@ def _watchlist_price_provider_preference(
     return normalized_preference or None
 
 
+def _watchlist_scan_summary(
+    results: list[dict[str, Any]],
+    ranked_setups: list[dict[str, Any]],
+    failed_symbols: list[dict[str, Any]],
+    skipped_symbols: list[dict[str, Any]],
+) -> dict[str, int]:
+    return {
+        "total": len(results),
+        "ok": len(ranked_setups),
+        "failed": len(failed_symbols),
+        "skipped": len(skipped_symbols),
+    }
+
+
 def _scan_watchlist_payload(
     *,
     watchlist_model: dict[str, Any],
@@ -584,6 +603,8 @@ def _scan_watchlist_payload(
             }
             for symbol in symbols
         ]
+        failed_symbols: list[dict[str, Any]] = []
+        ranked_setups: list[dict[str, Any]] = []
         return 0, {
             "watchlist": str(watchlist),
             "watchlist_model": watchlist_model,
@@ -591,9 +612,12 @@ def _scan_watchlist_payload(
             "provider_mode": provider_mode,
             "symbols": list(symbols),
             "results": skipped_symbols,
-            "ranked_setups": [],
-            "failed_symbols": [],
+            "ranked_setups": ranked_setups,
+            "failed_symbols": failed_symbols,
             "skipped_symbols": skipped_symbols,
+            "summary": _watchlist_scan_summary(
+                skipped_symbols, ranked_setups, failed_symbols, skipped_symbols
+            ),
         }
 
     exit_code = 0
@@ -631,7 +655,8 @@ def _scan_watchlist_payload(
     results = [results_by_symbol[symbol] for symbol in symbols]
 
     ranked_setups = _rank_scan_setups(results)
-    failed_symbols = tuple(result for result in results if result["status"] != "ok")
+    failed_symbols = [result for result in results if result["status"] != "ok"]
+    skipped_symbols = []
 
     return exit_code, {
         "watchlist": str(watchlist),
@@ -641,8 +666,11 @@ def _scan_watchlist_payload(
         "symbols": list(symbols),
         "results": results,
         "ranked_setups": ranked_setups,
-        "failed_symbols": list(failed_symbols),
-        "skipped_symbols": [],
+        "failed_symbols": failed_symbols,
+        "skipped_symbols": skipped_symbols,
+        "summary": _watchlist_scan_summary(
+            results, ranked_setups, failed_symbols, skipped_symbols
+        ),
     }
 
 
@@ -707,6 +735,15 @@ def _format_report_markdown(payload: dict[str, Any]) -> str:
         f"- Provider mode: `{payload['provider_mode']['mode']}`",
         f"- Price provider: `{payload['provider_mode']['price_provider']}`",
     ]
+    summary = payload["summary"]
+    lines.extend(
+        [
+            "- Symbols scanned: `{}`".format(summary["total"]),
+            "- Successful setups: `{}`".format(summary["ok"]),
+            "- Failed symbols: `{}`".format(summary["failed"]),
+            "- Skipped symbols: `{}`".format(summary["skipped"]),
+        ]
+    )
     if payload["provider_mode"].get("unavailable_context"):
         lines.append("- Unavailable context:")
         for item in payload["provider_mode"]["unavailable_context"]:
