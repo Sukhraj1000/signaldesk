@@ -334,6 +334,7 @@ def _format_ta_markdown(report: dict[str, Any]) -> str:
         "",
         "## Facts",
         f"- Generated at: `{generated_at}`",
+        f"- Schema version: `{identity['schema_version']}`",
         f"- Symbol: `{identity['symbol']}`",
         f"- Timeframe: `{identity['timeframe']}`",
         f"- Provider mode: `{provider_mode['mode']}`",
