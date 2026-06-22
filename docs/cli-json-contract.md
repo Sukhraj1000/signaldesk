@@ -39,6 +39,24 @@ The v1 JSON keeps early flat and grouped fields for compatibility, then adds can
 The canonical aliases do not introduce new data sources or LLM-derived facts; they regroup already-computed deterministic output and unavailable-context metadata. The top-level compatibility fields remain available while downstream adapters migrate to `signal_card`.
 
 
+## Watchlist scan JSON
+
+`signaldesk scan --watchlist <path> --output json` emits a deterministic watchlist scan payload for ranked multi-symbol TA workflows. The payload is assembled from the same canonical TA signal-card summaries as `signaldesk ta`; the scan command does not introduce separate market-data facts or LLM-derived conclusions.
+
+The scan JSON object includes:
+
+- `watchlist`: source watchlist path.
+- `watchlist_model`: normalized watchlist metadata (`name`, `symbols`, `tags`, `asset_class`, `provider_preference`, `enabled`, and `notes`).
+- `scanned_at`: UTC scan timestamp shared by all symbols in the run.
+- `provider_mode`: resolved role/provider metadata, including unavailable enhanced context where relevant.
+- `symbols`: normalized, de-duplicated requested symbols in watchlist order.
+- `results`: per-symbol outcomes in watchlist order. Successful rows have `status: "ok"` plus a deterministic `summary`; failures have `status: "failed"` plus a redacted `error`; disabled watchlists return `status: "skipped"` rows with a reason.
+- `ranked_setups`: successful results sorted deterministically by setup quality, risk score, then symbol, each with a `rank`.
+- `failed_symbols`: all failed symbol rows, preserving watchlist order so one bad symbol does not hide the rest of the scan.
+- `skipped_symbols`: skipped rows, currently used when the normalized watchlist is disabled.
+
+Default scan mode remains usable without paid keys. For no-network fixture smoke checks, use a watchlist whose `provider_preference` is `local-fixture` or pass `--provider local-fixture`; missing enhanced context must appear as unavailable context rather than being interpreted as absent risk.
+
 ## Watchlist report JSON
 
-`signaldesk report --watchlist <path> --format json` emits the same deterministic watchlist payload used by the Markdown report renderer. The JSON object includes `watchlist`, `scanned_at`, `provider_mode`, requested `symbols`, and per-symbol `results`. Successful results include a `summary` with provider, deterministic TA summary fields, provenance, and unavailable context; failed results include a redacted `error` string. This keeps report automation machine-readable without introducing extra data sources or LLM-derived facts.
+`signaldesk report --watchlist <path> --format json` emits the same deterministic watchlist payload used by the Markdown report renderer. The JSON object includes `watchlist`, `watchlist_model`, `scanned_at`, `provider_mode`, requested `symbols`, `results`, `ranked_setups`, `failed_symbols`, and `skipped_symbols`. Successful results include a `summary` with provider, deterministic TA summary fields, provenance, and unavailable context; failed results include a redacted `error` string. This keeps report automation machine-readable without introducing extra data sources or LLM-derived facts.
