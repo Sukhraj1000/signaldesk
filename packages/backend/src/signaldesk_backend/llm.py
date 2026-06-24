@@ -1,6 +1,7 @@
 """Guarded prompt payload contracts for optional LLM explanations."""
 
 import json
+import re
 from collections.abc import Mapping
 from copy import deepcopy
 from typing import Any
@@ -59,10 +60,23 @@ _UNTRUSTED_PROVIDER_TEXT_FIELDS = (
 
 _EXCLUDED_SIGNAL_CARD_FIELDS = ("signal_card.narrative",)
 
+_RECOMMENDATION_LANGUAGE_RE = re.compile(
+    r"\b(?:buy|sell|hold|strong[-\s]+buy|strong[-\s]+sell|price[-\s]+target|target[-\s]+price|take[-\s]+profit|stop[-\s]+loss)\b",
+    re.IGNORECASE,
+)
+
+
+def _reject_recommendation_language(value: str, field: str) -> None:
+    if _RECOMMENDATION_LANGUAGE_RE.search(value):
+        raise ValueError(
+            f"LLM explanation field {field} must not contain recommendations or trade instructions"
+        )
+
 
 def _require_non_empty_string(value: Any, field: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"LLM explanation field {field} must be a non-empty string")
+    _reject_recommendation_language(value, field)
     return value
 
 
@@ -75,6 +89,7 @@ def _require_string_list(value: Any, field: str, *, min_items: int = 0) -> list[
     for index, item in enumerate(value):
         if not isinstance(item, str) or not item.strip():
             raise ValueError(f"LLM explanation field {field}[{index}] must be a non-empty string")
+        _reject_recommendation_language(item, f"{field}[{index}]")
         strings.append(item)
     return strings
 
