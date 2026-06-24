@@ -22,6 +22,7 @@ from signaldesk_backend import (
     Symbol,
     assemble_ta_signal_card_report,
     assess_technical_analysis_risks,
+    attach_validated_llm_explanation_to_report,
     average_true_range,
     build_openai_compatible_chat_messages,
     build_openai_compatible_chat_request,
@@ -1002,6 +1003,63 @@ def llm_chat_request(
         typer.echo(str(exc), err=True)
         raise typer.Exit(1) from exc
     typer.echo(json.dumps(request_body, indent=2, sort_keys=True))
+
+
+@llm_app.command("attach-output")
+def llm_attach_output(
+    symbol: str,
+    path: Path = typer.Argument(  # noqa: B008
+        ..., help="Path to a candidate LLM explanation JSON object."
+    ),
+    provider: str | None = typer.Option(
+        None,
+        help=(
+            "Registered market-data provider to use. When omitted, SignalDesk "
+            "uses --mode role resolution."
+        ),
+    ),
+    mode: str = typer.Option("default", help="Provider role mode: default or enhanced."),
+    interval: str = typer.Option("1d", help="Historical candle interval."),
+    days: int = typer.Option(120, min=1, help="Number of calendar days of history to request."),
+    output: str = typer.Option("json", help="Output format: json or markdown."),
+) -> None:
+    """Attach a validated LLM explanation to a TA report without calling an LLM."""
+
+    output_format = output.strip().lower()
+    if output_format not in {"json", "markdown", "md"}:
+        typer.echo("--output must be 'json', 'markdown', or 'md'.", err=True)
+        raise typer.Exit(2)
+
+    registry = default_provider_registry()
+    try:
+        parsed = parse_llm_explanation_response_content(path.read_text(encoding="utf-8"))
+        report = _fetch_ta_report(
+            registry,
+            symbol=symbol,
+            provider=provider,
+            mode=mode,
+            interval=interval,
+            days=days,
+            as_of=datetime.now(UTC),
+        )
+        report_with_narrative = attach_validated_llm_explanation_to_report(report, parsed)
+    except OSError as exc:
+        typer.echo(redact_provider_diagnostic(f"could not read LLM output JSON: {exc}"), err=True)
+        raise typer.Exit(1) from exc
+    except (KeyError, ValueError) as exc:
+        typer.echo(
+            "invalid LLM explanation output or TA report: schema validation failed",
+            err=True,
+        )
+        raise typer.Exit(1) from exc
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
+
+    if output_format == "json":
+        typer.echo(json.dumps(report_with_narrative, indent=2, sort_keys=True))
+        return
+    typer.echo(_format_ta_markdown(report_with_narrative), nl=False)
 
 
 @llm_app.command("validate-output")

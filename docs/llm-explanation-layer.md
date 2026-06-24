@@ -37,9 +37,10 @@ Candidate model output must be raw JSON matching `signaldesk.llm_explanation.v1`
 signaldesk llm validate-output fixtures/llm/valid-explanation.json
 signaldesk llm validate-chat-response fixtures/llm/valid-chat-response.json
 signaldesk llm render-output fixtures/llm/valid-explanation.json
+signaldesk llm attach-output AMD fixtures/llm/valid-explanation.json --provider local-fixture --output markdown
 ```
 
-Invalid JSON, Markdown fences, extra fields, blank required fields, malformed OpenAI-compatible chat responses, and tool-call style responses fail closed at the raw-JSON/schema boundary. Recommendation-language terms covered by `signaldesk_backend.llm._reject_recommendation_language` also fail closed during field validation. Unavailable provider or LLM context must remain visible to users instead of being silently omitted.
+Invalid JSON, Markdown fences, extra fields, blank required fields, malformed OpenAI-compatible chat responses, and tool-call style responses fail closed at the raw-JSON/schema boundary. Recommendation-language terms covered by `signaldesk_backend.llm._reject_recommendation_language` also fail closed during field validation. `signaldesk llm attach-output` reuses the same parser before it can add narrative to a deterministic TA report; failed validation emits a generic schema failure and does not leak hostile model text. Unavailable provider or LLM context must remain visible to users instead of being silently omitted.
 
 ## Reviewer checklist for issue #54
 
