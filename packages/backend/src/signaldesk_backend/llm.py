@@ -329,9 +329,11 @@ def validate_llm_prompt_payload(prompt_payload: Mapping[str, Any]) -> dict[str, 
     if signal_card.get("narrative") is not None:
         raise ValueError("LLM prompt payload signal_card.narrative must be null")
 
+    identity = signal_card.get("identity")
+    card_schema_version = identity.get("schema_version") if isinstance(identity, Mapping) else None
     validate_ta_signal_card_report(
         {
-            "schema_version": signal_card.get("identity", {}).get("schema_version"),
+            "schema_version": card_schema_version,
             **dict(signal_card),
             "signal_card": dict(signal_card),
         }

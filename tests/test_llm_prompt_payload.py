@@ -217,6 +217,14 @@ def test_validate_llm_prompt_payload_rejects_mutated_guardrails_and_schema() -> 
         )
 
 
+def test_validate_llm_prompt_payload_rejects_non_object_identity_without_attribute_error() -> None:
+    payload = build_ta_llm_prompt_payload(_report_with_untrusted_provider_text())
+    mutated_card = {**payload["signal_card"], "identity": "not an object"}
+
+    with pytest.raises(ValueError, match="identity"):
+        validate_llm_prompt_payload({**payload, "signal_card": mutated_card})
+
+
 def test_chat_request_revalidates_prompt_payload_before_adapter_use() -> None:
     from signaldesk_backend import build_openai_compatible_chat_request
 
