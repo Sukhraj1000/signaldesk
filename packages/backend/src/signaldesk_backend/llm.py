@@ -152,6 +152,27 @@ def parse_llm_explanation_response_content(content: str) -> dict[str, Any]:
     return validate_llm_explanation_output(parsed)
 
 
+def _markdown_bullets(items: list[str]) -> str:
+    if not items:
+        return "- None reported"
+    return "\n".join(f"- {item}" for item in items)
+
+
+def render_llm_explanation_markdown(output: Mapping[str, Any]) -> str:
+    # Revalidate the fail-closed output contract before rendering user-facing text.
+    validated = validate_llm_explanation_output(output)
+    return (
+        "### LLM explanation\n"
+        f"{validated['summary']}\n\n"
+        "#### Deterministic facts used\n"
+        f"{_markdown_bullets(validated['deterministic_facts_used'])}\n\n"
+        "#### Risks and scope\n"
+        f"{_markdown_bullets(validated['risks'])}\n\n"
+        "#### Unavailable context\n"
+        f"{_markdown_bullets(validated['unavailable_context'])}"
+    )
+
+
 def llm_explanation_output_schema() -> dict[str, Any]:
     """Return a defensive copy of the public LLM explanation output schema."""
 
@@ -257,6 +278,7 @@ __all__ = [
     "build_openai_compatible_chat_request",
     "llm_explanation_output_schema",
     "parse_llm_explanation_response_content",
+    "render_llm_explanation_markdown",
     "build_ta_llm_prompt_payload",
     "validate_llm_explanation_output",
 ]

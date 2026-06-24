@@ -42,6 +42,7 @@ from signaldesk_backend.llm import (
     build_ta_llm_prompt_payload,
     llm_explanation_output_schema,
     parse_llm_explanation_response_content,
+    render_llm_explanation_markdown,
     validate_llm_explanation_output,
 )
 from signaldesk_backend.models import (
@@ -146,6 +147,7 @@ __all__ = [
     "build_openai_compatible_chat_request",
     "build_ta_llm_prompt_payload",
     "parse_llm_explanation_response_content",
+    "render_llm_explanation_markdown",
     "assemble_ta_signal_card_report",
     "assess_technical_analysis_risks",
     "calculate_fibonacci_retracement_levels",
