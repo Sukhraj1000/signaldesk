@@ -234,6 +234,14 @@ def _config_inspect_payload(settings: Settings) -> dict[str, str]:
     }
 
 
+def _ensure_no_llm_provider(llm: str) -> None:
+    """Keep no-network/default LLM command paths explicit until live adapters are wired in."""
+
+    if llm.strip().lower() != "none":
+        typer.echo("Only --llm none is currently supported.", err=True)
+        raise typer.Exit(2)
+
+
 def _format_config_inspect(payload: dict[str, str]) -> tuple[str, ...]:
     lines = ["setting\tvalue"]
     lines.extend(f"{key}\t{value}" for key, value in payload.items())
@@ -281,9 +289,7 @@ def technical_analysis(
 ) -> None:
     """Fetch candles and run deterministic technical analysis for one symbol."""
 
-    if llm.strip().lower() != "none":
-        typer.echo("Only --llm none is currently supported.", err=True)
-        raise typer.Exit(2)
+    _ensure_no_llm_provider(llm)
 
     output_format = output.strip().lower()
     if output_format not in {"table", "json", "markdown", "md"}:
@@ -891,8 +897,10 @@ def llm_prompt_payload(
     mode: str = typer.Option("default", help="Provider role mode: default or enhanced."),
     interval: str = typer.Option("1d", help="Historical candle interval."),
     days: int = typer.Option(120, min=1, help="Number of calendar days of history to request."),
+    llm: str = typer.Option("none", help="LLM provider. Only none is currently supported."),
     output: str = typer.Option("json", help="Output format: json."),
 ) -> None:
+    _ensure_no_llm_provider(llm)
     if output.strip().lower() != "json":
         typer.echo("--output must be 'json'.", err=True)
         raise typer.Exit(2)
@@ -932,9 +940,11 @@ def llm_chat_messages(
     mode: str = typer.Option("default", help="Provider role mode: default or enhanced."),
     interval: str = typer.Option("1d", help="Historical candle interval."),
     days: int = typer.Option(120, min=1, help="Number of calendar days of history to request."),
+    llm: str = typer.Option("none", help="LLM provider. Only none is currently supported."),
     output: str = typer.Option("json", help="Output format: json."),
 ) -> None:
     """Render guarded OpenAI-compatible chat messages without calling an LLM."""
+    _ensure_no_llm_provider(llm)
     if output.strip().lower() != "json":
         typer.echo("--output must be 'json'.", err=True)
         raise typer.Exit(2)
@@ -977,9 +987,11 @@ def llm_chat_request(
         "openai/gpt-4o-mini",
         help="OpenAI-compatible model name to place in the no-network request body.",
     ),
+    llm: str = typer.Option("none", help="LLM provider. Only none is currently supported."),
     output: str = typer.Option("json", help="Output format: json."),
 ) -> None:
     """Render a guarded OpenAI-compatible chat request without calling an LLM."""
+    _ensure_no_llm_provider(llm)
     if output.strip().lower() != "json":
         typer.echo("--output must be 'json'.", err=True)
         raise typer.Exit(2)
@@ -1021,10 +1033,12 @@ def llm_attach_output(
     mode: str = typer.Option("default", help="Provider role mode: default or enhanced."),
     interval: str = typer.Option("1d", help="Historical candle interval."),
     days: int = typer.Option(120, min=1, help="Number of calendar days of history to request."),
+    llm: str = typer.Option("none", help="LLM provider. Only none is currently supported."),
     output: str = typer.Option("json", help="Output format: json or markdown."),
 ) -> None:
     """Attach a validated LLM explanation to a TA report without calling an LLM."""
 
+    _ensure_no_llm_provider(llm)
     output_format = output.strip().lower()
     if output_format not in {"json", "markdown", "md"}:
         typer.echo("--output must be 'json', 'markdown', or 'md'.", err=True)
@@ -1628,9 +1642,7 @@ def report_watchlist(
 ) -> None:
     """Generate a deterministic report for a watchlist."""
 
-    if llm.strip().lower() != "none":
-        typer.echo("Only --llm none is currently supported.", err=True)
-        raise typer.Exit(2)
+    _ensure_no_llm_provider(llm)
     normalized_report_format = report_format.strip().lower()
     if normalized_report_format not in {"markdown", "md", "table", "json"}:
         typer.echo("--format must be 'markdown', 'table', or 'json'.", err=True)

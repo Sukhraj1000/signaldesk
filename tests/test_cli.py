@@ -3223,3 +3223,42 @@ def test_llm_attach_output_fails_closed_without_leaking_invalid_content(
     assert result.stdout == ""
     assert "BUY NOW" not in result.stderr
     assert "BUY NOW" not in result.stdout
+
+def test_llm_prompt_payload_accepts_explicit_no_llm_option() -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "llm",
+            "prompt-payload",
+            "AMD",
+            "--provider",
+            "local-fixture",
+            "--llm",
+            "none",
+            "--output",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["schema_version"] == "signaldesk.llm_prompt.v1"
+    assert payload["signal_card"]["llm"] == "none"
+
+
+def test_llm_prompt_payload_rejects_live_llm_option_until_adapter_cli_is_wired() -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "llm",
+            "prompt-payload",
+            "AMD",
+            "--provider",
+            "local-fixture",
+            "--llm",
+            "openrouter",
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert "Only --llm none is currently supported." in result.output
