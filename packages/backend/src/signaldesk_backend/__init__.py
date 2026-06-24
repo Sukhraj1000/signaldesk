@@ -47,6 +47,7 @@ from signaldesk_backend.llm import (
     parse_openai_compatible_chat_response,
     render_llm_explanation_markdown,
     validate_llm_explanation_output,
+    validate_llm_prompt_payload,
 )
 from signaldesk_backend.models import (
     Candle,
@@ -186,6 +187,7 @@ __all__ = [
     "score_technical_analysis",
     "simple_moving_average",
     "validate_llm_explanation_output",
+    "validate_llm_prompt_payload",
     "validate_ta_signal_card_report",
     "volume_moving_average",
 ]

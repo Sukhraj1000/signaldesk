@@ -27,7 +27,7 @@ The prompt payload contains only:
 - a validated `signal_card` with `narrative: null`
 - the strict `signaldesk.llm_explanation.v1` output schema
 
-Adapters must not add browser tools, market-data clients, hidden free-form context, or provider text outside the structured `signal_card`. Provider and news strings remain untrusted data even when they contain instruction-like text.
+Adapters must not add browser tools, market-data clients, hidden free-form context, or provider text outside the structured `signal_card`. Provider and news strings remain untrusted data even when they contain instruction-like text. Before an OpenAI-compatible chat request is rendered, SignalDesk revalidates the complete prompt payload so mutated guardrails, output schemas, untrusted-field labels, excluded fields, or recycled narrative fail closed.
 
 ## Fail-closed output boundary
 

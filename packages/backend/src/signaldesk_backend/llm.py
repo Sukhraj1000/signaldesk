@@ -218,7 +218,6 @@ def render_llm_explanation_markdown(output: Mapping[str, Any]) -> str:
     )
 
 
-
 def attach_validated_llm_explanation_to_report(
     report: Mapping[str, Any], output: Mapping[str, Any]
 ) -> dict[str, Any]:
@@ -242,6 +241,7 @@ def attach_validated_llm_explanation_to_report(
     updated_report["signal_card"]["narrative"] = narrative
     validate_ta_signal_card_report(updated_report)
     return updated_report
+
 
 def llm_explanation_output_schema() -> dict[str, Any]:
     """Return a defensive copy of the public LLM explanation output schema."""
@@ -280,21 +280,26 @@ def build_ta_llm_prompt_payload(report: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def build_openai_compatible_chat_messages(
-    prompt_payload: Mapping[str, Any],
-) -> list[dict[str, str]]:
-    """Wrap a guarded prompt payload for OpenAI-compatible chat adapters."""
+def validate_llm_prompt_payload(prompt_payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Validate the structured LLM prompt payload before adapter use.
+
+    Future enhanced LLM adapters may receive prompt payloads from CLI/API layers,
+    tests, or local fixtures. Revalidate the full guarded contract at that
+    boundary so provider/news text cannot smuggle new instructions by mutating
+    guardrails, output schema, excluded fields, or the canonical signal card.
+    """
 
     if not isinstance(prompt_payload, Mapping):
         raise ValueError("LLM prompt payload must be a JSON object")
+
     schema_version = prompt_payload.get("schema_version")
-    task = prompt_payload.get("task")
     if schema_version != LLM_PROMPT_PAYLOAD_SCHEMA_VERSION:
         raise ValueError(
             f"LLM prompt payload schema_version must be {LLM_PROMPT_PAYLOAD_SCHEMA_VERSION}"
         )
-    if task != "explain_ta_signal_card":
+    if prompt_payload.get("task") != "explain_ta_signal_card":
         raise ValueError("LLM prompt payload task must be explain_ta_signal_card")
+
     required_fields = set(_PROMPT_SCHEMA["required"])
     payload_fields = set(prompt_payload.keys())
     missing_fields = sorted(required_fields - payload_fields)
@@ -303,8 +308,54 @@ def build_openai_compatible_chat_messages(
     unexpected_fields = sorted(payload_fields - required_fields)
     if unexpected_fields:
         raise ValueError(f"LLM prompt payload contains unexpected field(s): {unexpected_fields}")
+    if prompt_payload.get("guardrails") != list(_LLM_GUARDRAILS):
+        raise ValueError("LLM prompt payload guardrails must match the fixed SignalDesk guardrails")
+    if prompt_payload.get("untrusted_provider_text_fields") != list(
+        _UNTRUSTED_PROVIDER_TEXT_FIELDS
+    ):
+        raise ValueError(
+            "LLM prompt payload untrusted_provider_text_fields must match the fixed contract"
+        )
+    if prompt_payload.get("excluded_signal_card_fields") != list(_EXCLUDED_SIGNAL_CARD_FIELDS):
+        raise ValueError(
+            "LLM prompt payload excluded_signal_card_fields must match the fixed contract"
+        )
+    if prompt_payload.get("output_schema") != _OUTPUT_SCHEMA:
+        raise ValueError("LLM prompt payload output_schema must match the fixed output contract")
 
-    content = json.dumps(prompt_payload, sort_keys=True, separators=(",", ":"))
+    signal_card = prompt_payload.get("signal_card")
+    if not isinstance(signal_card, Mapping):
+        raise ValueError("LLM prompt payload signal_card must be a JSON object")
+    if signal_card.get("narrative") is not None:
+        raise ValueError("LLM prompt payload signal_card.narrative must be null")
+
+    identity = signal_card.get("identity")
+    card_schema_version = identity.get("schema_version") if isinstance(identity, Mapping) else None
+    validate_ta_signal_card_report(
+        {
+            "schema_version": card_schema_version,
+            **dict(signal_card),
+            "signal_card": dict(signal_card),
+        }
+    )
+    return {
+        "schema_version": schema_version,
+        "task": "explain_ta_signal_card",
+        "guardrails": list(_LLM_GUARDRAILS),
+        "untrusted_provider_text_fields": list(_UNTRUSTED_PROVIDER_TEXT_FIELDS),
+        "excluded_signal_card_fields": list(_EXCLUDED_SIGNAL_CARD_FIELDS),
+        "signal_card": deepcopy(dict(signal_card)),
+        "output_schema": deepcopy(_OUTPUT_SCHEMA),
+    }
+
+
+def build_openai_compatible_chat_messages(
+    prompt_payload: Mapping[str, Any],
+) -> list[dict[str, str]]:
+    """Wrap a validated guarded prompt payload for OpenAI-compatible chat adapters."""
+
+    validated_payload = validate_llm_prompt_payload(prompt_payload)
+    content = json.dumps(validated_payload, sort_keys=True, separators=(",", ":"))
     return [
         {
             "role": "system",
@@ -328,14 +379,11 @@ def build_openai_compatible_chat_request(
 ) -> dict[str, Any]:
     """Build a no-network OpenAI-compatible chat-completions request body."""
 
-    if not isinstance(prompt_payload, Mapping):
-        raise ValueError("LLM prompt payload must be a JSON object")
     normalized_model = model.strip()
     if not normalized_model:
         raise ValueError("LLM chat request model must be a non-empty string")
-    output_schema = prompt_payload.get("output_schema")
-    if not isinstance(output_schema, Mapping):
-        raise ValueError("LLM prompt payload output_schema must be a JSON object")
+    validated_payload = validate_llm_prompt_payload(prompt_payload)
+    output_schema = validated_payload["output_schema"]
 
     return {
         "model": normalized_model,
@@ -397,4 +445,5 @@ __all__ = [
     "render_llm_explanation_markdown",
     "build_ta_llm_prompt_payload",
     "validate_llm_explanation_output",
+    "validate_llm_prompt_payload",
 ]
