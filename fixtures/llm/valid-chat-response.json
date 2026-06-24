@@ -1,0 +1,14 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "{\"schema_version\":\"signaldesk.llm_explanation.v1\",\"summary\":\"AMD shows an uptrend based only on the signal card.\",\"deterministic_facts_used\":[\"trend.regimes.trend=uptrend\"],\"risks\":[\"Deterministic TA only.\"],\"unavailable_context\":[\"LLM provider disabled\"]}",
+        "role": "assistant"
+      }
+    }
+  ],
+  "id": "chatcmpl-signaldesk-fixture",
+  "object": "chat.completion"
+}

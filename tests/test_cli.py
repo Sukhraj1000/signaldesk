@@ -3067,3 +3067,72 @@ def test_llm_input_schema_outputs_guarded_prompt_schema() -> None:
     assert schema["properties"]["task"]["const"] == "explain_ta_signal_card"
     assert "signal_card" in schema["required"]
     assert "output_schema" in schema["required"]
+
+def test_llm_validate_chat_response_accepts_schema_valid_assistant_json(tmp_path: Path) -> None:
+    response = {
+        "choices": [
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": json.dumps(
+                        {
+                            "schema_version": "signaldesk.llm_explanation.v1",
+                            "summary": "AMD shows an uptrend based only on the signal card.",
+                            "deterministic_facts_used": ["trend.regimes.trend=uptrend"],
+                            "risks": ["Deterministic TA only."],
+                            "unavailable_context": ["LLM provider disabled"],
+                        }
+                    ),
+                }
+            }
+        ]
+    }
+    response_path = tmp_path / "llm-chat-response.json"
+    response_path.write_text(json.dumps(response), encoding="utf-8")
+
+    result = CliRunner().invoke(app, ["llm", "validate-chat-response", str(response_path)])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["schema_version"] == "signaldesk.llm_explanation.v1"
+    assert payload["deterministic_facts_used"] == ["trend.regimes.trend=uptrend"]
+
+
+def test_llm_validate_chat_response_fails_closed_without_leaking_tool_call(tmp_path: Path) -> None:
+    response = {
+        "choices": [
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": "{}",
+                    "tool_calls": [
+                        {
+                            "type": "function",
+                            "function": {"name": "fetch_market_data", "arguments": "AMD"},
+                        }
+                    ],
+                }
+            }
+        ]
+    }
+    response_path = tmp_path / "llm-chat-response.json"
+    response_path.write_text(json.dumps(response), encoding="utf-8")
+
+    result = CliRunner().invoke(app, ["llm", "validate-chat-response", str(response_path)])
+
+    assert result.exit_code == 1
+    assert "invalid LLM chat response: schema validation failed" in result.stderr
+    assert "fetch_market_data" not in result.stderr
+    assert "fetch_market_data" not in result.stdout
+
+
+def test_llm_validate_chat_response_rejects_malformed_json_without_leaking_text(
+    tmp_path: Path,
+) -> None:
+    response_path = tmp_path / "llm-chat-response.json"
+    response_path.write_text("{", encoding="utf-8")
+
+    result = CliRunner().invoke(app, ["llm", "validate-chat-response", str(response_path)])
+
+    assert result.exit_code == 1
+    assert "invalid LLM chat response: JSON parse failed" in result.stderr

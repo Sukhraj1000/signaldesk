@@ -46,6 +46,7 @@ from signaldesk_backend import (
     llm_prompt_payload_schema,
     macd,
     parse_llm_explanation_response_content,
+    parse_openai_compatible_chat_response,
     redact_provider_diagnostic,
     relative_strength_index,
     relative_volume,
@@ -1022,6 +1023,32 @@ def llm_validate_output(
 
     typer.echo(json.dumps(validated, indent=2, sort_keys=True))
 
+
+@llm_app.command("validate-chat-response")
+def llm_validate_chat_response(
+    path: Path = typer.Argument(  # noqa: B008
+        ..., help="Path to an OpenAI-compatible chat-completions response JSON object."
+    ),
+) -> None:
+    """Validate an OpenAI-compatible LLM response without calling an LLM."""
+
+    try:
+        response = json.loads(path.read_text(encoding="utf-8"))
+        validated = parse_openai_compatible_chat_response(response)
+    except OSError as exc:
+        typer.echo(
+            redact_provider_diagnostic(f"could not read LLM chat response JSON: {exc}"),
+            err=True,
+        )
+        raise typer.Exit(1) from exc
+    except json.JSONDecodeError as exc:
+        typer.echo("invalid LLM chat response: JSON parse failed", err=True)
+        raise typer.Exit(1) from exc
+    except ValueError as exc:
+        typer.echo("invalid LLM chat response: schema validation failed", err=True)
+        raise typer.Exit(1) from exc
+
+    typer.echo(json.dumps(validated, indent=2, sort_keys=True))
 
 @llm_app.command("render-output")
 def llm_render_output(
