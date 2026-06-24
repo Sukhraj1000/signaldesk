@@ -43,6 +43,7 @@ from signaldesk_backend import (
     exponential_moving_average,
     extract_ta_signal_card,
     llm_explanation_output_schema,
+    llm_prompt_payload_schema,
     macd,
     parse_llm_explanation_response_content,
     redact_provider_diagnostic,
@@ -861,6 +862,18 @@ def llm_output_schema(
         typer.echo("--output must be 'json'.", err=True)
         raise typer.Exit(2)
     typer.echo(json.dumps(llm_explanation_output_schema(), indent=2, sort_keys=True))
+
+
+@llm_app.command("input-schema")
+def llm_input_schema(
+    output: str = typer.Option("json", help="Output format: json."),
+) -> None:
+    """Render the guarded LLM prompt payload JSON schema."""
+
+    if output.strip().lower() != "json":
+        typer.echo("--output must be \"json\".", err=True)
+        raise typer.Exit(2)
+    typer.echo(json.dumps(llm_prompt_payload_schema(), indent=2, sort_keys=True))
 
 
 @llm_app.command("prompt-payload")
