@@ -396,3 +396,32 @@ def test_parse_llm_explanation_response_content_fails_closed_on_markdown_or_arra
 
     with pytest.raises(ValueError, match="JSON parse failed"):
         parse_llm_explanation_response_content("{not json")
+
+
+def test_build_openai_compatible_chat_request_enforces_schema_without_tools() -> None:
+    from signaldesk_backend import build_openai_compatible_chat_request
+    payload = build_ta_llm_prompt_payload(_report_with_untrusted_provider_text())
+    request_body = build_openai_compatible_chat_request(payload, model="openrouter/test-model")
+    assert request_body["model"] == "openrouter/test-model"
+    assert request_body["temperature"] == 0
+    assert request_body["messages"]
+    assert "tools" not in request_body
+    assert "api_key" not in request_body
+    assert request_body["response_format"]["type"] == "json_schema"
+    assert request_body["response_format"]["json_schema"]["strict"] is True
+    assert request_body["response_format"]["json_schema"]["schema"] == payload["output_schema"]
+    request_schema = request_body["response_format"]["json_schema"]["schema"]
+    request_schema["properties"]["schema_version"]["const"] = "mutated"
+    assert payload["output_schema"]["properties"]["schema_version"]["const"] == (
+        LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION
+    )
+
+
+def test_build_openai_compatible_chat_request_rejects_invalid_payload_or_model() -> None:
+    from signaldesk_backend import build_openai_compatible_chat_request
+    payload = build_ta_llm_prompt_payload(_report_with_untrusted_provider_text())
+    with pytest.raises(ValueError, match="model"):
+        build_openai_compatible_chat_request(payload, model="   ")
+    payload["output_schema"] = []
+    with pytest.raises(ValueError, match="output_schema"):
+        build_openai_compatible_chat_request(payload)
