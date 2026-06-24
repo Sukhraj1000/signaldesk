@@ -24,6 +24,7 @@ from signaldesk_backend import (
     assess_technical_analysis_risks,
     average_true_range,
     build_openai_compatible_chat_messages,
+    build_openai_compatible_chat_request,
     build_ta_llm_prompt_payload,
     calculate_fibonacci_retracement_levels,
     classify_trend_regime,
@@ -941,6 +942,51 @@ def llm_chat_messages(
         typer.echo(str(exc), err=True)
         raise typer.Exit(1) from exc
     typer.echo(json.dumps(messages, indent=2, sort_keys=True))
+
+
+@llm_app.command("chat-request")
+def llm_chat_request(
+    symbol: str,
+    provider: str | None = typer.Option(
+        None,
+        help=(
+            "Registered market-data provider to use. When omitted, SignalDesk "
+            "uses --mode role resolution."
+        ),
+    ),
+    mode: str = typer.Option("default", help="Provider role mode: default or enhanced."),
+    interval: str = typer.Option("1d", help="Historical candle interval."),
+    days: int = typer.Option(120, min=1, help="Number of calendar days of history to request."),
+    model: str = typer.Option(
+        "openai/gpt-4o-mini",
+        help="OpenAI-compatible model name to place in the no-network request body.",
+    ),
+    output: str = typer.Option("json", help="Output format: json."),
+) -> None:
+    """Render a guarded OpenAI-compatible chat request without calling an LLM."""
+    if output.strip().lower() != "json":
+        typer.echo("--output must be 'json'.", err=True)
+        raise typer.Exit(2)
+    registry = default_provider_registry()
+    try:
+        report = _fetch_ta_report(
+            registry,
+            symbol=symbol,
+            provider=provider,
+            mode=mode,
+            interval=interval,
+            days=days,
+            as_of=datetime.now(UTC),
+        )
+        payload = build_ta_llm_prompt_payload(report)
+        request_body = build_openai_compatible_chat_request(payload, model=model)
+    except (KeyError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from exc
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
+    typer.echo(json.dumps(request_body, indent=2, sort_keys=True))
 
 
 @llm_app.command("validate-output")
