@@ -347,12 +347,45 @@ def build_openai_compatible_chat_request(
     }
 
 
+def parse_openai_compatible_chat_response(response: Mapping[str, Any]) -> dict[str, Any]:
+    """Extract and validate a strict LLM explanation from a chat-completions response.
+
+    This is the fail-closed adapter boundary for future OpenAI-compatible providers
+    such as OpenRouter. It accepts only the first assistant message content as a
+    raw JSON object, rejects tool-call style responses, and delegates to the same
+    schema validator used by local CLI smoke commands before any narrative can be
+    attached to a signal card.
+    """
+
+    if not isinstance(response, Mapping):
+        raise ValueError("LLM chat response must be a JSON object")
+    choices = response.get("choices")
+    if not isinstance(choices, list) or not choices:
+        raise ValueError("LLM chat response must include at least one choice")
+    first_choice = choices[0]
+    if not isinstance(first_choice, Mapping):
+        raise ValueError("LLM chat response choice must be a JSON object")
+    message = first_choice.get("message")
+    if not isinstance(message, Mapping):
+        raise ValueError("LLM chat response choice must include a message object")
+    if message.get("tool_calls"):
+        raise ValueError("LLM chat response must not include tool calls")
+    role = message.get("role")
+    if role != "assistant":
+        raise ValueError("LLM chat response message role must be assistant")
+    content = message.get("content")
+    if not isinstance(content, str):
+        raise ValueError("LLM chat response message content must be a string")
+    return parse_llm_explanation_response_content(content)
+
+
 __all__ = [
     "LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION",
     "LLM_PROMPT_PAYLOAD_SCHEMA_VERSION",
     "attach_validated_llm_explanation_to_report",
     "build_openai_compatible_chat_messages",
     "build_openai_compatible_chat_request",
+    "parse_openai_compatible_chat_response",
     "llm_explanation_output_schema",
     "llm_prompt_payload_schema",
     "parse_llm_explanation_response_content",
