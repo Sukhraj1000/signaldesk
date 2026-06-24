@@ -431,7 +431,10 @@ def test_config_inspect_reports_sanitized_table(monkeypatch: MonkeyPatch) -> Non
         "DATABASE_URL", "postgresql://signaldesk:dbpass@example.test:5432/signaldesk"
     )
     monkeypatch.setenv("REDIS_URL", "redis://:redispass@cache.test:6379/0")
-    monkeypatch.setenv("LLM_PROVIDER", "none")
+    monkeypatch.setenv("LLM_PROVIDER", "openrouter")
+    monkeypatch.setenv("LLM_MODEL", "openrouter/test-model")
+    monkeypatch.setenv("LLM_ENDPOINT_URL", "https://user:endpointpass@openrouter.example.test/api/v1/chat/completions")
+    monkeypatch.setenv("LLM_API_KEY", "unit-test-secret")
 
     result = CliRunner().invoke(app, ["config", "inspect"])
 
@@ -441,8 +444,17 @@ def test_config_inspect_reports_sanitized_table(monkeypatch: MonkeyPatch) -> Non
     assert "log_level\tdebug" in result.stdout
     assert "database_url\tpostgresql://<redacted>@example.test:5432/signaldesk" in result.stdout
     assert "redis_url\tredis://<redacted>@cache.test:6379/0" in result.stdout
+    assert "llm_provider\topenrouter" in result.stdout
+    assert "llm_model\topenrouter/test-model" in result.stdout
+    assert (
+        "llm_endpoint_url\thttps://<redacted>@openrouter.example.test/api/v1/chat/completions"
+        in result.stdout
+    )
+    assert "llm_api_key_configured\tyes" in result.stdout
     assert "dbpass" not in result.stdout
     assert "redispass" not in result.stdout
+    assert "endpointpass" not in result.stdout
+    assert "unit-test-secret" not in result.stdout
 
 
 def test_config_inspect_reports_json_and_rejects_unknown_output(monkeypatch: MonkeyPatch) -> None:
@@ -753,15 +765,24 @@ def test_config_inspect_helpers_redact_secrets_from_payload() -> None:
             log_level="warning",
             database_url="postgresql://user:password@example.test/db",
             redis_url="redis://:password@redis.test:6379/0",
-            llm_provider="none",
+            llm_provider="openrouter",
+            llm_model="openrouter/test-model",
+            llm_endpoint_url="https://user:endpointpass@openrouter.example.test/api/v1/chat/completions",
+            llm_api_key_configured=True,
         )
     )
     lines = _format_config_inspect(payload)
 
     assert payload["database_url"] == "postgresql://<redacted>@example.test/db"
     assert payload["redis_url"] == "redis://<redacted>@redis.test:6379/0"
+    assert payload["llm_provider"] == "openrouter"
+    assert payload["llm_model"] == "openrouter/test-model"
+    assert payload["llm_endpoint_url"] == "https://<redacted>@openrouter.example.test/api/v1/chat/completions"
+    assert payload["llm_api_key_configured"] == "yes"
     assert "password" not in json.dumps(payload)
+    assert "endpointpass" not in json.dumps(payload)
     assert "password" not in "\n".join(lines)
+    assert "endpointpass" not in "\n".join(lines)
 
 
 def test_providers_check_is_available_from_help() -> None:

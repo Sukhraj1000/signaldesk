@@ -231,6 +231,9 @@ def _config_inspect_payload(settings: Settings) -> dict[str, str]:
         "database_url": _redact_url_secret(settings.database_url),
         "redis_url": _redact_url_secret(settings.redis_url),
         "llm_provider": settings.llm_provider,
+        "llm_model": settings.llm_model,
+        "llm_endpoint_url": _redact_url_secret(settings.llm_endpoint_url),
+        "llm_api_key_configured": "yes" if settings.llm_api_key_configured else "no",
     }
 
 

@@ -7,6 +7,18 @@ SignalDesk keeps market intelligence deterministic first. The optional LLM expla
 - Default mode: `--llm none` / `LLM_PROVIDER=none`. The TA report remains complete and useful without any paid key or LLM provider. Narrative is reported as unavailable context.
 - Enhanced LLM mode: OpenAI-compatible request payloads can be generated and validated locally, but provider calls must pass through the guarded prompt and fail-closed response parser before narrative is attached.
 
+
+## Adapter configuration boundary
+
+Enhanced LLM adapter settings are loaded from environment variables but only non-secret configuration is reported by `signaldesk config inspect`:
+
+- `LLM_PROVIDER` selects optional explanation mode; default remains `none`.
+- `LLM_MODEL` defaults to `openai/gpt-4o-mini`.
+- `LLM_ENDPOINT_URL` defaults to the OpenRouter chat-completions endpoint and is redacted if userinfo is present.
+- `LLM_API_KEY` is never printed or stored in `Settings`; config inspection reports only whether a non-blank key is configured.
+
+Default/no-LLM workflows do not require any of these enhanced-mode variables. Live adapter calls must still pass through the guarded prompt and fail-closed response parser before narrative is attached.
+
 ## Guarded input boundary
 
 Use the CLI inspection commands to see the exact JSON sent to a future adapter without calling an LLM:
