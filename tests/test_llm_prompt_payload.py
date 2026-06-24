@@ -279,6 +279,16 @@ def test_validate_llm_explanation_output_rejects_recommendation_language() -> No
         )
 
 
+def test_llm_explanation_output_schema_returns_defensive_copy() -> None:
+    from signaldesk_backend import llm_explanation_output_schema
+
+    schema = llm_explanation_output_schema()
+
+    assert schema["properties"]["schema_version"]["const"] == LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION
+    schema["properties"]["schema_version"]["const"] = "mutated"
+    assert llm_explanation_output_schema()["properties"]["schema_version"]["const"] == (
+        LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION
+    )
 
 def test_documented_llm_explanation_schema_matches_prompt_payload_contract() -> None:
     from pathlib import Path

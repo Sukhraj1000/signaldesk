@@ -152,6 +152,12 @@ def parse_llm_explanation_response_content(content: str) -> dict[str, Any]:
     return validate_llm_explanation_output(parsed)
 
 
+def llm_explanation_output_schema() -> dict[str, Any]:
+    """Return a defensive copy of the public LLM explanation output schema."""
+
+    return deepcopy(_OUTPUT_SCHEMA)
+
+
 def build_ta_llm_prompt_payload(report: Mapping[str, Any]) -> dict[str, Any]:
     """Build the only structured input an LLM may receive for TA explanation mode.
 
@@ -217,6 +223,7 @@ __all__ = [
     "LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION",
     "LLM_PROMPT_PAYLOAD_SCHEMA_VERSION",
     "build_openai_compatible_chat_messages",
+    "llm_explanation_output_schema",
     "parse_llm_explanation_response_content",
     "build_ta_llm_prompt_payload",
     "validate_llm_explanation_output",
