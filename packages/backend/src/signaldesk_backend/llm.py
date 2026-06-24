@@ -63,6 +63,48 @@ _UNTRUSTED_PROVIDER_TEXT_FIELDS = (
 
 _EXCLUDED_SIGNAL_CARD_FIELDS = ("signal_card.narrative",)
 
+_PROMPT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": [
+        "schema_version",
+        "task",
+        "guardrails",
+        "untrusted_provider_text_fields",
+        "excluded_signal_card_fields",
+        "signal_card",
+        "output_schema",
+    ],
+    "properties": {
+        "schema_version": {"const": LLM_PROMPT_PAYLOAD_SCHEMA_VERSION},
+        "task": {"const": "explain_ta_signal_card"},
+        "guardrails": {
+            "type": "array",
+            "minItems": len(_LLM_GUARDRAILS),
+            "items": {"type": "string", "minLength": 1, "pattern": r"\S"},
+        },
+        "untrusted_provider_text_fields": {
+            "type": "array",
+            "items": {"type": "string", "minLength": 1, "pattern": r"\S"},
+        },
+        "excluded_signal_card_fields": {
+            "type": "array",
+            "items": {"type": "string", "minLength": 1, "pattern": r"\S"},
+        },
+        "signal_card": {
+            "type": "object",
+            "description": (
+                "Canonical SignalDesk signal_card object validated by backend "
+                "contracts before prompt construction. Narrative must be null."
+            ),
+        },
+        "output_schema": {
+            "type": "object",
+            "description": "Strict signaldesk.llm_explanation.v1 JSON output schema.",
+        },
+    },
+}
+
 _RECOMMENDATION_LANGUAGE_RE = re.compile(
     r"\b(?:buy|sell|hold|strong[-\s]+buy|strong[-\s]+sell|price[-\s]+target|target[-\s]+price|take[-\s]+profit|stop[-\s]+loss)\b",
     re.IGNORECASE,
@@ -207,6 +249,12 @@ def llm_explanation_output_schema() -> dict[str, Any]:
     return deepcopy(_OUTPUT_SCHEMA)
 
 
+def llm_prompt_payload_schema() -> dict[str, Any]:
+    """Return a defensive copy of the public LLM prompt payload schema."""
+
+    return deepcopy(_PROMPT_SCHEMA)
+
+
 def build_ta_llm_prompt_payload(report: Mapping[str, Any]) -> dict[str, Any]:
     """Build the only structured input an LLM may receive for TA explanation mode.
 
@@ -306,6 +354,7 @@ __all__ = [
     "build_openai_compatible_chat_messages",
     "build_openai_compatible_chat_request",
     "llm_explanation_output_schema",
+    "llm_prompt_payload_schema",
     "parse_llm_explanation_response_content",
     "render_llm_explanation_markdown",
     "build_ta_llm_prompt_payload",

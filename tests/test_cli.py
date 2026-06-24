@@ -3056,3 +3056,14 @@ def test_llm_render_output_fails_closed_without_leaking_invalid_content(tmp_path
     assert result.stdout == ""
     assert "BUY NOW" not in result.stderr
     assert "BUY NOW" not in result.stdout
+
+
+def test_llm_input_schema_outputs_guarded_prompt_schema() -> None:
+    result = CliRunner().invoke(app, ["llm", "input-schema"])
+
+    assert result.exit_code == 0, result.stderr
+    schema = json.loads(result.stdout)
+    assert schema["properties"]["schema_version"]["const"] == "signaldesk.llm_prompt.v1"
+    assert schema["properties"]["task"]["const"] == "explain_ta_signal_card"
+    assert "signal_card" in schema["required"]
+    assert "output_schema" in schema["required"]

@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -8,6 +9,7 @@ from signaldesk_backend import (
     assemble_ta_signal_card_report,
     attach_validated_llm_explanation_to_report,
     build_ta_llm_prompt_payload,
+    llm_prompt_payload_schema,
 )
 
 
@@ -105,6 +107,44 @@ def _report_with_untrusted_provider_text() -> dict[str, Any]:
         narrative=None,
     )
 
+
+def test_llm_prompt_payload_schema_documents_guarded_input_shape() -> None:
+    schema = llm_prompt_payload_schema()
+    payload = build_ta_llm_prompt_payload(_report_with_untrusted_provider_text())
+
+    assert schema["additionalProperties"] is False
+    assert schema["properties"]["schema_version"]["const"] == LLM_PROMPT_PAYLOAD_SCHEMA_VERSION
+    assert schema["properties"]["task"]["const"] == "explain_ta_signal_card"
+    assert schema["required"] == [
+        "schema_version",
+        "task",
+        "guardrails",
+        "untrusted_provider_text_fields",
+        "excluded_signal_card_fields",
+        "signal_card",
+        "output_schema",
+    ]
+    assert set(payload) == set(schema["required"])
+    assert schema["properties"]["guardrails"]["minItems"] == len(payload["guardrails"])
+    assert schema["properties"]["signal_card"]["type"] == "object"
+    assert schema["properties"]["output_schema"]["type"] == "object"
+
+
+def test_documented_llm_prompt_payload_schema_matches_backend_contract() -> None:
+    schema_path = Path("docs/schemas/signaldesk.llm_prompt.v1.schema.json")
+    documented_schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    backend_schema = llm_prompt_payload_schema()
+
+    for key in ("type", "additionalProperties", "required"):
+        assert documented_schema[key] == backend_schema[key]
+    for field, backend_property in backend_schema["properties"].items():
+        documented_property = documented_schema["properties"][field]
+        if "type" in backend_property:
+            assert documented_property["type"] == backend_property["type"]
+        if "const" in backend_property:
+            assert documented_property["const"] == backend_property["const"]
+        if "minItems" in backend_property:
+            assert documented_property["minItems"] == backend_property["minItems"]
 
 def test_build_ta_llm_prompt_payload_uses_validated_signal_card_only() -> None:
     report = _report_with_untrusted_provider_text()
