@@ -2861,6 +2861,64 @@ def test_llm_chat_messages_command_rejects_non_json_output(monkeypatch: MonkeyPa
     assert "--output must be 'json'." in result.stderr
 
 
+def test_llm_chat_request_command_renders_guarded_request_without_tools(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        cli_main, "default_provider_registry", lambda: ProviderRegistry((WorkingProvider(),))
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "llm",
+            "chat-request",
+            "AMD",
+            "--provider",
+            "working",
+            "--model",
+            "openrouter/test-model",
+            "--output",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    request_body = json.loads(result.stdout)
+    assert request_body["model"] == "openrouter/test-model"
+    assert request_body["temperature"] == 0
+    assert [message["role"] for message in request_body["messages"]] == ["system", "user"]
+    assert request_body["response_format"]["type"] == "json_schema"
+    assert request_body["response_format"]["json_schema"]["strict"] is True
+    assert request_body["response_format"]["json_schema"]["schema"]["additionalProperties"] is False
+    assert "output_schema" in request_body["messages"][1]["content"]
+    assert "provider_client" not in result.stdout
+    assert '"tools":' not in result.stdout
+    assert "api_key" not in result.stdout
+
+
+def test_llm_chat_request_command_rejects_non_json_output(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        cli_main, "default_provider_registry", lambda: ProviderRegistry((WorkingProvider(),))
+    )
+    result = CliRunner().invoke(
+        app, ["llm", "chat-request", "AMD", "--provider", "working", "--output", "table"]
+    )
+    assert result.exit_code == 2
+    assert "--output must be 'json'." in result.stderr
+
+
+def test_llm_chat_request_command_rejects_blank_model(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        cli_main, "default_provider_registry", lambda: ProviderRegistry((WorkingProvider(),))
+    )
+    result = CliRunner().invoke(
+        app, ["llm", "chat-request", "AMD", "--provider", "working", "--model", "   "]
+    )
+    assert result.exit_code == 2
+    assert "model" in result.stderr
+
+
 def test_llm_validate_output_accepts_schema_valid_json(tmp_path: Path) -> None:
     from signaldesk_backend import LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION
 
