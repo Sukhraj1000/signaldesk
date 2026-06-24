@@ -279,6 +279,49 @@ def test_validate_llm_explanation_output_rejects_recommendation_language() -> No
         )
 
 
+
+def test_documented_llm_explanation_schema_matches_prompt_payload_contract() -> None:
+    from pathlib import Path
+
+    payload = build_ta_llm_prompt_payload(_report_with_untrusted_provider_text())
+    documented_schema = json.loads(
+        Path("docs/schemas/signaldesk.llm_explanation.v1.schema.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    comparable_schema = {
+        key: value
+        for key, value in documented_schema.items()
+        if key not in {"$schema", "$id", "title", "description"}
+    }
+    comparable_schema["properties"] = {
+        field: {
+            key: value
+            for key, value in property_schema.items()
+            if key != "description"
+        }
+        for field, property_schema in comparable_schema["properties"].items()
+    }
+
+    assert comparable_schema == payload["output_schema"]
+
+
+def test_documented_llm_explanation_schema_fixture_uses_public_schema_version() -> None:
+    from pathlib import Path
+
+    fixture = json.loads(Path("fixtures/llm/valid-explanation.json").read_text(encoding="utf-8"))
+    documented_schema = json.loads(
+        Path("docs/schemas/signaldesk.llm_explanation.v1.schema.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert documented_schema["properties"]["schema_version"]["const"] == (
+        LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION
+    )
+    assert fixture["schema_version"] == LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION
+
 def test_build_openai_compatible_chat_messages_wraps_payload_without_tools() -> None:
     from signaldesk_backend import build_openai_compatible_chat_messages
 
