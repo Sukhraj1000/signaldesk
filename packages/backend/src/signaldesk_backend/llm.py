@@ -295,9 +295,14 @@ def build_openai_compatible_chat_messages(
         )
     if task != "explain_ta_signal_card":
         raise ValueError("LLM prompt payload task must be explain_ta_signal_card")
-    for field in ("guardrails", "signal_card", "output_schema"):
-        if field not in prompt_payload:
-            raise ValueError(f"LLM prompt payload missing required field: {field}")
+    required_fields = set(_PROMPT_SCHEMA["required"])
+    payload_fields = set(prompt_payload.keys())
+    missing_fields = sorted(required_fields - payload_fields)
+    if missing_fields:
+        raise ValueError(f"LLM prompt payload missing required field(s): {missing_fields}")
+    unexpected_fields = sorted(payload_fields - required_fields)
+    if unexpected_fields:
+        raise ValueError(f"LLM prompt payload contains unexpected field(s): {unexpected_fields}")
 
     content = json.dumps(prompt_payload, sort_keys=True, separators=(",", ":"))
     return [
