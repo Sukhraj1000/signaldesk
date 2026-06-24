@@ -6,6 +6,7 @@ def test_tox_smoke_covers_guarded_llm_runtime_entrypoints() -> None:
     tox_ini = Path("tox.ini").read_text(encoding="utf-8")
 
     assert "signaldesk llm prompt-payload AMD --provider local-fixture --output json" in tox_ini
+    assert "signaldesk llm chat-messages AMD --provider local-fixture --output json" in tox_ini
     assert "signaldesk llm validate-output fixtures/llm/valid-explanation.json" in tox_ini
 
 
