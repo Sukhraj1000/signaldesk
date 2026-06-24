@@ -251,6 +251,29 @@ def test_validate_llm_explanation_output_rejects_invented_or_non_string_items() 
         validate_llm_explanation_output({**valid, "risks": ["   "]})
 
 
+def test_validate_llm_explanation_output_rejects_recommendation_language() -> None:
+    from signaldesk_backend import validate_llm_explanation_output
+
+    valid = {
+        "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
+        "summary": "AMD shows an uptrend based only on the signal card.",
+        "deterministic_facts_used": ["trend.regimes.trend=uptrend"],
+        "risks": ["Deterministic TA only."],
+        "unavailable_context": ["LLM provider disabled"],
+    }
+
+    with pytest.raises(ValueError, match="recommendations or trade instructions"):
+        validate_llm_explanation_output({**valid, "summary": "Buy AMD based on this setup."})
+
+    with pytest.raises(ValueError, match="recommendations or trade instructions"):
+        validate_llm_explanation_output(
+            {**valid, "deterministic_facts_used": ["analyst price target was invented"]}
+        )
+
+    with pytest.raises(ValueError, match="recommendations or trade instructions"):
+        validate_llm_explanation_output({**valid, "risks": ["Use a stop loss at 95."]})
+
+
 def test_build_openai_compatible_chat_messages_wraps_payload_without_tools() -> None:
     from signaldesk_backend import build_openai_compatible_chat_messages
 
