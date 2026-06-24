@@ -273,6 +273,11 @@ def test_validate_llm_explanation_output_rejects_recommendation_language() -> No
     with pytest.raises(ValueError, match="recommendations or trade instructions"):
         validate_llm_explanation_output({**valid, "risks": ["Use a stop loss at 95."]})
 
+    with pytest.raises(ValueError, match="recommendations or trade instructions"):
+        validate_llm_explanation_output(
+            {**valid, "unavailable_context": ["Broker note says strong-buy."]}
+        )
+
 
 def test_build_openai_compatible_chat_messages_wraps_payload_without_tools() -> None:
     from signaldesk_backend import build_openai_compatible_chat_messages

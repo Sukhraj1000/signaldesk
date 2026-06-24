@@ -61,7 +61,7 @@ _UNTRUSTED_PROVIDER_TEXT_FIELDS = (
 _EXCLUDED_SIGNAL_CARD_FIELDS = ("signal_card.narrative",)
 
 _RECOMMENDATION_LANGUAGE_RE = re.compile(
-    r"\b(?:buy|sell|hold|strong buy|strong sell|price target|target price|take profit|stop loss)\b",
+    r"\b(?:buy|sell|hold|strong[-\s]+buy|strong[-\s]+sell|price[-\s]+target|target[-\s]+price|take[-\s]+profit|stop[-\s]+loss)\b",
     re.IGNORECASE,
 )
 
