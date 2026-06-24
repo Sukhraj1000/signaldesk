@@ -38,7 +38,7 @@ signaldesk llm validate-output fixtures/llm/valid-explanation.json
 signaldesk llm render-output fixtures/llm/valid-explanation.json
 ```
 
-Invalid JSON, Markdown fences, extra fields, blank required fields, tool-call style responses, or recommendation language fail closed. Unavailable provider or LLM context must remain visible to users instead of being silently omitted.
+Invalid JSON, Markdown fences, extra fields, blank required fields, and tool-call style responses fail closed at the raw-JSON/schema boundary. Recommendation-language terms covered by `signaldesk_backend.llm._reject_recommendation_language` also fail closed during field validation. Unavailable provider or LLM context must remain visible to users instead of being silently omitted.
 
 ## Reviewer checklist for issue #54
 
