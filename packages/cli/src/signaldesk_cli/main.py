@@ -48,6 +48,7 @@ from signaldesk_backend import (
     redact_provider_diagnostic,
     relative_strength_index,
     relative_volume,
+    render_llm_explanation_markdown,
     resolve_provider_mode,
     score_technical_analysis,
     simple_moving_average,
@@ -1007,6 +1008,26 @@ def llm_validate_output(
         raise typer.Exit(1) from exc
 
     typer.echo(json.dumps(validated, indent=2, sort_keys=True))
+
+
+@llm_app.command("render-output")
+def llm_render_output(
+    path: Path = typer.Argument(  # noqa: B008
+        ..., help="Path to a candidate LLM explanation JSON object."
+    ),
+) -> None:
+    # Validate optional LLM output and render a readable Markdown explanation.
+    try:
+        parsed = parse_llm_explanation_response_content(path.read_text(encoding="utf-8"))
+        rendered = render_llm_explanation_markdown(parsed)
+    except OSError as exc:
+        typer.echo(redact_provider_diagnostic(f"could not read LLM output JSON: {exc}"), err=True)
+        raise typer.Exit(1) from exc
+    except ValueError as exc:
+        typer.echo("invalid LLM explanation output: schema validation failed", err=True)
+        raise typer.Exit(1) from exc
+
+    typer.echo(rendered)
 
 
 @app.command("scan")

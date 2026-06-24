@@ -425,3 +425,42 @@ def test_build_openai_compatible_chat_request_rejects_invalid_payload_or_model()
     payload["output_schema"] = []
     with pytest.raises(ValueError, match="output_schema"):
         build_openai_compatible_chat_request(payload)
+
+def test_render_llm_explanation_markdown_uses_validated_output_only() -> None:
+    from signaldesk_backend import render_llm_explanation_markdown
+
+    output = {
+        "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
+        "summary": "AMD shows an uptrend based only on the signal card.",
+        "deterministic_facts_used": ["trend.regimes.trend=uptrend"],
+        "risks": ["Deterministic TA only."],
+        "unavailable_context": ["LLM provider disabled"],
+    }
+
+    rendered = render_llm_explanation_markdown(output)
+
+    assert rendered == (
+        "### LLM explanation\n"
+        "AMD shows an uptrend based only on the signal card.\n\n"
+        "#### Deterministic facts used\n"
+        "- trend.regimes.trend=uptrend\n\n"
+        "#### Risks and scope\n"
+        "- Deterministic TA only.\n\n"
+        "#### Unavailable context\n"
+        "- LLM provider disabled"
+    )
+
+
+def test_render_llm_explanation_markdown_fails_closed_on_unvalidated_output() -> None:
+    from signaldesk_backend import render_llm_explanation_markdown
+
+    with pytest.raises(ValueError, match="recommendations or trade instructions"):
+        render_llm_explanation_markdown(
+            {
+                "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
+                "summary": "Buy AMD based on this setup.",
+                "deterministic_facts_used": ["trend.regimes.trend=uptrend"],
+                "risks": ["Deterministic TA only."],
+                "unavailable_context": ["LLM provider disabled"],
+            }
+        )
