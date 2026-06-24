@@ -2,9 +2,11 @@
 
 import json
 import re
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from copy import deepcopy
 from typing import Any
+from urllib.parse import urlsplit
+from urllib.request import Request, urlopen
 
 from signaldesk_backend.signal_cards import (
     extract_ta_signal_card,
@@ -400,6 +402,77 @@ def build_openai_compatible_chat_request(
     }
 
 
+
+_OPENAI_COMPATIBLE_DEFAULT_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
+
+
+def _validate_openai_compatible_endpoint(endpoint_url: str) -> str:
+    normalized_endpoint = endpoint_url.strip()
+    if not normalized_endpoint:
+        raise ValueError("LLM adapter endpoint_url must be a non-empty HTTPS URL")
+    parts = urlsplit(normalized_endpoint)
+    if parts.scheme != "https" or not parts.netloc:
+        raise ValueError("LLM adapter endpoint_url must be a non-empty HTTPS URL")
+    if parts.username is not None or parts.password is not None:
+        raise ValueError("LLM adapter endpoint_url must not contain credentials")
+    return normalized_endpoint
+
+
+def request_openai_compatible_llm_explanation(
+    prompt_payload: Mapping[str, Any],
+    *,
+    api_key: str,
+    endpoint_url: str = _OPENAI_COMPATIBLE_DEFAULT_ENDPOINT,
+    model: str = "openai/gpt-4o-mini",
+    timeout: float = 30.0,
+    transport: Callable[..., Any] = urlopen,
+) -> dict[str, Any]:
+    """Call an OpenAI-compatible chat endpoint and return validated explanation JSON.
+
+    This enhanced-mode adapter boundary performs the only network-facing LLM call:
+    it sends the already-validated SignalDesk prompt payload as strict JSON,
+    carries credentials only in the Authorization header, and immediately parses
+    the provider response through the fail-closed chat-response validator before
+    callers may attach narrative to a signal card. Tests should pass a transport
+    callable so default-mode and CI verification do not require network access.
+    """
+
+    normalized_key = api_key.strip()
+    if not normalized_key:
+        raise ValueError("LLM adapter api_key is required")
+    normalized_endpoint = _validate_openai_compatible_endpoint(endpoint_url)
+    request_body = build_openai_compatible_chat_request(prompt_payload, model=model)
+    encoded_body = json.dumps(request_body, separators=(",", ":")).encode("utf-8")
+    request = Request(
+        normalized_endpoint,
+        data=encoded_body,
+        headers={
+            "Authorization": f"Bearer {normalized_key}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        method="POST",
+    )
+
+    response = transport(request, timeout=timeout)
+    try:
+        raw_response = response.read()
+    finally:
+        close = getattr(response, "close", None)
+        if callable(close):
+            close()
+    try:
+        decoded_response = raw_response.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError("LLM adapter response must be UTF-8 JSON") from exc
+    try:
+        response_payload = json.loads(decoded_response)
+    except json.JSONDecodeError as exc:
+        raise ValueError("LLM adapter response JSON parse failed") from exc
+    if not isinstance(response_payload, Mapping):
+        raise ValueError("LLM adapter response must decode to a JSON object")
+    return parse_openai_compatible_chat_response(response_payload)
+
 def parse_openai_compatible_chat_response(response: Mapping[str, Any]) -> dict[str, Any]:
     """Extract and validate a strict LLM explanation from a chat-completions response.
 
@@ -441,6 +514,7 @@ __all__ = [
     "build_openai_compatible_chat_messages",
     "build_openai_compatible_chat_request",
     "parse_openai_compatible_chat_response",
+    "request_openai_compatible_llm_explanation",
     "llm_explanation_output_schema",
     "llm_prompt_payload_schema",
     "parse_llm_explanation_response_content",
