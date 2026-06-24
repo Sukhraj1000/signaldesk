@@ -6,7 +6,10 @@ from collections.abc import Mapping
 from copy import deepcopy
 from typing import Any
 
-from signaldesk_backend.signal_cards import extract_ta_signal_card
+from signaldesk_backend.signal_cards import (
+    extract_ta_signal_card,
+    validate_ta_signal_card_report,
+)
 
 LLM_PROMPT_PAYLOAD_SCHEMA_VERSION = "signaldesk.llm_prompt.v1"
 LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION = "signaldesk.llm_explanation.v1"
@@ -173,6 +176,31 @@ def render_llm_explanation_markdown(output: Mapping[str, Any]) -> str:
     )
 
 
+
+def attach_validated_llm_explanation_to_report(
+    report: Mapping[str, Any], output: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Attach a schema-validated LLM narrative without changing deterministic facts.
+
+    LLM adapters should call this after receiving an assistant response and before
+    returning a TA report to CLI/API/dashboard renderers. The boundary validates
+    the existing canonical signal card, validates the LLM output fail-closed,
+    renders explanation text, and updates only the top-level/signal_card
+    narrative aliases. Prices, levels, risks, unavailable context, scores, and
+    provenance remain deterministic source-of-truth fields.
+    """
+
+    validate_ta_signal_card_report(report)
+    validated_output = validate_llm_explanation_output(output)
+    updated_report: dict[str, Any] = deepcopy(dict(report))
+    narrative = render_llm_explanation_markdown(validated_output)
+    updated_report["narrative"] = narrative
+    if not isinstance(updated_report.get("signal_card"), dict):
+        raise ValueError("signal-card report must include a signal_card object")
+    updated_report["signal_card"]["narrative"] = narrative
+    validate_ta_signal_card_report(updated_report)
+    return updated_report
+
 def llm_explanation_output_schema() -> dict[str, Any]:
     """Return a defensive copy of the public LLM explanation output schema."""
 
@@ -274,6 +302,7 @@ def build_openai_compatible_chat_request(
 __all__ = [
     "LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION",
     "LLM_PROMPT_PAYLOAD_SCHEMA_VERSION",
+    "attach_validated_llm_explanation_to_report",
     "build_openai_compatible_chat_messages",
     "build_openai_compatible_chat_request",
     "llm_explanation_output_schema",

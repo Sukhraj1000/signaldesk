@@ -37,6 +37,7 @@ from signaldesk_backend.indicators import (
 from signaldesk_backend.llm import (
     LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
     LLM_PROMPT_PAYLOAD_SCHEMA_VERSION,
+    attach_validated_llm_explanation_to_report,
     build_openai_compatible_chat_messages,
     build_openai_compatible_chat_request,
     build_ta_llm_prompt_payload,
@@ -142,6 +143,7 @@ __all__ = [
     "TwelveDataProvider",
     "UnavailableContext",
     "YFinanceProvider",
+    "attach_validated_llm_explanation_to_report",
     "average_true_range",
     "build_openai_compatible_chat_messages",
     "build_openai_compatible_chat_request",

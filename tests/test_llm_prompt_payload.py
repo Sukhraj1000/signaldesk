@@ -6,6 +6,7 @@ from signaldesk_backend import (
     LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
     LLM_PROMPT_PAYLOAD_SCHEMA_VERSION,
     assemble_ta_signal_card_report,
+    attach_validated_llm_explanation_to_report,
     build_ta_llm_prompt_payload,
 )
 
@@ -464,3 +465,54 @@ def test_render_llm_explanation_markdown_fails_closed_on_unvalidated_output() ->
                 "unavailable_context": ["LLM provider disabled"],
             }
         )
+
+
+def test_attach_validated_llm_explanation_updates_only_narrative_aliases() -> None:
+    report = _report_with_untrusted_provider_text()
+    output = {
+        "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
+        "summary": "AMD shows an uptrend based only on the signal card.",
+        "deterministic_facts_used": ["trend.regimes.trend=uptrend"],
+        "risks": ["Deterministic TA only."],
+        "unavailable_context": ["LLM provider disabled"],
+    }
+
+    updated = attach_validated_llm_explanation_to_report(report, output)
+
+    assert updated is not report
+    assert updated["narrative"] == updated["signal_card"]["narrative"]
+    assert updated["narrative"].startswith("### LLM explanation\nAMD shows an uptrend")
+    for section in (
+        "identity",
+        "provider_mode",
+        "facts",
+        "trend",
+        "levels",
+        "events",
+        "risk",
+        "score",
+        "provenance",
+        "unavailable_context",
+        "llm",
+    ):
+        assert updated[section] == report[section]
+        assert updated["signal_card"][section] == report["signal_card"][section]
+    assert report["narrative"] is None
+    assert report["signal_card"]["narrative"] is None
+
+
+def test_attach_validated_llm_explanation_fails_closed_without_mutating_report() -> None:
+    report = _report_with_untrusted_provider_text()
+    invalid_output = {
+        "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
+        "summary": "Buy AMD based on invented context.",
+        "deterministic_facts_used": ["trend.regimes.trend=uptrend"],
+        "risks": [],
+        "unavailable_context": [],
+    }
+
+    with pytest.raises(ValueError, match="recommendations or trade instructions"):
+        attach_validated_llm_explanation_to_report(report, invalid_output)
+
+    assert report["narrative"] is None
+    assert report["signal_card"]["narrative"] is None
