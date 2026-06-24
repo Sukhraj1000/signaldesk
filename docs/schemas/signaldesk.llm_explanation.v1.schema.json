@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:signaldesk:schema:llm_explanation:v1",
+  "title": "SignalDesk LLM explanation output v1",
+  "description": "Fail-closed JSON output contract for optional LLM explanations. LLMs may explain structured SignalDesk facts only; they must not add recommendations or invented market data.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "summary",
+    "deterministic_facts_used",
+    "risks",
+    "unavailable_context"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "signaldesk.llm_explanation.v1"
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S",
+      "description": "Readable explanation based only on the supplied signal_card facts."
+    },
+    "deterministic_facts_used": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "description": "Traceable structured facts from the prompt signal_card used in the summary."
+    },
+    "risks": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "description": "Risk or scope statements copied from deterministic SignalDesk context."
+    },
+    "unavailable_context": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "description": "Unavailable provider or LLM context that must remain visible to users."
+    }
+  }
+}

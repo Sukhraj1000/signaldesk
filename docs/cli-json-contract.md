@@ -51,6 +51,8 @@ signaldesk llm validate-output path/to/candidate-llm-output.json
 
 `signaldesk llm validate-output` is a fail-closed boundary for candidate LLM JSON. It accepts only the schema-versioned explanation object with `summary`, `deterministic_facts_used`, `risks`, and `unavailable_context`; unexpected fields such as recommendations are rejected. Validation errors are intentionally generic so hostile or provider-sourced text from an invalid LLM response is not echoed back into terminal output, logs, or reports.
 
+The machine-readable explanation output schema lives at [`docs/schemas/signaldesk.llm_explanation.v1.schema.json`](schemas/signaldesk.llm_explanation.v1.schema.json). The backend prompt payload embeds this same strict schema so adapter prompts, CLI validation, and documentation stay aligned.
+
 Future OpenAI-compatible or local LLM adapters should call these same backend contracts before and after provider invocation. They must not receive provider clients, tool handles, hidden market context, credentials, or authority to override unavailable context from external text.
 
 ## TA and watchlist Markdown reports
