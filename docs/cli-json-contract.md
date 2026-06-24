@@ -53,7 +53,7 @@ signaldesk llm validate-output path/to/candidate-llm-output.json
 
 The machine-readable prompt payload schema lives at [`docs/schemas/signaldesk.llm_prompt.v1.schema.json`](schemas/signaldesk.llm_prompt.v1.schema.json), and the explanation output schema lives at [`docs/schemas/signaldesk.llm_explanation.v1.schema.json`](schemas/signaldesk.llm_explanation.v1.schema.json). The backend prompt payload embeds this same strict output schema so adapter prompts, CLI validation, and documentation stay aligned.
 
-Future OpenAI-compatible or local LLM adapters should call these same backend contracts before and after provider invocation. They must not receive provider clients, tool handles, hidden market context, credentials, or authority to override unavailable context from external text.
+Future OpenAI-compatible or local LLM adapters should call these same backend contracts before and after provider invocation. `parse_openai_compatible_chat_response()` is the no-network adapter boundary for OpenRouter/OpenAI-compatible responses: it accepts only the first assistant message content as raw JSON, rejects tool calls, and validates the explanation schema before narrative attachment. Adapters must not receive provider clients, tool handles, hidden market context, credentials, or authority to override unavailable context from external text.
 
 ## TA and watchlist Markdown reports
 

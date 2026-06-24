@@ -556,3 +556,70 @@ def test_attach_validated_llm_explanation_fails_closed_without_mutating_report()
 
     assert report["narrative"] is None
     assert report["signal_card"]["narrative"] is None
+
+
+def test_parse_openai_compatible_chat_response_validates_assistant_json() -> None:
+    from signaldesk_backend import parse_openai_compatible_chat_response
+
+    response = {
+        "choices": [
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": json.dumps(
+                        {
+                            "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
+                            "summary": "AMD shows an uptrend based only on the signal card.",
+                            "deterministic_facts_used": ["trend.regimes.trend=uptrend"],
+                            "risks": ["Deterministic TA only."],
+                            "unavailable_context": ["LLM provider disabled"],
+                        }
+                    ),
+                }
+            }
+        ]
+    }
+
+    parsed = parse_openai_compatible_chat_response(response)
+
+    assert parsed["schema_version"] == LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION
+    assert parsed["summary"].startswith("AMD shows")
+
+
+def test_parse_openai_compatible_chat_response_fails_closed_on_tools_or_bad_content() -> None:
+    from signaldesk_backend import parse_openai_compatible_chat_response
+
+    valid_content = json.dumps(
+        {
+            "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
+            "summary": "AMD shows an uptrend based only on the signal card.",
+            "deterministic_facts_used": ["trend.regimes.trend=uptrend"],
+            "risks": ["Deterministic TA only."],
+            "unavailable_context": ["LLM provider disabled"],
+        }
+    )
+
+    with pytest.raises(ValueError, match="tool calls"):
+        parse_openai_compatible_chat_response(
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": valid_content,
+                            "tool_calls": [{"name": "fetch_prices"}],
+                        }
+                    }
+                ]
+            }
+        )
+
+    with pytest.raises(ValueError, match="raw JSON object"):
+        parse_openai_compatible_chat_response(
+            {"choices": [{"message": {"role": "assistant", "content": "Buy AMD now"}}]}
+        )
+
+    with pytest.raises(ValueError, match="assistant"):
+        parse_openai_compatible_chat_response(
+            {"choices": [{"message": {"role": "tool", "content": valid_content}}]}
+        )

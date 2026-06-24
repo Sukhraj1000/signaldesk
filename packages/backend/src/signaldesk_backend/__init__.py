@@ -44,6 +44,7 @@ from signaldesk_backend.llm import (
     llm_explanation_output_schema,
     llm_prompt_payload_schema,
     parse_llm_explanation_response_content,
+    parse_openai_compatible_chat_response,
     render_llm_explanation_markdown,
     validate_llm_explanation_output,
 )
@@ -150,6 +151,7 @@ __all__ = [
     "build_openai_compatible_chat_request",
     "build_ta_llm_prompt_payload",
     "parse_llm_explanation_response_content",
+    "parse_openai_compatible_chat_response",
     "render_llm_explanation_markdown",
     "assemble_ta_signal_card_report",
     "assess_technical_analysis_risks",
