@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from os import getenv
 
 
@@ -15,7 +15,9 @@ class Settings:
     redis_url: str = "redis://localhost:6379/0"
     llm_provider: str = "none"
     llm_model: str = "openai/gpt-4o-mini"
-    llm_endpoint_url: str = "https://openrouter.ai/api/v1/chat/completions"
+    llm_endpoint_url: str = field(
+        default="https://openrouter.ai/api/v1/chat/completions", repr=False
+    )
     llm_api_key_configured: bool = False
 
     @classmethod

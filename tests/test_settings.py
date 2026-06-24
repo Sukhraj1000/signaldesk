@@ -3,7 +3,13 @@ from signaldesk_backend import Settings
 
 
 def test_settings_load_defaults(monkeypatch: MonkeyPatch) -> None:
-    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    for name in (
+        "LLM_PROVIDER",
+        "LLM_MODEL",
+        "LLM_ENDPOINT_URL",
+        "LLM_API_KEY",
+    ):
+        monkeypatch.delenv(name, raising=False)
 
     settings = Settings.from_env()
 
@@ -29,3 +35,4 @@ def test_settings_reports_llm_adapter_configuration_without_secret(
     assert settings.llm_endpoint_url == "https://openrouter.example.test/api/v1/chat/completions"
     assert settings.llm_api_key_configured is True
     assert "unit-test-secret" not in repr(settings)
+    assert "openrouter.example.test" not in repr(settings)
