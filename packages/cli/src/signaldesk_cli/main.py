@@ -42,13 +42,13 @@ from signaldesk_backend import (
     exponential_moving_average,
     extract_ta_signal_card,
     macd,
+    parse_llm_explanation_response_content,
     redact_provider_diagnostic,
     relative_strength_index,
     relative_volume,
     resolve_provider_mode,
     score_technical_analysis,
     simple_moving_average,
-    validate_llm_explanation_output,
     validate_ta_signal_card_report,
     volume_moving_average,
 )
@@ -939,17 +939,9 @@ def llm_validate_output(
     """Validate optional LLM explanation output without calling an LLM."""
 
     try:
-        raw_output = json.loads(path.read_text(encoding="utf-8"))
-        validated = validate_llm_explanation_output(raw_output)
+        validated = parse_llm_explanation_response_content(path.read_text(encoding="utf-8"))
     except OSError as exc:
         typer.echo(redact_provider_diagnostic(f"could not read LLM output JSON: {exc}"), err=True)
-        raise typer.Exit(1) from exc
-    except json.JSONDecodeError as exc:
-        typer.echo(
-            "invalid LLM explanation output: JSON parse failed at "
-            f"line {exc.lineno} column {exc.colno}",
-            err=True,
-        )
         raise typer.Exit(1) from exc
     except ValueError as exc:
         typer.echo("invalid LLM explanation output: schema validation failed", err=True)

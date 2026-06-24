@@ -1,3 +1,4 @@
+import json
 from typing import Any
 
 import pytest
@@ -277,3 +278,40 @@ def test_build_openai_compatible_chat_messages_rejects_unvalidated_payload() -> 
 
     with pytest.raises(ValueError, match="output_schema"):
         build_openai_compatible_chat_messages(payload)
+
+
+def test_parse_llm_explanation_response_content_accepts_json_object_string() -> None:
+    from signaldesk_backend import parse_llm_explanation_response_content
+
+    content = json.dumps(
+        {
+            "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
+            "summary": "AMD shows an uptrend based only on the signal card.",
+            "deterministic_facts_used": ["trend.regimes.trend=uptrend"],
+            "risks": ["Deterministic TA only."],
+            "unavailable_context": ["LLM provider disabled"],
+        }
+    )
+
+    assert parse_llm_explanation_response_content(content)["summary"].startswith("AMD shows")
+
+
+def test_parse_llm_explanation_response_content_fails_closed_on_markdown_or_arrays() -> None:
+    from signaldesk_backend import parse_llm_explanation_response_content
+
+    valid_payload = {
+        "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
+        "summary": "AMD shows an uptrend based only on the signal card.",
+        "deterministic_facts_used": ["trend.regimes.trend=uptrend"],
+        "risks": ["Deterministic TA only."],
+        "unavailable_context": ["LLM provider disabled"],
+    }
+
+    with pytest.raises(ValueError, match="raw JSON object"):
+        parse_llm_explanation_response_content("```json\n" + json.dumps(valid_payload) + "\n```")
+
+    with pytest.raises(ValueError, match="raw JSON object"):
+        parse_llm_explanation_response_content(json.dumps([valid_payload]))
+
+    with pytest.raises(ValueError, match="JSON parse failed"):
+        parse_llm_explanation_response_content("{not json")

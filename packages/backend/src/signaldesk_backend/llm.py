@@ -70,9 +70,7 @@ def _require_string_list(value: Any, field: str, *, min_items: int = 0) -> list[
     if not isinstance(value, list):
         raise ValueError(f"LLM explanation field {field} must be a list of strings")
     if len(value) < min_items:
-        raise ValueError(
-            f"LLM explanation field {field} must contain at least {min_items} item(s)"
-        )
+        raise ValueError(f"LLM explanation field {field} must contain at least {min_items} item(s)")
     strings: list[str] = []
     for index, item in enumerate(value):
         if not isinstance(item, str) or not item.strip():
@@ -113,6 +111,30 @@ def validate_llm_explanation_output(output: Mapping[str, Any]) -> dict[str, Any]
             output["unavailable_context"], "unavailable_context"
         ),
     }
+
+
+def parse_llm_explanation_response_content(content: str) -> dict[str, Any]:
+    """Parse raw OpenAI-compatible message content and validate it fail-closed.
+
+    Enhanced LLM adapters should pass the assistant message content through
+    this boundary before any narrative is attached to a signal card. The content
+    must be a raw JSON object, not Markdown, fenced code, arrays, or prose with
+    embedded JSON, so downstream callers never scrape best-effort explanations
+    from malformed model output.
+    """
+
+    if not isinstance(content, str) or not content.strip():
+        raise ValueError("LLM explanation response content must be a raw JSON object")
+    stripped = content.strip()
+    if stripped.startswith("```") or not stripped.startswith("{"):
+        raise ValueError("LLM explanation response content must be a raw JSON object")
+    try:
+        parsed = json.loads(stripped)
+    except json.JSONDecodeError as exc:
+        raise ValueError("LLM explanation response content JSON parse failed") from exc
+    if not isinstance(parsed, Mapping):
+        raise ValueError("LLM explanation response content must decode to a JSON object")
+    return validate_llm_explanation_output(parsed)
 
 
 def build_ta_llm_prompt_payload(report: Mapping[str, Any]) -> dict[str, Any]:
@@ -180,6 +202,7 @@ __all__ = [
     "LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION",
     "LLM_PROMPT_PAYLOAD_SCHEMA_VERSION",
     "build_openai_compatible_chat_messages",
+    "parse_llm_explanation_response_content",
     "build_ta_llm_prompt_payload",
     "validate_llm_explanation_output",
 ]

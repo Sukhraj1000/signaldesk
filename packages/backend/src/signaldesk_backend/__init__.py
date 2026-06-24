@@ -39,6 +39,7 @@ from signaldesk_backend.llm import (
     LLM_PROMPT_PAYLOAD_SCHEMA_VERSION,
     build_openai_compatible_chat_messages,
     build_ta_llm_prompt_payload,
+    parse_llm_explanation_response_content,
     validate_llm_explanation_output,
 )
 from signaldesk_backend.models import (
@@ -141,6 +142,7 @@ __all__ = [
     "average_true_range",
     "build_openai_compatible_chat_messages",
     "build_ta_llm_prompt_payload",
+    "parse_llm_explanation_response_content",
     "assemble_ta_signal_card_report",
     "assess_technical_analysis_risks",
     "calculate_fibonacci_retracement_levels",
