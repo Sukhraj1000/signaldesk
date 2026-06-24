@@ -275,7 +275,9 @@ def test_validate_llm_explanation_output_accepts_minimal_schema() -> None:
 
     output = {
         "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
-        "summary": "AMD shows an uptrend based only on the signal card.",
+        "summary": (
+                                            "AMD shows an uptrend based only on the signal card."
+                                        ),
         "deterministic_facts_used": ["trend.regimes.trend=uptrend"],
         "risks": ["Deterministic TA only."],
         "unavailable_context": ["LLM provider disabled"],
@@ -292,7 +294,9 @@ def test_validate_llm_explanation_output_fails_closed_on_extra_or_missing_fields
 
     valid = {
         "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
-        "summary": "AMD shows an uptrend based only on the signal card.",
+        "summary": (
+                                            "AMD shows an uptrend based only on the signal card."
+                                        ),
         "deterministic_facts_used": ["trend.regimes.trend=uptrend"],
         "risks": ["Deterministic TA only."],
         "unavailable_context": ["LLM provider disabled"],
@@ -312,7 +316,9 @@ def test_validate_llm_explanation_output_rejects_invented_or_non_string_items() 
 
     valid = {
         "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
-        "summary": "AMD shows an uptrend based only on the signal card.",
+        "summary": (
+                                            "AMD shows an uptrend based only on the signal card."
+                                        ),
         "deterministic_facts_used": ["trend.regimes.trend=uptrend"],
         "risks": ["Deterministic TA only."],
         "unavailable_context": ["LLM provider disabled"],
@@ -342,7 +348,9 @@ def test_validate_llm_explanation_output_rejects_recommendation_language() -> No
 
     valid = {
         "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
-        "summary": "AMD shows an uptrend based only on the signal card.",
+        "summary": (
+                                            "AMD shows an uptrend based only on the signal card."
+                                        ),
         "deterministic_facts_used": ["trend.regimes.trend=uptrend"],
         "risks": ["Deterministic TA only."],
         "unavailable_context": ["LLM provider disabled"],
@@ -461,7 +469,9 @@ def test_parse_llm_explanation_response_content_accepts_json_object_string() -> 
     content = json.dumps(
         {
             "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
-            "summary": "AMD shows an uptrend based only on the signal card.",
+            "summary": (
+                                            "AMD shows an uptrend based only on the signal card."
+                                        ),
             "deterministic_facts_used": ["trend.regimes.trend=uptrend"],
             "risks": ["Deterministic TA only."],
             "unavailable_context": ["LLM provider disabled"],
@@ -476,7 +486,9 @@ def test_parse_llm_explanation_response_content_fails_closed_on_markdown_or_arra
 
     valid_payload = {
         "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
-        "summary": "AMD shows an uptrend based only on the signal card.",
+        "summary": (
+                                            "AMD shows an uptrend based only on the signal card."
+                                        ),
         "deterministic_facts_used": ["trend.regimes.trend=uptrend"],
         "risks": ["Deterministic TA only."],
         "unavailable_context": ["LLM provider disabled"],
@@ -528,7 +540,9 @@ def test_render_llm_explanation_markdown_uses_validated_output_only() -> None:
 
     output = {
         "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
-        "summary": "AMD shows an uptrend based only on the signal card.",
+        "summary": (
+                                            "AMD shows an uptrend based only on the signal card."
+                                        ),
         "deterministic_facts_used": ["trend.regimes.trend=uptrend"],
         "risks": ["Deterministic TA only."],
         "unavailable_context": ["LLM provider disabled"],
@@ -567,7 +581,9 @@ def test_attach_validated_llm_explanation_updates_only_narrative_aliases() -> No
     report = _report_with_untrusted_provider_text()
     output = {
         "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
-        "summary": "AMD shows an uptrend based only on the signal card.",
+        "summary": (
+                                            "AMD shows an uptrend based only on the signal card."
+                                        ),
         "deterministic_facts_used": ["trend.regimes.trend=uptrend"],
         "risks": ["Deterministic TA only."],
         "unavailable_context": ["LLM provider disabled"],
@@ -625,7 +641,9 @@ def test_parse_openai_compatible_chat_response_validates_assistant_json() -> Non
                     "content": json.dumps(
                         {
                             "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
-                            "summary": "AMD shows an uptrend based only on the signal card.",
+                            "summary": (
+                                            "AMD shows an uptrend based only on the signal card."
+                                        ),
                             "deterministic_facts_used": ["trend.regimes.trend=uptrend"],
                             "risks": ["Deterministic TA only."],
                             "unavailable_context": ["LLM provider disabled"],
@@ -648,7 +666,9 @@ def test_parse_openai_compatible_chat_response_fails_closed_on_tools_or_bad_cont
     valid_content = json.dumps(
         {
             "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
-            "summary": "AMD shows an uptrend based only on the signal card.",
+            "summary": (
+                                            "AMD shows an uptrend based only on the signal card."
+                                        ),
             "deterministic_facts_used": ["trend.regimes.trend=uptrend"],
             "risks": ["Deterministic TA only."],
             "unavailable_context": ["LLM provider disabled"],
@@ -693,4 +713,127 @@ def test_parse_openai_compatible_chat_response_fails_closed_on_tools_or_bad_cont
                     },
                 ]
             }
+        )
+
+
+def test_openai_compatible_llm_adapter_sends_guarded_request_without_secret_in_body() -> None:
+    from signaldesk_backend import request_openai_compatible_llm_explanation
+
+    class FakeResponse:
+        closed = False
+
+        def read(self) -> bytes:
+            return json.dumps(
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": json.dumps(
+                                    {
+                                        "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
+                                        "summary": (
+                                            "AMD shows an uptrend based only on the signal card."
+                                        ),
+                                        "deterministic_facts_used": [
+                                            "signal_card.trend.regimes.trend=uptrend"
+                                        ],
+                                        "risks": ["Deterministic TA only."],
+                                        "unavailable_context": ["LLM provider disabled"],
+                                    }
+                                ),
+                            }
+                        }
+                    ]
+                }
+            ).encode("utf-8")
+
+        def close(self) -> None:
+            self.closed = True
+
+    captured: dict[str, Any] = {}
+
+    def fake_transport(request: Any, *, timeout: float) -> FakeResponse:
+        captured["url"] = request.full_url
+        captured["timeout"] = timeout
+        captured["authorization"] = request.get_header("Authorization")
+        captured["content_type"] = request.get_header("Content-type")
+        captured["body"] = request.data.decode("utf-8")
+        return FakeResponse()
+
+    payload = build_ta_llm_prompt_payload(_report_with_untrusted_provider_text())
+    validated = request_openai_compatible_llm_explanation(
+        payload,
+        api_key="unit-test-credential",
+        endpoint_url="https://openrouter.example.test/api/v1/chat/completions",
+        model="openrouter/test-model",
+        timeout=3.5,
+        transport=fake_transport,
+    )
+
+    assert validated["summary"].startswith("AMD shows")
+    assert captured["url"] == "https://openrouter.example.test/api/v1/chat/completions"
+    assert captured["timeout"] == 3.5
+    assert captured["authorization"] == "Bearer unit-test-credential"
+    assert captured["content_type"] == "application/json"
+    body = json.loads(captured["body"])
+    assert body["model"] == "openrouter/test-model"
+    assert "tools" not in body
+    assert "api_key" not in captured["body"]
+    assert "unit-test-credential" not in captured["body"]
+    assert "IGNORE PRIOR INSTRUCTIONS" in captured["body"]
+
+
+def test_openai_compatible_llm_adapter_fails_closed_before_network_on_bad_config() -> None:
+    from signaldesk_backend import request_openai_compatible_llm_explanation
+
+    payload = build_ta_llm_prompt_payload(_report_with_untrusted_provider_text())
+
+    def unexpected_transport(*_: Any, **__: Any) -> None:
+        raise AssertionError("transport must not be called")
+
+    with pytest.raises(ValueError, match="api_key"):
+        request_openai_compatible_llm_explanation(
+            payload, api_key="   ", transport=unexpected_transport
+        )
+    with pytest.raises(ValueError, match="HTTPS URL"):
+        request_openai_compatible_llm_explanation(
+            payload,
+            api_key="unit-test-credential",
+            endpoint_url="http://openrouter.example.test/api/v1/chat/completions",
+            transport=unexpected_transport,
+        )
+    with pytest.raises(ValueError, match="credentials"):
+        request_openai_compatible_llm_explanation(
+            payload,
+            api_key="unit-test-credential",
+            endpoint_url="https://user@openrouter.example.test/api/v1/chat/completions",
+            transport=unexpected_transport,
+        )
+
+
+def test_openai_compatible_llm_adapter_fails_closed_on_malformed_provider_response() -> None:
+    from signaldesk_backend import request_openai_compatible_llm_explanation
+
+    class FakeResponse:
+        def read(self) -> bytes:
+            return json.dumps(
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": "```json\\n{}\\n```",
+                            }
+                        }
+                    ]
+                }
+            ).encode("utf-8")
+
+    payload = build_ta_llm_prompt_payload(_report_with_untrusted_provider_text())
+    with pytest.raises(ValueError, match="raw JSON object"):
+        request_openai_compatible_llm_explanation(
+            payload,
+            api_key="unit-test-credential",
+            transport=lambda request, *, timeout: FakeResponse(),
         )
