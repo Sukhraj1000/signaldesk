@@ -1056,7 +1056,6 @@ def llm_attach_output(
         typer.echo(str(exc), err=True)
         raise typer.Exit(1) from exc
 
-    validate_ta_signal_card_report(report_with_narrative)
     if output_format == "json":
         typer.echo(json.dumps(report_with_narrative, indent=2, sort_keys=True))
         return
