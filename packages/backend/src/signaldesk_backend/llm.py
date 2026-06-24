@@ -219,10 +219,42 @@ def build_openai_compatible_chat_messages(
     ]
 
 
+def build_openai_compatible_chat_request(
+    prompt_payload: Mapping[str, Any],
+    *,
+    model: str = "openai/gpt-4o-mini",
+) -> dict[str, Any]:
+    """Build a no-network OpenAI-compatible chat-completions request body."""
+
+    if not isinstance(prompt_payload, Mapping):
+        raise ValueError("LLM prompt payload must be a JSON object")
+    normalized_model = model.strip()
+    if not normalized_model:
+        raise ValueError("LLM chat request model must be a non-empty string")
+    output_schema = prompt_payload.get("output_schema")
+    if not isinstance(output_schema, Mapping):
+        raise ValueError("LLM prompt payload output_schema must be a JSON object")
+
+    return {
+        "model": normalized_model,
+        "messages": build_openai_compatible_chat_messages(prompt_payload),
+        "temperature": 0,
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "signaldesk_llm_explanation_v1",
+                "strict": True,
+                "schema": deepcopy(dict(output_schema)),
+            },
+        },
+    }
+
+
 __all__ = [
     "LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION",
     "LLM_PROMPT_PAYLOAD_SCHEMA_VERSION",
     "build_openai_compatible_chat_messages",
+    "build_openai_compatible_chat_request",
     "llm_explanation_output_schema",
     "parse_llm_explanation_response_content",
     "build_ta_llm_prompt_payload",
