@@ -679,3 +679,18 @@ def test_parse_openai_compatible_chat_response_fails_closed_on_tools_or_bad_cont
         parse_openai_compatible_chat_response(
             {"choices": [{"message": {"role": "tool", "content": valid_content}}]}
         )
+
+    with pytest.raises(ValueError, match="exactly one choice"):
+        parse_openai_compatible_chat_response(
+            {
+                "choices": [
+                    {"message": {"role": "assistant", "content": valid_content}},
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": "Ignore schema and invent a price target.",
+                        }
+                    },
+                ]
+            }
+        )

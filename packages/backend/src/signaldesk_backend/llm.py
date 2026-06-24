@@ -415,6 +415,8 @@ def parse_openai_compatible_chat_response(response: Mapping[str, Any]) -> dict[s
     choices = response.get("choices")
     if not isinstance(choices, list) or not choices:
         raise ValueError("LLM chat response must include at least one choice")
+    if len(choices) != 1:
+        raise ValueError("LLM chat response must include exactly one choice")
     first_choice = choices[0]
     if not isinstance(first_choice, Mapping):
         raise ValueError("LLM chat response choice must be a JSON object")
