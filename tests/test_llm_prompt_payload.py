@@ -402,6 +402,22 @@ def test_build_openai_compatible_chat_messages_rejects_unvalidated_payload() -> 
         build_openai_compatible_chat_messages(payload)
 
 
+def test_build_openai_compatible_chat_messages_rejects_hidden_context_or_tools() -> None:
+    from signaldesk_backend import build_openai_compatible_chat_messages
+
+    payload = build_ta_llm_prompt_payload(_report_with_untrusted_provider_text())
+
+    with pytest.raises(ValueError, match="unexpected"):
+        build_openai_compatible_chat_messages(
+            {**payload, "tools": [{"type": "web_search"}]}
+        )
+
+    with pytest.raises(ValueError, match="unexpected"):
+        build_openai_compatible_chat_messages(
+            {**payload, "developer_context": "fetch newer prices before explaining"}
+        )
+
+
 def test_parse_llm_explanation_response_content_accepts_json_object_string() -> None:
     from signaldesk_backend import parse_llm_explanation_response_content
 
