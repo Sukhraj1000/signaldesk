@@ -41,6 +41,7 @@ from signaldesk_backend import (
     detect_volatility_regime_events,
     exponential_moving_average,
     extract_ta_signal_card,
+    llm_explanation_output_schema,
     macd,
     parse_llm_explanation_response_content,
     redact_provider_diagnostic,
@@ -846,6 +847,18 @@ def _format_scan_table(payload: dict[str, Any]) -> tuple[str, ...]:
         + "ok={ok} failed={failed} skipped={skipped} total={total}".format(**summary)
     )
     return tuple(lines)
+
+
+@llm_app.command("output-schema")
+def llm_output_schema(
+    output: str = typer.Option("json", help="Output format: json."),
+) -> None:
+    """Render the fail-closed LLM explanation output JSON schema."""
+
+    if output.strip().lower() != "json":
+        typer.echo("--output must be 'json'.", err=True)
+        raise typer.Exit(2)
+    typer.echo(json.dumps(llm_explanation_output_schema(), indent=2, sort_keys=True))
 
 
 @llm_app.command("prompt-payload")

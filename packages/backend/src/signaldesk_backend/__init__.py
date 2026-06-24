@@ -39,6 +39,7 @@ from signaldesk_backend.llm import (
     LLM_PROMPT_PAYLOAD_SCHEMA_VERSION,
     build_openai_compatible_chat_messages,
     build_ta_llm_prompt_payload,
+    llm_explanation_output_schema,
     parse_llm_explanation_response_content,
     validate_llm_explanation_output,
 )
@@ -164,6 +165,7 @@ __all__ = [
     "exponential_moving_average",
     "extract_ta_signal_card",
     "fallback_provider_call",
+    "llm_explanation_output_schema",
     "macd",
     "normalize_provider_name",
     "provider_rate_limit_failure",

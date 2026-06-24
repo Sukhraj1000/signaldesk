@@ -2768,6 +2768,27 @@ def test_fixtures_generate_rejects_invalid_options(tmp_path: Path) -> None:
     assert "--as-of must use YYYY-MM-DD format" in bad_date.stderr
 
 
+def test_llm_output_schema_command_emits_public_contract() -> None:
+    result = CliRunner().invoke(app, ["llm", "output-schema"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["additionalProperties"] is False
+    assert payload["properties"]["schema_version"]["const"] == "signaldesk.llm_explanation.v1"
+    assert payload["required"] == [
+        "schema_version",
+        "summary",
+        "deterministic_facts_used",
+        "risks",
+        "unavailable_context",
+    ]
+
+def test_llm_output_schema_command_rejects_non_json_output() -> None:
+    result = CliRunner().invoke(app, ["llm", "output-schema", "--output", "table"])
+
+    assert result.exit_code == 2
+    assert "--output must be \x27json\x27." in result.stderr
+
 def test_llm_prompt_payload_command_emits_guarded_structured_json(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(
         cli_main, "default_provider_registry", lambda: ProviderRegistry((WorkingProvider(),))
