@@ -13,16 +13,21 @@ JsonPayload = dict[str, Any]
 StartResponse = Callable[[str, list[tuple[str, str]]], None]
 
 
-def _json_response(start_response: StartResponse, status: str, payload: JsonPayload) -> list[bytes]:
+def _json_response(
+    start_response: StartResponse,
+    status: str,
+    payload: JsonPayload,
+    *,
+    extra_headers: list[tuple[str, str]] | None = None,
+) -> list[bytes]:
     body = json.dumps(payload, indent=2, sort_keys=True).encode("utf-8")
-    start_response(
-        status,
-        [
-            ("Content-Type", "application/json; charset=utf-8"),
-            ("Content-Length", str(len(body))),
-            ("Cache-Control", "no-store"),
-        ],
-    )
+    headers = [
+        ("Content-Type", "application/json; charset=utf-8"),
+        ("Content-Length", str(len(body))),
+        ("Cache-Control", "no-store"),
+    ]
+    headers.extend(extra_headers or [])
+    start_response(status, headers)
     return [body]
 
 
@@ -109,6 +114,19 @@ def openapi_schema() -> JsonPayload:
             "/providers": {
                 "get": {
                     "summary": "Provider capabilities",
+                    "parameters": [
+                        {
+                            "name": "role",
+                            "in": "query",
+                            "required": False,
+                            "description": (
+                                "Optional provider data role filter such as price, "
+                                "fundamentals, or catalyst. Repeat the parameter "
+                                "to request multiple roles."
+                            ),
+                            "schema": {"type": "string"},
+                        }
+                    ],
                     "responses": {
                         "200": {
                             "description": "Configured provider capability metadata",
@@ -136,9 +154,14 @@ class SignalDeskApiApp:
     def __call__(self, environ: dict[str, Any], start_response: StartResponse) -> Iterable[bytes]:
         method = str(environ.get("REQUEST_METHOD", "GET")).upper()
         path = str(environ.get("PATH_INFO", "/"))
+        if path not in {"/health", "/providers", "/openapi.json"}:
+            return _json_response(start_response, "404 Not Found", _not_found(path))
         if method != "GET":
             return _json_response(
-                start_response, "405 Method Not Allowed", _method_not_allowed(method)
+                start_response,
+                "405 Method Not Allowed",
+                _method_not_allowed(method),
+                extra_headers=[("Allow", "GET")],
             )
         if path == "/health":
             return _json_response(start_response, "200 OK", health_payload())
@@ -151,9 +174,7 @@ class SignalDeskApiApp:
                     item for item in payload["providers"] if item.get("data_role") in roles
                 ]
             return _json_response(start_response, "200 OK", payload)
-        if path == "/openapi.json":
-            return _json_response(start_response, "200 OK", openapi_schema())
-        return _json_response(start_response, "404 Not Found", _not_found(path))
+        return _json_response(start_response, "200 OK", openapi_schema())
 
 
 def create_app() -> SignalDeskApiApp:

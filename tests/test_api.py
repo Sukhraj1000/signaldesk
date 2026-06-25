@@ -5,7 +5,9 @@ from wsgiref.util import setup_testing_defaults
 from signaldesk_api.app import create_app, health_payload, openapi_schema, providers_payload
 
 
-def _wsgi_json(path: str, *, method: str = "GET") -> tuple[str, dict[str, Any]]:
+def _wsgi_response(
+    path: str, *, method: str = "GET"
+) -> tuple[str, dict[str, Any], list[tuple[str, str]]]:
     status = ""
     headers: list[tuple[str, str]] = []
 
@@ -20,7 +22,7 @@ def _wsgi_json(path: str, *, method: str = "GET") -> tuple[str, dict[str, Any]]:
     environ["PATH_INFO"] = path
     body = b"".join(create_app()(environ, start_response))
     assert ("Content-Type", "application/json; charset=utf-8") in headers
-    return status, json.loads(body.decode("utf-8"))
+    return status, json.loads(body.decode("utf-8")), headers
 
 
 def test_health_payload_is_secret_free() -> None:
@@ -41,6 +43,8 @@ def test_openapi_schema_documents_health_and_providers() -> None:
     assert "/health" in schema["paths"]
     assert "/providers" in schema["paths"]
     assert "/openapi.json" in schema["paths"]
+    providers_get = schema["paths"]["/providers"]["get"]
+    assert providers_get["parameters"][0]["name"] == "role"
 
 
 def test_providers_payload_uses_backend_registry() -> None:
@@ -54,18 +58,23 @@ def test_providers_payload_uses_backend_registry() -> None:
 
 
 def test_wsgi_app_routes_json_errors() -> None:
-    status, payload = _wsgi_json("/missing")
+    status, payload, _headers = _wsgi_response("/missing")
     assert status == "404 Not Found"
     assert payload["error"]["type"] == "not_found"
 
-    status, payload = _wsgi_json("/health", method="POST")
+    status, payload, headers = _wsgi_response("/health", method="POST")
     assert status == "405 Method Not Allowed"
     assert payload["error"]["type"] == "method_not_allowed"
+    assert ("Allow", "GET") in headers
+
+    status, payload, _headers = _wsgi_response("/missing", method="POST")
+    assert status == "404 Not Found"
+    assert payload["error"]["type"] == "not_found"
 
 
 
 def test_wsgi_app_smoke_serves_health() -> None:
-    status, payload = _wsgi_json("/health")
+    status, payload, _headers = _wsgi_response("/health")
 
     assert status == "200 OK"
     assert payload["status"] == "ok"
