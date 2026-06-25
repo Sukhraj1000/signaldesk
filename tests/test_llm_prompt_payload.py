@@ -275,9 +275,7 @@ def test_validate_llm_explanation_output_accepts_minimal_schema() -> None:
 
     output = {
         "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
-        "summary": (
-                                            "AMD shows an uptrend based only on the signal card."
-                                        ),
+        "summary": ("AMD shows an uptrend based only on the signal card."),
         "deterministic_facts_used": ["trend.regimes.trend=uptrend"],
         "risks": ["Deterministic TA only."],
         "unavailable_context": ["LLM provider disabled"],
@@ -294,9 +292,7 @@ def test_validate_llm_explanation_output_fails_closed_on_extra_or_missing_fields
 
     valid = {
         "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
-        "summary": (
-                                            "AMD shows an uptrend based only on the signal card."
-                                        ),
+        "summary": ("AMD shows an uptrend based only on the signal card."),
         "deterministic_facts_used": ["trend.regimes.trend=uptrend"],
         "risks": ["Deterministic TA only."],
         "unavailable_context": ["LLM provider disabled"],
@@ -316,9 +312,7 @@ def test_validate_llm_explanation_output_rejects_invented_or_non_string_items() 
 
     valid = {
         "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
-        "summary": (
-                                            "AMD shows an uptrend based only on the signal card."
-                                        ),
+        "summary": ("AMD shows an uptrend based only on the signal card."),
         "deterministic_facts_used": ["trend.regimes.trend=uptrend"],
         "risks": ["Deterministic TA only."],
         "unavailable_context": ["LLM provider disabled"],
@@ -348,9 +342,7 @@ def test_validate_llm_explanation_output_rejects_recommendation_language() -> No
 
     valid = {
         "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
-        "summary": (
-                                            "AMD shows an uptrend based only on the signal card."
-                                        ),
+        "summary": ("AMD shows an uptrend based only on the signal card."),
         "deterministic_facts_used": ["trend.regimes.trend=uptrend"],
         "risks": ["Deterministic TA only."],
         "unavailable_context": ["LLM provider disabled"],
@@ -469,9 +461,7 @@ def test_parse_llm_explanation_response_content_accepts_json_object_string() -> 
     content = json.dumps(
         {
             "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
-            "summary": (
-                                            "AMD shows an uptrend based only on the signal card."
-                                        ),
+            "summary": ("AMD shows an uptrend based only on the signal card."),
             "deterministic_facts_used": ["trend.regimes.trend=uptrend"],
             "risks": ["Deterministic TA only."],
             "unavailable_context": ["LLM provider disabled"],
@@ -486,9 +476,7 @@ def test_parse_llm_explanation_response_content_fails_closed_on_markdown_or_arra
 
     valid_payload = {
         "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
-        "summary": (
-                                            "AMD shows an uptrend based only on the signal card."
-                                        ),
+        "summary": ("AMD shows an uptrend based only on the signal card."),
         "deterministic_facts_used": ["trend.regimes.trend=uptrend"],
         "risks": ["Deterministic TA only."],
         "unavailable_context": ["LLM provider disabled"],
@@ -540,9 +528,7 @@ def test_render_llm_explanation_markdown_uses_validated_output_only() -> None:
 
     output = {
         "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
-        "summary": (
-                                            "AMD shows an uptrend based only on the signal card."
-                                        ),
+        "summary": ("AMD shows an uptrend based only on the signal card."),
         "deterministic_facts_used": ["trend.regimes.trend=uptrend"],
         "risks": ["Deterministic TA only."],
         "unavailable_context": ["LLM provider disabled"],
@@ -581,9 +567,7 @@ def test_attach_validated_llm_explanation_updates_only_narrative_aliases() -> No
     report = _report_with_untrusted_provider_text()
     output = {
         "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
-        "summary": (
-                                            "AMD shows an uptrend based only on the signal card."
-                                        ),
+        "summary": ("AMD shows an uptrend based only on the signal card."),
         "deterministic_facts_used": ["trend.regimes.trend=uptrend"],
         "risks": ["Deterministic TA only."],
         "unavailable_context": ["LLM provider disabled"],
@@ -641,9 +625,7 @@ def test_parse_openai_compatible_chat_response_validates_assistant_json() -> Non
                     "content": json.dumps(
                         {
                             "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
-                            "summary": (
-                                            "AMD shows an uptrend based only on the signal card."
-                                        ),
+                            "summary": ("AMD shows an uptrend based only on the signal card."),
                             "deterministic_facts_used": ["trend.regimes.trend=uptrend"],
                             "risks": ["Deterministic TA only."],
                             "unavailable_context": ["LLM provider disabled"],
@@ -666,9 +648,7 @@ def test_parse_openai_compatible_chat_response_fails_closed_on_tools_or_bad_cont
     valid_content = json.dumps(
         {
             "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
-            "summary": (
-                                            "AMD shows an uptrend based only on the signal card."
-                                        ),
+            "summary": ("AMD shows an uptrend based only on the signal card."),
             "deterministic_facts_used": ["trend.regimes.trend=uptrend"],
             "risks": ["Deterministic TA only."],
             "unavailable_context": ["LLM provider disabled"],
@@ -882,3 +862,127 @@ def test_openai_compatible_llm_adapter_fails_closed_on_malformed_provider_respon
             api_key="unit-test-credential",
             transport=lambda request, *, timeout: FakeResponse(),
         )
+
+
+def test_validate_llm_explanation_output_against_prompt_requires_auditable_fact_paths() -> None:
+    from signaldesk_backend import validate_llm_explanation_output_against_prompt
+
+    prompt_payload = build_ta_llm_prompt_payload(_report_with_untrusted_provider_text())
+    output = {
+        "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
+        "summary": "AMD shows an uptrend based only on the signal card.",
+        "deterministic_facts_used": [
+            "trend.regimes.trend=uptrend",
+            "signal_card.facts.latest_close",
+            "facts.catalysts.events[0].headline",
+        ],
+        "risks": ["Deterministic TA only."],
+        "unavailable_context": ["LLM provider disabled"],
+    }
+
+    assert validate_llm_explanation_output_against_prompt(prompt_payload, output) == output
+
+    with pytest.raises(ValueError, match="not in signal_card"):
+        validate_llm_explanation_output_against_prompt(
+            prompt_payload,
+            {**output, "deterministic_facts_used": ["facts.latest_close_invented=999.00"]},
+        )
+
+    with pytest.raises(ValueError, match="scalar signal_card value"):
+        validate_llm_explanation_output_against_prompt(
+            prompt_payload,
+            {**output, "deterministic_facts_used": ["facts.catalysts"]},
+        )
+
+
+def test_live_llm_adapter_rejects_outputs_that_cite_invented_fact_paths() -> None:
+    from signaldesk_backend import request_openai_compatible_llm_explanation
+
+    class _Response:
+        def read(self) -> bytes:
+            payload = {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": json.dumps(
+                                {
+                                    "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
+                                    "summary": (
+                                        "AMD shows an uptrend based only on the signal card."
+                                    ),
+                                    "deterministic_facts_used": [
+                                        "facts.latest_close_invented=999.00"
+                                    ],
+                                    "risks": ["Deterministic TA only."],
+                                    "unavailable_context": ["LLM provider disabled"],
+                                }
+                            ),
+                        }
+                    }
+                ]
+            }
+            return json.dumps(payload).encode("utf-8")
+
+        def close(self) -> None:
+            return None
+
+    def transport(request: object, *, timeout: float) -> _Response:
+        return _Response()
+
+    prompt_payload = build_ta_llm_prompt_payload(_report_with_untrusted_provider_text())
+
+    with pytest.raises(ValueError, match="not in signal_card"):
+        request_openai_compatible_llm_explanation(
+            prompt_payload,
+            api_key="test-key",
+            transport=transport,
+        )
+
+
+def test_live_llm_adapter_checks_response_against_sent_prompt_snapshot() -> None:
+    from signaldesk_backend import request_openai_compatible_llm_explanation
+
+    prompt_payload = build_ta_llm_prompt_payload(_report_with_untrusted_provider_text())
+
+    class _Response:
+        def read(self) -> bytes:
+            payload = {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": json.dumps(
+                                {
+                                    "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
+                                    "summary": (
+                                        "AMD shows an uptrend based only on the signal card."
+                                    ),
+                                    "deterministic_facts_used": ["facts.latest_close"],
+                                    "risks": ["Deterministic TA only."],
+                                    "unavailable_context": ["LLM provider disabled"],
+                                }
+                            ),
+                        }
+                    }
+                ]
+            }
+            return json.dumps(payload).encode("utf-8")
+
+        def close(self) -> None:
+            return None
+
+    def transport(request: object, *, timeout: float) -> _Response:
+        prompt_payload["signal_card"] = {
+            **prompt_payload["signal_card"],
+            "facts": {"symbol": "AMD"},
+        }
+        return _Response()
+
+    validated = request_openai_compatible_llm_explanation(
+        prompt_payload,
+        api_key="test-key",
+        transport=transport,
+    )
+
+    assert validated["deterministic_facts_used"] == ["facts.latest_close"]

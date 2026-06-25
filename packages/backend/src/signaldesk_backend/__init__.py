@@ -48,6 +48,7 @@ from signaldesk_backend.llm import (
     render_llm_explanation_markdown,
     request_openai_compatible_llm_explanation,
     validate_llm_explanation_output,
+    validate_llm_explanation_output_against_prompt,
     validate_llm_prompt_payload,
 )
 from signaldesk_backend.models import (
@@ -189,6 +190,7 @@ __all__ = [
     "score_technical_analysis",
     "simple_moving_average",
     "validate_llm_explanation_output",
+    "validate_llm_explanation_output_against_prompt",
     "validate_llm_prompt_payload",
     "validate_ta_signal_card_report",
     "volume_moving_average",
