@@ -2219,6 +2219,7 @@ def test_ta_command_attaches_live_llm_explanation_through_guarded_adapter(
     )
     monkeypatch.setenv("LLM_API_KEY", "unit-test-secret")
     monkeypatch.setenv("LLM_MODEL", "openai/test-model")
+    monkeypatch.setenv("LLM_ENDPOINT_URL", "https://llm.example.test/v1/chat/completions")
 
     calls: list[dict[str, Any]] = []
 
@@ -2276,12 +2277,44 @@ def test_ta_command_attaches_live_llm_explanation_through_guarded_adapter(
         {
             "prompt_payload": calls[0]["prompt_payload"],
             "api_key": "unit-test-secret",
-            "endpoint_url": "https://openrouter.ai/api/v1/chat/completions",
+            "endpoint_url": "https://llm.example.test/v1/chat/completions",
             "model": "openai/test-model",
         }
     ]
     assert calls[0]["prompt_payload"]["schema_version"] == "signaldesk.llm_prompt.v1"
     assert calls[0]["prompt_payload"]["signal_card"]["narrative"] is None
+
+
+def test_ta_command_rejects_unknown_live_llm_provider() -> None:
+    result = CliRunner().invoke(app, ["ta", "AMD", "--llm", "ollama"])
+
+    assert result.exit_code == 2
+    assert "--llm must be none, openrouter, or openai for live TA mode." in result.stderr
+
+
+def test_ta_command_sanitizes_live_llm_transport_failures(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        cli_main, "default_provider_registry", lambda: ProviderRegistry((WorkingProvider(),))
+    )
+    monkeypatch.setenv("LLM_API_KEY", "unit-test-secret")
+    monkeypatch.setenv("LLM_ENDPOINT_URL", "https://user:secret@llm.example.test/v1")
+
+    def fail_request(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        raise RuntimeError("transport failed with unit-test-secret")
+
+    monkeypatch.setattr(cli_main, "request_openai_compatible_llm_explanation", fail_request)
+
+    result = CliRunner().invoke(
+        app, ["ta", "AMD", "--provider", "working", "--llm", "openai"]
+    )
+
+    assert result.exit_code == 2
+    assert "--llm openai request failed" in result.stderr
+    assert "unit-test-secret" not in result.stderr
+    assert "secret@" not in result.stderr
+
 
 
 def test_ta_command_reports_validation_errors(monkeypatch: MonkeyPatch) -> None:

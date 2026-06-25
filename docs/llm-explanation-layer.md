@@ -15,7 +15,7 @@ Enhanced LLM adapter settings are loaded from environment variables but only non
 - `LLM_PROVIDER` selects optional explanation mode; default remains `none`.
 - `LLM_MODEL` defaults to `openai/gpt-4o-mini`.
 - `LLM_ENDPOINT_URL` defaults to the OpenRouter chat-completions endpoint and is redacted if userinfo is present.
-- `LLM_API_KEY` is never printed or stored in `Settings`; config inspection reports only whether a non-blank key is configured.
+- `LLM_API_KEY` is held in `Settings.llm_api_key` only for the live adapter call, with `repr=False`, and is never printed by config inspection; config inspection reports only whether a non-blank key is configured.
 
 Default/no-LLM workflows do not require any of these enhanced-mode variables. Live adapter calls must still pass through the guarded prompt and fail-closed response parser before narrative is attached.
 

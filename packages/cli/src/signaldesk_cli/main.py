@@ -266,7 +266,11 @@ def _ensure_no_llm_provider(llm: str) -> None:
 def _normalize_live_llm_provider(llm: str) -> str:
     """Normalize live TA LLM selection with guarded enhanced providers explicit."""
 
-    return _normalize_llm_provider(llm, allow_enhanced_inspection=True)
+    normalized = llm.strip().lower()
+    if normalized == "none" or normalized in _ENHANCED_LLM_INSPECTION_PROVIDERS:
+        return normalized
+    typer.echo("--llm must be none, openrouter, or openai for live TA mode.", err=True)
+    raise typer.Exit(2)
 
 def _llm_unavailable_context(llm_provider: str) -> dict[str, Any]:
     if llm_provider == "none":
@@ -385,12 +389,20 @@ def _attach_live_llm_explanation_if_requested(
             f"--llm {llm_provider} requires LLM_API_KEY; default --llm none remains available"
         )
     prompt_payload = build_ta_llm_prompt_payload(report)
-    explanation = request_openai_compatible_llm_explanation(
-        prompt_payload,
-        api_key=api_key,
-        endpoint_url=settings.llm_endpoint_url,
-        model=settings.llm_model,
-    )
+    try:
+        explanation = request_openai_compatible_llm_explanation(
+            prompt_payload,
+            api_key=api_key,
+            endpoint_url=settings.llm_endpoint_url,
+            model=settings.llm_model,
+        )
+    except ValueError:
+        raise
+    except Exception as exc:
+        raise ValueError(
+            f"--llm {llm_provider} request failed; check enhanced LLM configuration "
+            "or provider availability"
+        ) from exc
     attached_report = attach_validated_llm_explanation_to_report(report, explanation)
     _remove_llm_unavailable_context(attached_report)
     validate_ta_signal_card_report(attached_report)
