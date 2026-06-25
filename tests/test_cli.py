@@ -2242,7 +2242,8 @@ def test_ta_command_attaches_live_llm_explanation_through_guarded_adapter(
             "schema_version": "signaldesk.llm_explanation.v1",
             "summary": "AMD deterministic setup is explained from the provided signal card.",
             "deterministic_facts_used": [
-                "Latest close and trend regime came from the signal card."
+                "facts.latest_close",
+                "trend.regimes.trend.regime",
             ],
             "risks": ["No trading instruction is produced."],
             "unavailable_context": [],
