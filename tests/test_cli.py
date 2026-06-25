@@ -2196,11 +2196,92 @@ def test_ta_command_reports_provider_failures_without_secrets(monkeypatch: Monke
     assert "secret" not in result.stderr
 
 
-def test_ta_command_rejects_llm_modes_until_guardrails_exist() -> None:
-    result = CliRunner().invoke(app, ["ta", "AMD", "--llm", "openai"])
+def test_ta_command_requires_api_key_for_live_llm_mode(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        cli_main, "default_provider_registry", lambda: ProviderRegistry((WorkingProvider(),))
+    )
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+
+    result = CliRunner().invoke(
+        app, ["ta", "AMD", "--provider", "working", "--llm", "openai"]
+    )
 
     assert result.exit_code == 2
-    assert "Only --llm none is currently supported." in result.stderr
+    assert "--llm openai requires LLM_API_KEY" in result.stderr
+    assert "default --llm none remains available" in result.stderr
+
+
+def test_ta_command_attaches_live_llm_explanation_through_guarded_adapter(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        cli_main, "default_provider_registry", lambda: ProviderRegistry((WorkingProvider(),))
+    )
+    monkeypatch.setenv("LLM_API_KEY", "unit-test-secret")
+    monkeypatch.setenv("LLM_MODEL", "openai/test-model")
+
+    calls: list[dict[str, Any]] = []
+
+    def fake_request(
+        prompt_payload: dict[str, Any],
+        *,
+        api_key: str,
+        endpoint_url: str,
+        model: str,
+    ) -> dict[str, Any]:
+        calls.append(
+            {
+                "prompt_payload": prompt_payload,
+                "api_key": api_key,
+                "endpoint_url": endpoint_url,
+                "model": model,
+            }
+        )
+        return {
+            "schema_version": "signaldesk.llm_explanation.v1",
+            "summary": "AMD deterministic setup is explained from the provided signal card.",
+            "deterministic_facts_used": [
+                "Latest close and trend regime came from the signal card."
+            ],
+            "risks": ["No trading instruction is produced."],
+            "unavailable_context": [],
+        }
+
+    monkeypatch.setattr(cli_main, "request_openai_compatible_llm_explanation", fake_request)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "ta",
+            "AMD",
+            "--provider",
+            "working",
+            "--llm",
+            "openai",
+            "--output",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["provider_mode"]["llm_provider"] == "openai"
+    assert payload["llm"] == "openai"
+    assert payload["narrative"].startswith("### LLM explanation")
+    assert not any(
+        item["context_type"] == "llm_explanation"
+        for item in payload["unavailable_context"]
+    )
+    assert calls == [
+        {
+            "prompt_payload": calls[0]["prompt_payload"],
+            "api_key": "unit-test-secret",
+            "endpoint_url": "https://openrouter.ai/api/v1/chat/completions",
+            "model": "openai/test-model",
+        }
+    ]
+    assert calls[0]["prompt_payload"]["schema_version"] == "signaldesk.llm_prompt.v1"
+    assert calls[0]["prompt_payload"]["signal_card"]["narrative"] is None
 
 
 def test_ta_command_reports_validation_errors(monkeypatch: MonkeyPatch) -> None:

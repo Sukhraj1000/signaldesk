@@ -52,6 +52,7 @@ from signaldesk_backend import (
     relative_strength_index,
     relative_volume,
     render_llm_explanation_markdown,
+    request_openai_compatible_llm_explanation,
     resolve_provider_mode,
     score_technical_analysis,
     simple_moving_average,
@@ -261,6 +262,12 @@ def _ensure_no_llm_provider(llm: str) -> None:
 
     _normalize_llm_provider(llm, allow_enhanced_inspection=False)
 
+
+def _normalize_live_llm_provider(llm: str) -> str:
+    """Normalize live TA LLM selection with guarded enhanced providers explicit."""
+
+    return _normalize_llm_provider(llm, allow_enhanced_inspection=True)
+
 def _llm_unavailable_context(llm_provider: str) -> dict[str, Any]:
     if llm_provider == "none":
         return {
@@ -317,14 +324,14 @@ def technical_analysis(
         "default",
         help="Provider role mode to resolve when --provider is omitted: default or enhanced.",
     ),
-    llm: str = typer.Option("none", help="LLM provider. Only 'none' is currently supported."),
+    llm: str = typer.Option("none", help="LLM provider: none, openrouter, or openai."),
     interval: str = typer.Option("1d", help="Historical candle interval."),
     days: int = typer.Option(120, min=1, help="Number of calendar days of history to request."),
     output: str = typer.Option("table", help="Output format: table, json, or markdown."),
 ) -> None:
     """Fetch candles and run deterministic technical analysis for one symbol."""
 
-    _ensure_no_llm_provider(llm)
+    llm_provider = _normalize_live_llm_provider(llm)
 
     output_format = output.strip().lower()
     if output_format not in {"table", "json", "markdown", "md"}:
@@ -341,7 +348,9 @@ def technical_analysis(
             interval=interval,
             days=days,
             as_of=datetime.now(UTC),
+            llm_provider=llm_provider,
         )
+        report = _attach_live_llm_explanation_if_requested(report, llm_provider)
     except (KeyError, ValueError) as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(2) from exc
@@ -360,6 +369,61 @@ def technical_analysis(
     for key, value in _ta_table_report_values(report).items():
         typer.echo(f"{key}\t{value}")
 
+
+
+def _attach_live_llm_explanation_if_requested(
+    report: dict[str, Any], llm_provider: str
+) -> dict[str, Any]:
+    """Attach a guarded live LLM explanation only for explicit enhanced CLI mode."""
+
+    if llm_provider == "none":
+        return report
+    settings = Settings.from_env()
+    api_key = settings.llm_api_key or ""
+    if not api_key.strip():
+        raise ValueError(
+            f"--llm {llm_provider} requires LLM_API_KEY; default --llm none remains available"
+        )
+    prompt_payload = build_ta_llm_prompt_payload(report)
+    explanation = request_openai_compatible_llm_explanation(
+        prompt_payload,
+        api_key=api_key,
+        endpoint_url=settings.llm_endpoint_url,
+        model=settings.llm_model,
+    )
+    attached_report = attach_validated_llm_explanation_to_report(report, explanation)
+    _remove_llm_unavailable_context(attached_report)
+    validate_ta_signal_card_report(attached_report)
+    return attached_report
+
+
+def _remove_llm_unavailable_context(report: dict[str, Any]) -> None:
+    def without_llm(items: object) -> list[Any]:
+        if not isinstance(items, list):
+            return []
+        return [
+            item
+            for item in items
+            if not (
+                isinstance(item, dict)
+                and item.get("context_type") == "llm_explanation"
+            )
+        ]
+
+    report["unavailable_context"] = without_llm(report.get("unavailable_context"))
+    if isinstance(report.get("risk"), dict):
+        report["risk"]["unavailable_context"] = without_llm(
+            report["risk"].get("unavailable_context")
+        )
+    if isinstance(report.get("signal_card"), dict):
+        report["signal_card"]["unavailable_context"] = without_llm(
+            report["signal_card"].get("unavailable_context")
+        )
+        signal_risk = report["signal_card"].get("risk")
+        if isinstance(signal_risk, dict):
+            signal_risk["unavailable_context"] = without_llm(
+                signal_risk.get("unavailable_context")
+            )
 
 def _format_ta_markdown(report: dict[str, Any]) -> str:
     """Render a compact Markdown report from the canonical TA signal card."""
