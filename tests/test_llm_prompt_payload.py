@@ -720,6 +720,18 @@ def test_parse_openai_compatible_chat_response_fails_closed_on_tools_or_bad_cont
             {"choices": [{"message": {"role": "assistant", "content": "Buy AMD now"}}]}
         )
 
+    with pytest.raises(ValueError, match="finish_reason"):
+        parse_openai_compatible_chat_response(
+            {
+                "choices": [
+                    {
+                        "finish_reason": "length",
+                        "message": {"role": "assistant", "content": valid_content},
+                    }
+                ]
+            }
+        )
+
     with pytest.raises(ValueError, match="assistant"):
         parse_openai_compatible_chat_response(
             {"choices": [{"message": {"role": "tool", "content": valid_content}}]}
