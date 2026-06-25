@@ -606,6 +606,11 @@ def parse_openai_compatible_chat_response(response: Mapping[str, Any]) -> dict[s
     first_choice = choices[0]
     if not isinstance(first_choice, Mapping):
         raise ValueError("LLM chat response choice must be a JSON object")
+    finish_reason = first_choice.get("finish_reason")
+    if finish_reason is not None and finish_reason != "stop":
+        raise ValueError(
+            "LLM chat response finish_reason must be stop before explanation content is accepted"
+        )
     message = first_choice.get("message")
     if not isinstance(message, Mapping):
         raise ValueError("LLM chat response choice must include a message object")
