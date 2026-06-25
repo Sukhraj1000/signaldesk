@@ -4,6 +4,7 @@ import json
 import re
 from collections.abc import Callable, Mapping
 from copy import deepcopy
+from decimal import Decimal, InvalidOperation
 from typing import Any
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
@@ -175,6 +176,15 @@ def validate_llm_explanation_output(output: Mapping[str, Any]) -> dict[str, Any]
     }
 
 
+def _cited_value_matches_signal_card(cited_value: str, resolved_value: Any) -> bool:
+    resolved_text = str(resolved_value).strip()
+    cited_text = cited_value.strip()
+    try:
+        return Decimal(cited_text) == Decimal(resolved_text)
+    except InvalidOperation:
+        return cited_text == resolved_text
+
+
 def _resolve_signal_card_path(signal_card: Mapping[str, Any], fact_reference: str) -> Any:
     """Resolve a deterministic_facts_used path against the validated signal card.
 
@@ -260,7 +270,14 @@ def validate_llm_explanation_output_against_prompt(
     validated_output = validate_llm_explanation_output(output)
     signal_card = validated_prompt["signal_card"]
     for fact_reference in validated_output["deterministic_facts_used"]:
-        _resolve_signal_card_path(signal_card, fact_reference)
+        resolved_value = _resolve_signal_card_path(signal_card, fact_reference)
+        if "=" in fact_reference:
+            cited_value = fact_reference.split("=", 1)[1].strip()
+            if not _cited_value_matches_signal_card(cited_value, resolved_value):
+                raise ValueError(
+                    "LLM explanation deterministic_facts_used value "
+                    f"{fact_reference!r} does not match signal_card value"
+                )
     return validated_output
 
 
