@@ -986,3 +986,33 @@ def test_live_llm_adapter_checks_response_against_sent_prompt_snapshot() -> None
     )
 
     assert validated["deterministic_facts_used"] == ["facts.latest_close"]
+
+
+def test_attach_validated_llm_explanation_to_report_rejects_invented_fact_paths() -> None:
+    report = _report_with_untrusted_provider_text()
+    output = {
+        "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
+        "summary": "AMD context is explained using only auditable signal-card facts.",
+        "deterministic_facts_used": ["facts.latest_close=101.25", "facts.invented_metric=42"],
+        "risks": ["Deterministic TA only."],
+        "unavailable_context": ["LLM provider disabled"],
+    }
+
+    with pytest.raises(ValueError, match="deterministic_facts_used"):
+        attach_validated_llm_explanation_to_report(report, output)
+
+
+def test_attach_validated_llm_explanation_to_report_accepts_report_audited_fact_paths() -> None:
+    report = _report_with_untrusted_provider_text()
+    output = {
+        "schema_version": LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION,
+        "summary": "AMD context is explained using only auditable signal-card facts.",
+        "deterministic_facts_used": ["facts.latest_close=101.25", "trend.regimes.trend=uptrend"],
+        "risks": ["Deterministic TA only."],
+        "unavailable_context": ["LLM provider disabled"],
+    }
+
+    updated = attach_validated_llm_explanation_to_report(report, output)
+
+    assert "LLM explanation" in updated["narrative"]
+    assert updated["signal_card"]["narrative"] == updated["narrative"]

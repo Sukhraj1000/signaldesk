@@ -323,7 +323,12 @@ def attach_validated_llm_explanation_to_report(
     """
 
     validate_ta_signal_card_report(report)
-    validated_output = validate_llm_explanation_output(output)
+    # Rebuild the exact guarded prompt from this report and require every
+    # deterministic_facts_used reference to resolve against its canonical
+    # signal_card before narrative can be attached. This keeps local attach-output
+    # and live adapter responses on the same anti-invention boundary.
+    prompt_payload = build_ta_llm_prompt_payload(report)
+    validated_output = validate_llm_explanation_output_against_prompt(prompt_payload, output)
     updated_report: dict[str, Any] = deepcopy(dict(report))
     narrative = render_llm_explanation_markdown(validated_output)
     updated_report["narrative"] = narrative
