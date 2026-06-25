@@ -237,13 +237,45 @@ def _config_inspect_payload(settings: Settings) -> dict[str, str]:
     }
 
 
-def _ensure_no_llm_provider(llm: str) -> None:
-    """Keep no-network/default LLM command paths explicit until live adapters are wired in."""
+_ENHANCED_LLM_INSPECTION_PROVIDERS = {"openrouter", "openai"}
 
-    if llm.strip().lower() != "none":
+def _normalize_llm_provider(llm: str, *, allow_enhanced_inspection: bool = False) -> str:
+    """Normalize CLI LLM selection while keeping live narrative generation explicit."""
+
+    normalized = llm.strip().lower()
+    if normalized == "none":
+        return "none"
+    if allow_enhanced_inspection and normalized in _ENHANCED_LLM_INSPECTION_PROVIDERS:
+        return normalized
+    if allow_enhanced_inspection:
+        typer.echo(
+            "--llm must be none, openrouter, or openai for guarded no-network inspection.",
+            err=True,
+        )
+    else:
         typer.echo("Only --llm none is currently supported.", err=True)
-        raise typer.Exit(2)
+    raise typer.Exit(2)
 
+def _ensure_no_llm_provider(llm: str) -> None:
+    """Keep live/default runtime paths explicit until narrative generation is wired in."""
+
+    _normalize_llm_provider(llm, allow_enhanced_inspection=False)
+
+def _llm_unavailable_context(llm_provider: str) -> dict[str, Any]:
+    if llm_provider == "none":
+        return {
+            "context_type": "llm_explanation",
+            "reason": "--llm none selected; narrative explanations are disabled",
+            "provider": None,
+        }
+    return {
+        "context_type": "llm_explanation",
+        "reason": (
+            "guarded LLM prompt/request inspection only; live narrative generation "
+            "is not performed in this command"
+        ),
+        "provider": llm_provider,
+    }
 
 def _format_config_inspect(payload: dict[str, str]) -> tuple[str, ...]:
     lines = ["setting\tvalue"]
@@ -687,6 +719,7 @@ def _fetch_ta_report(
     interval: str,
     days: int,
     as_of: datetime,
+    llm_provider: str = "none",
 ) -> dict[str, Any]:
     requested_symbol = Symbol(symbol)
     (
@@ -705,6 +738,10 @@ def _fetch_ta_report(
             f"{market_data_provider.name} failed for {requested_symbol.ticker}: {diagnostic}"
         )
 
+    provider_mode_payload = {
+        **provider_mode_payload,
+        "llm_provider": None if llm_provider == "none" else llm_provider,
+    }
     context_payloads = _enhanced_context_payloads(
         registry=registry,
         symbol=requested_symbol,
@@ -722,6 +759,7 @@ def _fetch_ta_report(
         enhanced_facts=context_payloads["facts"],
         enhanced_provenance=context_payloads["provenance"],
         enhanced_unavailable_context=context_payloads["unavailable_context"],
+        llm_provider=llm_provider,
     )
     validate_ta_signal_card_report(report)
     return report
@@ -900,10 +938,13 @@ def llm_prompt_payload(
     mode: str = typer.Option("default", help="Provider role mode: default or enhanced."),
     interval: str = typer.Option("1d", help="Historical candle interval."),
     days: int = typer.Option(120, min=1, help="Number of calendar days of history to request."),
-    llm: str = typer.Option("none", help="LLM provider. Only none is currently supported."),
+    llm: str = typer.Option(
+        "none",
+        help="LLM provider for guarded no-network inspection: none, openrouter, or openai.",
+    ),
     output: str = typer.Option("json", help="Output format: json."),
 ) -> None:
-    _ensure_no_llm_provider(llm)
+    llm_provider = _normalize_llm_provider(llm, allow_enhanced_inspection=True)
     if output.strip().lower() != "json":
         typer.echo("--output must be 'json'.", err=True)
         raise typer.Exit(2)
@@ -918,6 +959,7 @@ def llm_prompt_payload(
             interval=interval,
             days=days,
             as_of=datetime.now(UTC),
+            llm_provider=llm_provider,
         )
         payload = build_ta_llm_prompt_payload(report)
     except (KeyError, ValueError) as exc:
@@ -943,11 +985,14 @@ def llm_chat_messages(
     mode: str = typer.Option("default", help="Provider role mode: default or enhanced."),
     interval: str = typer.Option("1d", help="Historical candle interval."),
     days: int = typer.Option(120, min=1, help="Number of calendar days of history to request."),
-    llm: str = typer.Option("none", help="LLM provider. Only none is currently supported."),
+    llm: str = typer.Option(
+        "none",
+        help="LLM provider for guarded no-network inspection: none, openrouter, or openai.",
+    ),
     output: str = typer.Option("json", help="Output format: json."),
 ) -> None:
     """Render guarded OpenAI-compatible chat messages without calling an LLM."""
-    _ensure_no_llm_provider(llm)
+    llm_provider = _normalize_llm_provider(llm, allow_enhanced_inspection=True)
     if output.strip().lower() != "json":
         typer.echo("--output must be 'json'.", err=True)
         raise typer.Exit(2)
@@ -961,6 +1006,7 @@ def llm_chat_messages(
             interval=interval,
             days=days,
             as_of=datetime.now(UTC),
+            llm_provider=llm_provider,
         )
         payload = build_ta_llm_prompt_payload(report)
         messages = build_openai_compatible_chat_messages(payload)
@@ -990,11 +1036,14 @@ def llm_chat_request(
         "openai/gpt-4o-mini",
         help="OpenAI-compatible model name to place in the no-network request body.",
     ),
-    llm: str = typer.Option("none", help="LLM provider. Only none is currently supported."),
+    llm: str = typer.Option(
+        "none",
+        help="LLM provider for guarded no-network inspection: none, openrouter, or openai.",
+    ),
     output: str = typer.Option("json", help="Output format: json."),
 ) -> None:
     """Render a guarded OpenAI-compatible chat request without calling an LLM."""
-    _ensure_no_llm_provider(llm)
+    llm_provider = _normalize_llm_provider(llm, allow_enhanced_inspection=True)
     if output.strip().lower() != "json":
         typer.echo("--output must be 'json'.", err=True)
         raise typer.Exit(2)
@@ -1008,6 +1057,7 @@ def llm_chat_request(
             interval=interval,
             days=days,
             as_of=datetime.now(UTC),
+            llm_provider=llm_provider,
         )
         payload = build_ta_llm_prompt_payload(report)
         request_body = build_openai_compatible_chat_request(payload, model=model)
@@ -2055,6 +2105,7 @@ def _technical_analysis_report(
     enhanced_facts: dict[str, Any] | None = None,
     enhanced_provenance: list[dict[str, Any]] | None = None,
     enhanced_unavailable_context: tuple[dict[str, Any], ...] = (),
+    llm_provider: str = "none",
 ) -> dict[str, Any]:
     closes = tuple(candle.close for candle in candles)
     sma_20 = simple_moving_average(closes, period=20)[-1]
@@ -2147,13 +2198,7 @@ def _technical_analysis_report(
                 "provider": provider_name,
             }
         )
-    unavailable_context.append(
-        {
-            "context_type": "llm_explanation",
-            "reason": "--llm none selected; narrative explanations are disabled",
-            "provider": None,
-        }
-    )
+    unavailable_context.append(_llm_unavailable_context(llm_provider))
     fundamentals_unavailable = any(
         item["context_type"] == "fundamentals" for item in unavailable_context
     )
@@ -2255,6 +2300,7 @@ def _technical_analysis_report(
             "fibonacci_levels": fibonacci_levels,
             "setup_levels": setup,
         },
+        llm=llm_provider,
         flat_fields={
             "symbol": facts["symbol"],
             "provider": facts["provider"],
