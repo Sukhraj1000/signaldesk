@@ -44,6 +44,8 @@ def test_openapi_schema_documents_health_and_providers() -> None:
     assert schema["openapi"] == "3.1.0"
     assert "/health" in schema["paths"]
     assert "/providers" in schema["paths"]
+    assert "/scan" in schema["paths"]
+    assert "/reports" in schema["paths"]
     assert "/openapi.json" in schema["paths"]
     providers_get = schema["paths"]["/providers"]["get"]
     role_parameter = providers_get["parameters"][0]
@@ -85,6 +87,21 @@ def test_wsgi_app_smoke_serves_health() -> None:
     assert status == "200 OK"
     assert payload["status"] == "ok"
     assert payload["schema_version"] == "signaldesk.api.health.v1"
+
+
+def test_planned_workflow_routes_return_typed_unavailable_context() -> None:
+    for route in ("/scan", "/reports"):
+        status, payload, _headers = _wsgi_response(route)
+
+        assert status == "501 Not Implemented"
+        assert payload["error"]["type"] == "not_implemented"
+        assert payload["unavailable_context"] == [
+            {
+                "context_type": "api_route",
+                "reason": "planned_endpoint_not_implemented",
+                "route": route,
+            }
+        ]
 
 
 def test_wsgi_app_serves_symbol_ta_with_canonical_cli_schema() -> None:

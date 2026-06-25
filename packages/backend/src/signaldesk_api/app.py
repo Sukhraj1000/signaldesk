@@ -58,6 +58,25 @@ def _method_not_allowed(method: str) -> JsonPayload:
     }
 
 
+def _planned_endpoint_unavailable(path: str) -> JsonPayload:
+    return {
+        "error": {
+            "type": "not_implemented",
+            "message": (
+                f"SignalDesk API route {path} is planned but not implemented yet; "
+                "use CLI workflows until the shared deterministic backend workflow exists"
+            ),
+        },
+        "unavailable_context": [
+            {
+                "context_type": "api_route",
+                "reason": "planned_endpoint_not_implemented",
+                "route": path,
+            }
+        ],
+    }
+
+
 def _error_payload(error_type: str, message: str, *, field: str | None = None) -> JsonPayload:
     error: JsonPayload = {
         "type": error_type,
@@ -310,6 +329,37 @@ def openapi_schema() -> JsonPayload:
                     },
                 }
             },
+            "/scan": {
+                "get": {
+                    "summary": "Watchlist scan status",
+                    "description": (
+                        "Planned route for scan workflows. It currently returns a typed "
+                        "not_implemented error instead of duplicating scan logic in the API layer."
+                    ),
+                    "responses": {
+                        "501": {
+                            "description": "Scan workflow is not implemented in the API yet",
+                            "content": {"application/json": {"schema": {"type": "object"}}},
+                        }
+                    },
+                }
+            },
+            "/reports": {
+                "get": {
+                    "summary": "Report generation status",
+                    "description": (
+                        "Planned route for report workflows. It currently returns a typed "
+                        "not_implemented error until reports are backed by shared "
+                        "deterministic code."
+                    ),
+                    "responses": {
+                        "501": {
+                            "description": "Report workflow is not implemented in the API yet",
+                            "content": {"application/json": {"schema": {"type": "object"}}},
+                        }
+                    },
+                }
+            },
             "/openapi.json": {
                 "get": {
                     "summary": "OpenAPI document",
@@ -336,7 +386,7 @@ class SignalDeskApiApp:
     def __call__(self, environ: dict[str, Any], start_response: StartResponse) -> Iterable[bytes]:
         method = str(environ.get("REQUEST_METHOD", "GET")).upper()
         path = str(environ.get("PATH_INFO", "/"))
-        is_known_path = path in {"/health", "/providers", "/openapi.json"}
+        is_known_path = path in {"/health", "/providers", "/scan", "/reports", "/openapi.json"}
         ta_symbol = _symbol_ta_path_symbol(path)
         if not is_known_path and ta_symbol is None:
             return _json_response(start_response, "404 Not Found", _not_found(path))
@@ -358,6 +408,10 @@ class SignalDeskApiApp:
                     item for item in payload["providers"] if item.get("data_role") in roles
                 ]
             return _json_response(start_response, "200 OK", payload)
+        if path in {"/scan", "/reports"}:
+            return _json_response(
+                start_response, "501 Not Implemented", _planned_endpoint_unavailable(path)
+            )
         if ta_symbol is not None:
             try:
                 return _json_response(
