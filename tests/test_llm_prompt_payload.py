@@ -873,7 +873,7 @@ def test_validate_llm_explanation_output_against_prompt_requires_auditable_fact_
         "summary": "AMD shows an uptrend based only on the signal card.",
         "deterministic_facts_used": [
             "trend.regimes.trend=uptrend",
-            "signal_card.facts.latest_close",
+            "signal_card.facts.latest_close=101.250",
             "facts.catalysts.events[0].headline",
         ],
         "risks": ["Deterministic TA only."],
@@ -892,6 +892,13 @@ def test_validate_llm_explanation_output_against_prompt_requires_auditable_fact_
         validate_llm_explanation_output_against_prompt(
             prompt_payload,
             {**output, "deterministic_facts_used": ["facts.catalysts"]},
+        )
+
+
+    with pytest.raises(ValueError, match="does not match signal_card value"):
+        validate_llm_explanation_output_against_prompt(
+            prompt_payload,
+            {**output, "deterministic_facts_used": ["facts.latest_close=999.00"]},
         )
 
 
