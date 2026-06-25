@@ -9,7 +9,7 @@ from urllib.parse import parse_qs, unquote
 
 from signaldesk_backend import Settings, default_provider_registry, redact_provider_diagnostic
 from signaldesk_backend.providers import MarketDataProvider
-from signaldesk_cli.main import _fetch_ta_report
+from signaldesk_cli.main import MAX_TA_HISTORY_DAYS, _fetch_ta_report
 
 JsonPayload = dict[str, Any]
 StartResponse = Callable[[str, list[tuple[str, str]]], None]
@@ -93,6 +93,10 @@ def _parse_days(query: dict[str, list[str]]) -> int:
         raise _validation_error("days", "days must be an integer") from exc
     if days < 1:
         raise _validation_error("days", "days must be greater than or equal to 1")
+    if days > MAX_TA_HISTORY_DAYS:
+        raise _validation_error(
+            "days", f"days must be less than or equal to {MAX_TA_HISTORY_DAYS}"
+        )
     return days
 
 
@@ -282,7 +286,12 @@ def openapi_schema() -> JsonPayload:
                             "days",
                             "query",
                             "Number of calendar days of history to request.",
-                            {"type": "integer", "minimum": 1, "default": 120},
+                            {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": MAX_TA_HISTORY_DAYS,
+                                "default": 120,
+                            },
                         ),
                         _parameter(
                             "llm",

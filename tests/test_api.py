@@ -112,6 +112,13 @@ def test_symbol_ta_route_returns_typed_validation_errors() -> None:
     assert payload["error"]["type"] == "validation_error"
     assert payload["error"]["field"] == "days"
 
+    status, payload, _headers = _wsgi_response("/symbols/amd/ta?days=366")
+
+    assert status == "400 Bad Request"
+    assert payload["error"]["type"] == "validation_error"
+    assert payload["error"]["field"] == "days"
+    assert "less than or equal to 365" in payload["error"]["message"]
+
 
 def test_openapi_schema_documents_symbol_ta_route() -> None:
     schema = openapi_schema()
