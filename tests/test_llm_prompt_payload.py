@@ -690,6 +690,51 @@ def test_parse_openai_compatible_chat_response_fails_closed_on_tools_or_bad_cont
             }
         )
 
+    with pytest.raises(ValueError, match="tool calls"):
+        parse_openai_compatible_chat_response(
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": valid_content,
+                            "function_call": {"name": "fetch_prices", "arguments": "{}"},
+                        }
+                    }
+                ]
+            }
+        )
+
+    with pytest.raises(ValueError, match="tool calls"):
+        parse_openai_compatible_chat_response(
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": valid_content,
+                            "tool_calls": [],
+                        }
+                    }
+                ]
+            }
+        )
+
+    with pytest.raises(ValueError, match="tool calls"):
+        parse_openai_compatible_chat_response(
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": valid_content,
+                            "function_call": {},
+                        }
+                    }
+                ]
+            }
+        )
+
     with pytest.raises(ValueError, match="raw JSON object"):
         parse_openai_compatible_chat_response(
             {"choices": [{"message": {"role": "assistant", "content": "Buy AMD now"}}]}

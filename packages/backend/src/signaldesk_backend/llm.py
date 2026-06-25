@@ -496,7 +496,7 @@ def parse_openai_compatible_chat_response(response: Mapping[str, Any]) -> dict[s
     message = first_choice.get("message")
     if not isinstance(message, Mapping):
         raise ValueError("LLM chat response choice must include a message object")
-    if message.get("tool_calls"):
+    if "tool_calls" in message or "function_call" in message:
         raise ValueError("LLM chat response must not include tool calls")
     role = message.get("role")
     if role != "assistant":
