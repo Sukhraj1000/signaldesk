@@ -25,6 +25,7 @@ yfinance = [
 
 [project.scripts]
 signaldesk = "signaldesk_cli.main:app"
+signaldesk-api = "signaldesk_api.main:main"
 
 [tool.setuptools.packages.find]
 where = ["packages/backend/src", "packages/cli/src"]

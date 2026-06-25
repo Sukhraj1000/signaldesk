@@ -24,3 +24,9 @@ def test_llm_validate_output_smoke_fixture_is_schema_valid() -> None:
         validate_llm_explanation_output(fixture)["schema_version"]
         == LLM_EXPLANATION_OUTPUT_SCHEMA_VERSION
     )
+
+
+def test_tox_smoke_covers_api_openapi_entrypoint() -> None:
+    tox_ini = Path("tox.ini").read_text(encoding="utf-8")
+
+    assert "signaldesk-api openapi" in tox_ini
