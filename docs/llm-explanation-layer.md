@@ -28,7 +28,11 @@ signaldesk llm input-schema
 signaldesk llm output-schema
 signaldesk llm prompt-payload AMD --provider local-fixture --llm none
 signaldesk llm chat-request AMD --provider local-fixture --llm none
+signaldesk llm prompt-payload AMD --provider local-fixture --llm openrouter
+signaldesk llm chat-request AMD --provider local-fixture --llm openrouter
 ```
+
+The `openrouter` and `openai` selections on these `signaldesk llm` inspection commands do not call a provider or attach narrative. They only mark the canonical signal card and provider-mode metadata for guarded enhanced-mode prompt/request inspection; unavailable context still states that live narrative generation was not performed. User-facing TA/report commands continue to require `--llm none` until live generation is wired through the fail-closed adapter boundary.
 
 The prompt payload contains only:
 

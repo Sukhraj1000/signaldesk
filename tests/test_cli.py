@@ -3267,7 +3267,7 @@ def test_llm_prompt_payload_accepts_explicit_no_llm_option() -> None:
     assert payload["signal_card"]["llm"] == "none"
 
 
-def test_llm_prompt_payload_rejects_live_llm_option_until_adapter_cli_is_wired() -> None:
+def test_llm_prompt_payload_accepts_guarded_enhanced_llm_inspection() -> None:
     result = CliRunner().invoke(
         app,
         [
@@ -3281,5 +3281,84 @@ def test_llm_prompt_payload_rejects_live_llm_option_until_adapter_cli_is_wired()
         ],
     )
 
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["schema_version"] == "signaldesk.llm_prompt.v1"
+    assert payload["signal_card"]["llm"] == "openrouter"
+    assert payload["signal_card"]["provider_mode"]["llm_provider"] == "openrouter"
+    assert any(
+        item["context_type"] == "llm_explanation"
+        and item["provider"] == "openrouter"
+        and "inspection only" in item["reason"]
+        for item in payload["signal_card"]["unavailable_context"]
+    )
+
+
+
+def _assert_guarded_openrouter_prompt_payload(payload: dict[str, Any]) -> None:
+    assert payload["schema_version"] == "signaldesk.llm_prompt.v1"
+    assert payload["signal_card"]["llm"] == "openrouter"
+    assert payload["signal_card"]["provider_mode"]["llm_provider"] == "openrouter"
+    assert any(
+        item["context_type"] == "llm_explanation"
+        and item["provider"] == "openrouter"
+        and "inspection only" in item["reason"]
+        for item in payload["signal_card"]["unavailable_context"]
+    )
+
+
+def test_llm_chat_messages_accepts_guarded_enhanced_llm_inspection() -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "llm",
+            "chat-messages",
+            "AMD",
+            "--provider",
+            "local-fixture",
+            "--llm",
+            "openrouter",
+        ],
+    )
+
+    assert result.exit_code == 0
+    messages = json.loads(result.stdout)
+    payload = json.loads(messages[1]["content"])
+    _assert_guarded_openrouter_prompt_payload(payload)
+
+
+def test_llm_chat_request_accepts_guarded_enhanced_llm_inspection() -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "llm",
+            "chat-request",
+            "AMD",
+            "--provider",
+            "local-fixture",
+            "--llm",
+            "openrouter",
+        ],
+    )
+
+    assert result.exit_code == 0
+    request_body = json.loads(result.stdout)
+    payload = json.loads(request_body["messages"][1]["content"])
+    _assert_guarded_openrouter_prompt_payload(payload)
+
+def test_llm_prompt_payload_rejects_unknown_live_llm_option() -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "llm",
+            "prompt-payload",
+            "AMD",
+            "--provider",
+            "local-fixture",
+            "--llm",
+            "other-provider",
+        ],
+    )
+
     assert result.exit_code == 2
-    assert "Only --llm none is currently supported." in result.output
+    assert "--llm must be none, openrouter, or openai" in result.output
