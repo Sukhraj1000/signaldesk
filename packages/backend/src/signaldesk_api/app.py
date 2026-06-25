@@ -124,7 +124,12 @@ def openapi_schema() -> JsonPayload:
                                 "fundamentals, or catalyst. Repeat the parameter "
                                 "to request multiple roles."
                             ),
-                            "schema": {"type": "string"},
+                            "style": "form",
+                            "explode": True,
+                            "schema": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                            },
                         }
                     ],
                     "responses": {

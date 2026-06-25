@@ -44,7 +44,11 @@ def test_openapi_schema_documents_health_and_providers() -> None:
     assert "/providers" in schema["paths"]
     assert "/openapi.json" in schema["paths"]
     providers_get = schema["paths"]["/providers"]["get"]
-    assert providers_get["parameters"][0]["name"] == "role"
+    role_parameter = providers_get["parameters"][0]
+    assert role_parameter["name"] == "role"
+    assert role_parameter["style"] == "form"
+    assert role_parameter["explode"] is True
+    assert role_parameter["schema"]["type"] == "array"
 
 
 def test_providers_payload_uses_backend_registry() -> None:
