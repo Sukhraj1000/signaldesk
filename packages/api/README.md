@@ -4,6 +4,7 @@ The API package exposes a small HTTP surface for web and dashboard clients witho
 
 - `GET /health` for runtime smoke checks.
 - `GET /providers` for backend provider capability metadata.
+- `GET /symbols/{symbol}/ta` for the canonical `signaldesk.ta.v1` technical-analysis JSON contract shared with the CLI.
 - `GET /openapi.json` for generated OpenAPI documentation.
 
 Run locally after installation:

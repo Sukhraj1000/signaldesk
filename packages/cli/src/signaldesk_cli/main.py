@@ -63,6 +63,7 @@ from signaldesk_backend import (
 app = typer.Typer(help="SignalDesk command-line interface.")
 
 ENHANCED_CONTEXT_STALE_AFTER = timedelta(days=7)
+MAX_TA_HISTORY_DAYS = 365
 providers_app = typer.Typer(help="Inspect configured market-data providers.")
 config_app = typer.Typer(help="Inspect local SignalDesk configuration without exposing secrets.")
 fixtures_app = typer.Typer(help="Generate deterministic local fixture data.")
@@ -101,6 +102,7 @@ def _fixture_output_path(output_dir: Path, symbol: str) -> Path:
 
 
 def _fixture_candle_rows(symbol: str, *, days: int, as_of: datetime) -> list[dict[str, str]]:
+    _validate_ta_history_days(days)
     requested_symbol = Symbol(symbol)
     provider = default_provider_registry().get("local-fixture")
     result = provider.get_historical_candles(
@@ -784,6 +786,13 @@ def _summarize_technical_events(events: tuple[dict[str, Any], ...]) -> str:
     if omitted_count > 0:
         summaries.append(f"{omitted_count} more event(s) omitted")
     return "; ".join(summaries)
+
+
+def _validate_ta_history_days(days: int) -> None:
+    if days < 1:
+        raise ValueError("days must be greater than or equal to 1")
+    if days > MAX_TA_HISTORY_DAYS:
+        raise ValueError(f"days must be less than or equal to {MAX_TA_HISTORY_DAYS}")
 
 
 def _fetch_ta_report(

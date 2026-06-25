@@ -18,8 +18,10 @@ def _wsgi_response(
 
     environ: dict[str, object] = {}
     setup_testing_defaults(environ)
+    path_info, _, query_string = path.partition("?")
     environ["REQUEST_METHOD"] = method
-    environ["PATH_INFO"] = path
+    environ["PATH_INFO"] = path_info
+    environ["QUERY_STRING"] = query_string
     body = b"".join(create_app()(environ, start_response))
     assert ("Content-Type", "application/json; charset=utf-8") in headers
     return status, json.loads(body.decode("utf-8")), headers
@@ -83,3 +85,51 @@ def test_wsgi_app_smoke_serves_health() -> None:
     assert status == "200 OK"
     assert payload["status"] == "ok"
     assert payload["schema_version"] == "signaldesk.api.health.v1"
+
+
+def test_wsgi_app_serves_symbol_ta_with_canonical_cli_schema() -> None:
+    status, payload, _headers = _wsgi_response(
+        "/symbols/amd/ta?provider=local-fixture&llm=none"
+    )
+
+    assert status == "200 OK"
+    assert payload["schema_version"] == "signaldesk.ta.v1"
+    assert payload["symbol"] == "AMD"
+    assert payload["provider"] == "local-fixture"
+    assert payload["signal_card"]["identity"] == payload["identity"]
+    assert payload["signal_card"]["facts"] == payload["facts"]
+    assert payload["llm"] == "none"
+    assert any(
+        item["context_type"] == "llm_explanation"
+        for item in payload["unavailable_context"]
+    )
+
+
+def test_symbol_ta_route_returns_typed_validation_errors() -> None:
+    status, payload, _headers = _wsgi_response("/symbols/amd/ta?days=not-a-number")
+
+    assert status == "400 Bad Request"
+    assert payload["error"]["type"] == "validation_error"
+    assert payload["error"]["field"] == "days"
+
+    status, payload, _headers = _wsgi_response("/symbols/amd/ta?days=366")
+
+    assert status == "400 Bad Request"
+    assert payload["error"]["type"] == "validation_error"
+    assert payload["error"]["field"] == "days"
+    assert "less than or equal to 365" in payload["error"]["message"]
+
+
+def test_openapi_schema_documents_symbol_ta_route() -> None:
+    schema = openapi_schema()
+
+    assert "/symbols/{symbol}/ta" in schema["paths"]
+    parameters = schema["paths"]["/symbols/{symbol}/ta"]["get"]["parameters"]
+    assert [parameter["name"] for parameter in parameters] == [
+        "symbol",
+        "provider",
+        "mode",
+        "interval",
+        "days",
+        "llm",
+    ]
