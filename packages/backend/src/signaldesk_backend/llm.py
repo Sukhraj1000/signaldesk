@@ -175,6 +175,95 @@ def validate_llm_explanation_output(output: Mapping[str, Any]) -> dict[str, Any]
     }
 
 
+def _resolve_signal_card_path(signal_card: Mapping[str, Any], fact_reference: str) -> Any:
+    """Resolve a deterministic_facts_used path against the validated signal card.
+
+    LLM output may summarize facts in prose elsewhere, but entries in
+    deterministic_facts_used must be auditable references to existing canonical
+    signal-card values. References may optionally append ``=value`` for human
+    readability; validation resolves only the path before the equals sign.
+    """
+
+    path = fact_reference.split("=", 1)[0].strip()
+    if not path:
+        raise ValueError(
+            "LLM explanation deterministic_facts_used entries must start with a signal_card path"
+        )
+    if path == "signal_card" or path.startswith("signal_card."):
+        path = path.removeprefix("signal_card.")
+    current: Any = signal_card
+    for raw_part in path.split("."):
+        part = raw_part.strip()
+        if not part:
+            raise ValueError(
+                f"LLM explanation deterministic_facts_used path {fact_reference!r} is malformed"
+            )
+        while "[" in part:
+            field, bracketed = part.split("[", 1)
+            if field:
+                if not isinstance(current, Mapping) or field not in current:
+                    raise ValueError(
+                        "LLM explanation deterministic_facts_used path "
+                        f"{fact_reference!r} is not in signal_card"
+                    )
+                current = current[field]
+            if "]" not in bracketed:
+                raise ValueError(
+                    f"LLM explanation deterministic_facts_used path {fact_reference!r} is malformed"
+                )
+            index_text, remainder = bracketed.split("]", 1)
+            if not index_text:
+                raise ValueError(
+                    "LLM explanation deterministic_facts_used path "
+                    f"{fact_reference!r} must use concrete list indexes"
+                )
+            try:
+                index = int(index_text)
+            except ValueError as exc:
+                raise ValueError(
+                    "LLM explanation deterministic_facts_used path "
+                    f"{fact_reference!r} must use numeric list indexes"
+                ) from exc
+            if not isinstance(current, list) or not 0 <= index < len(current):
+                raise ValueError(
+                    "LLM explanation deterministic_facts_used path "
+                    f"{fact_reference!r} is not in signal_card"
+                )
+            current = current[index]
+            part = remainder
+        if part:
+            if not isinstance(current, Mapping) or part not in current:
+                raise ValueError(
+                    "LLM explanation deterministic_facts_used path "
+                    f"{fact_reference!r} is not in signal_card"
+                )
+            current = current[part]
+    if isinstance(current, (Mapping, list)):
+        raise ValueError(
+            "LLM explanation deterministic_facts_used path "
+            f"{fact_reference!r} must reference a scalar signal_card value"
+        )
+    return current
+
+
+def validate_llm_explanation_output_against_prompt(
+    prompt_payload: Mapping[str, Any], output: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Validate LLM output against the guarded prompt that produced it.
+
+    This adds an auditable anti-invention check for enhanced mode: every
+    deterministic_facts_used entry must resolve to an existing scalar value in the
+    same validated signal_card supplied to the adapter.
+    """
+
+    validated_prompt = validate_llm_prompt_payload(prompt_payload)
+    validated_output = validate_llm_explanation_output(output)
+    signal_card = validated_prompt["signal_card"]
+    for fact_reference in validated_output["deterministic_facts_used"]:
+        _resolve_signal_card_path(signal_card, fact_reference)
+    return validated_output
+
+
 def parse_llm_explanation_response_content(content: str) -> dict[str, Any]:
     """Parse raw OpenAI-compatible message content and validate it fail-closed.
 
@@ -402,7 +491,6 @@ def build_openai_compatible_chat_request(
     }
 
 
-
 _OPENAI_COMPATIBLE_DEFAULT_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 
 
@@ -441,7 +529,8 @@ def request_openai_compatible_llm_explanation(
     if not normalized_key:
         raise ValueError("LLM adapter api_key is required")
     normalized_endpoint = _validate_openai_compatible_endpoint(endpoint_url)
-    request_body = build_openai_compatible_chat_request(prompt_payload, model=model)
+    validated_prompt_payload = validate_llm_prompt_payload(prompt_payload)
+    request_body = build_openai_compatible_chat_request(validated_prompt_payload, model=model)
     encoded_body = json.dumps(request_body, separators=(",", ":")).encode("utf-8")
     request = Request(
         normalized_endpoint,
@@ -471,7 +560,9 @@ def request_openai_compatible_llm_explanation(
         raise ValueError("LLM adapter response JSON parse failed") from exc
     if not isinstance(response_payload, Mapping):
         raise ValueError("LLM adapter response must decode to a JSON object")
-    return parse_openai_compatible_chat_response(response_payload)
+    parsed_output = parse_openai_compatible_chat_response(response_payload)
+    return validate_llm_explanation_output_against_prompt(validated_prompt_payload, parsed_output)
+
 
 def parse_openai_compatible_chat_response(response: Mapping[str, Any]) -> dict[str, Any]:
     """Extract and validate a strict LLM explanation from a chat-completions response.
@@ -521,5 +612,6 @@ __all__ = [
     "render_llm_explanation_markdown",
     "build_ta_llm_prompt_payload",
     "validate_llm_explanation_output",
+    "validate_llm_explanation_output_against_prompt",
     "validate_llm_prompt_payload",
 ]
