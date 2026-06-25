@@ -15,7 +15,7 @@ Enhanced LLM adapter settings are loaded from environment variables but only non
 - `LLM_PROVIDER` selects optional explanation mode; default remains `none`.
 - `LLM_MODEL` defaults to `openai/gpt-4o-mini`.
 - `LLM_ENDPOINT_URL` defaults to the OpenRouter chat-completions endpoint and is redacted if userinfo is present.
-- `LLM_API_KEY` is never printed or stored in `Settings`; config inspection reports only whether a non-blank key is configured.
+- `LLM_API_KEY` is held in `Settings.llm_api_key` only for the live adapter call, with `repr=False`, and is never printed by config inspection; config inspection reports only whether a non-blank key is configured.
 
 Default/no-LLM workflows do not require any of these enhanced-mode variables. Live adapter calls must still pass through the guarded prompt and fail-closed response parser before narrative is attached.
 
@@ -32,7 +32,7 @@ signaldesk llm prompt-payload AMD --provider local-fixture --llm openrouter
 signaldesk llm chat-request AMD --provider local-fixture --llm openrouter
 ```
 
-The `openrouter` and `openai` selections on these `signaldesk llm` inspection commands do not call a provider or attach narrative. They only mark the canonical signal card and provider-mode metadata for guarded enhanced-mode prompt/request inspection; unavailable context still states that live narrative generation was not performed. User-facing TA/report commands continue to require `--llm none` until live generation is wired through the fail-closed adapter boundary.
+The `openrouter` and `openai` selections on these `signaldesk llm` inspection commands do not call a provider or attach narrative. They only mark the canonical signal card and provider-mode metadata for guarded enhanced-mode prompt/request inspection; unavailable context still states that live narrative generation was not performed. User-facing TA commands may opt into live enhanced LLM narrative generation with `--llm openrouter` or `--llm openai` only when `LLM_API_KEY` is configured. Default `--llm none` remains complete and does not require paid keys.
 
 The prompt payload contains only:
 
@@ -44,6 +44,16 @@ The prompt payload contains only:
 - the strict `signaldesk.llm_explanation.v1` output schema
 
 Adapters must not add browser tools, market-data clients, hidden free-form context, or provider text outside the structured `signal_card`. Provider and news strings remain untrusted data even when they contain instruction-like text. Before an OpenAI-compatible chat request is rendered, SignalDesk revalidates the complete prompt payload so mutated guardrails, output schemas, untrusted-field labels, excluded fields, or recycled narrative fail closed.
+
+## Live TA explanation boundary
+
+Live TA narrative generation is explicit enhanced mode:
+
+```bash
+LLM_API_KEY=... signaldesk ta AMD --provider local-fixture --llm openrouter --output markdown
+```
+
+The TA command first builds the deterministic signal card, then sends only the guarded prompt payload through the OpenAI-compatible adapter. The provider response must parse as strict `signaldesk.llm_explanation.v1` JSON before narrative is attached. If `LLM_API_KEY` is missing, the command fails closed with a configuration error and points users back to default `--llm none`; it must not silently omit unavailable LLM context or fabricate narrative.
 
 ## Fail-closed output boundary
 

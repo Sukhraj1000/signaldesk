@@ -19,6 +19,7 @@ class Settings:
         default="https://openrouter.ai/api/v1/chat/completions", repr=False
     )
     llm_api_key_configured: bool = False
+    llm_api_key: str | None = field(default=None, repr=False, compare=False)
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -31,4 +32,5 @@ class Settings:
             llm_model=getenv("LLM_MODEL", cls.llm_model),
             llm_endpoint_url=getenv("LLM_ENDPOINT_URL", cls.llm_endpoint_url),
             llm_api_key_configured=_env_present("LLM_API_KEY"),
+            llm_api_key=getenv("LLM_API_KEY"),
         )
