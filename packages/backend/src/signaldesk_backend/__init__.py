@@ -4,6 +4,7 @@ from signaldesk_backend.backtesting import (
     SetupReplayMetrics,
     SetupReplayObservation,
     SetupReplayReport,
+    SetupReplayWalkForwardWindow,
     evaluate_setup_replay,
 )
 from signaldesk_backend.chart_overlay_presentation import (
@@ -178,6 +179,7 @@ __all__ = [
     "SetupReplayMetrics",
     "SetupReplayObservation",
     "SetupReplayReport",
+    "SetupReplayWalkForwardWindow",
     "Settings",
     "SignalCard",
     "SupportResistanceZones",

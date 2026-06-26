@@ -65,6 +65,7 @@ The payload contains:
 - `setup_label`, `symbol`, `timeframe`, `sample_size`, `evaluable_signals`, and evaluated `horizons`.
 - `metrics`: hit rate, average forward return by horizon, false breakout rate, max adverse excursion proxy, event usefulness, and data availability rate. Decimal values are serialized as strings, and unavailable metric values are `null`.
 - `observations`: one row per supplied signal index, including the observed candle timestamp, entry close, forward returns by horizon, hit/false-breakout flags, and max adverse excursion proxy.
+- `walk_forward_windows`: chronological signal-count windows for walk-forward style validation, each with its own sample size, evaluable count, and usefulness metrics. Use `--walk-forward-window-size` to split windows; otherwise the full replay is reported as one window.
 - `provenance`: provider, source, generated timestamp, timeframe, inputs, and warnings.
 - `limitations` and `unavailable_context`: required explicit report sections so missing forward windows or scope limits are visible instead of silently omitted.
 
