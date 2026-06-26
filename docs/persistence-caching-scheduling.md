@@ -64,19 +64,29 @@ import pathlib
 import sys
 
 reports_dir = pathlib.Path("reports/daily")
-latest = max(reports_dir.glob("*.json"), key=lambda path: path.stat().st_mtime)
-payload = json.loads(latest.read_text(encoding="utf-8"))
-results = payload.get("results") or [payload]
-missing = []
-for result in results:
-    card = result.get("signal_card") or result.get("summary", {}).get("signal_card") or {}
-    summary = result.get("summary") or {}
-    missing.extend(card.get("unavailable_context") or [])
-    missing.extend(summary.get("unavailable_context") or [])
-if missing:
-    print(f"{latest}: unavailable context: {missing}", file=sys.stderr)
+artifacts = sorted(reports_dir.glob("*.json"))
+if not artifacts:
+    print(f"{reports_dir}: no saved report artifacts found", file=sys.stderr)
     sys.exit(1)
-print(f"{latest}: no unavailable context")
+
+findings = []
+for artifact in artifacts:
+    payload = json.loads(artifact.read_text(encoding="utf-8"))
+    results = payload.get("results") or [payload]
+    for result in results:
+        card = result.get("signal_card") or result.get("summary", {}).get("signal_card") or {}
+        summary = result.get("summary") or {}
+        missing = []
+        missing.extend(card.get("unavailable_context") or [])
+        missing.extend(summary.get("unavailable_context") or [])
+        if missing:
+            findings.append((artifact, missing))
+
+if findings:
+    for artifact, missing in findings:
+        print(f"{artifact}: unavailable context: {missing}", file=sys.stderr)
+    sys.exit(1)
+print(f"{reports_dir}: no unavailable context across {len(artifacts)} artifact(s)")
 PY
 ```
 
