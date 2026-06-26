@@ -30,6 +30,7 @@ from signaldesk_backend import (
     build_provider_status_presentation,
     build_signal_card_presentation,
     build_ta_llm_prompt_payload,
+    build_watchlist_scan_presentation,
     calculate_fibonacci_retracement_levels,
     classify_trend_regime,
     classify_volatility_regime,
@@ -491,6 +492,66 @@ def web_chart_overlays(
         raise typer.Exit(1) from exc
 
     typer.echo(json.dumps(presentation, indent=2, sort_keys=True))
+
+
+@web_app.command("watchlist-scan")
+def web_watchlist_scan(
+    watchlist: Path = typer.Option(  # noqa: B008
+        ..., help="YAML watchlist containing a top-level symbols list."
+    ),
+    provider: str | None = typer.Option(
+        None,
+        help=(
+            "Registered price provider to use for every symbol. When omitted, SignalDesk "
+            "uses --mode role resolution."
+        ),
+    ),
+    mode: str = typer.Option(
+        "default",
+        help="Provider role mode to resolve when --provider is omitted: default or enhanced.",
+    ),
+    llm: str = typer.Option("none", help="LLM provider: none."),
+    interval: str = typer.Option("1d", help="Historical candle interval."),
+    days: int = typer.Option(120, min=1, help="Number of calendar days of history to request."),
+    output: str = typer.Option("json", help="Output format: json."),
+    max_workers: int = typer.Option(
+        4,
+        min=1,
+        max=16,
+        help="Maximum concurrent symbol fetches for the watchlist scan.",
+    ),
+) -> None:
+    """Render dashboard-facing watchlist scan rows from canonical report JSON.
+
+    This command is a UI adapter smoke path: it runs the existing deterministic
+    watchlist scan, then groups the canonical report into renderer sections
+    without ranking, scoring, or hiding unavailable context in dashboard code.
+    """
+
+    _ensure_no_llm_provider(llm)
+    output_format = output.strip().lower()
+    if output_format != "json":
+        typer.echo("--output must be 'json'.", err=True)
+        raise typer.Exit(2)
+    try:
+        watchlist_model = _load_watchlist_model(watchlist)
+        exit_code, payload = _scan_watchlist_payload(
+            watchlist_model=watchlist_model,
+            watchlist=watchlist,
+            provider=provider,
+            mode=mode,
+            interval=interval,
+            days=days,
+            max_workers=max_workers,
+        )
+        presentation = build_watchlist_scan_presentation(payload)
+    except (KeyError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from exc
+
+    typer.echo(json.dumps(presentation, indent=2, sort_keys=True))
+    if exit_code:
+        raise typer.Exit(exit_code)
 
 
 @web_app.command("provider-status")

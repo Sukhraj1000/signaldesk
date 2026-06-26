@@ -1,0 +1,152 @@
+"""Renderer-facing watchlist scan presentation adapter."""
+
+from collections.abc import Iterable, Mapping
+from typing import Any
+
+WATCHLIST_SCAN_PRESENTATION_SCHEMA_VERSION = "signaldesk.web.watchlist_scan_presentation.v1"
+
+
+def build_watchlist_scan_presentation(watchlist_report: Mapping[str, Any]) -> dict[str, Any]:
+    """Group canonical watchlist report JSON into renderer-only dashboard sections."""
+
+    _require_report_sections(watchlist_report)
+    watchlist_model = _mapping_section(watchlist_report, "watchlist_model")
+    provider_mode = _mapping_section(watchlist_report, "provider_mode")
+    summary = _mapping_section(watchlist_report, "summary")
+
+    return {
+        "schema_version": WATCHLIST_SCAN_PRESENTATION_SCHEMA_VERSION,
+        "headline": {
+            "watchlist": watchlist_report.get("watchlist"),
+            "name": watchlist_model.get("name"),
+            "generated_at": watchlist_report.get("generated_at")
+            or watchlist_report.get("scanned_at"),
+            "symbols": _symbol_items(watchlist_report.get("symbols")),
+        },
+        "provider_badge": {
+            "mode": provider_mode.get("mode"),
+            "price_provider": provider_mode.get("price_provider"),
+        },
+        "summary_tiles": {
+            "total": summary.get("total", 0),
+            "ok": summary.get("ok", 0),
+            "failed": summary.get("failed", 0),
+            "skipped": summary.get("skipped", 0),
+        },
+        "ranked_setup_rows": [
+            _ranked_setup_row(result)
+            for result in _mapping_items(watchlist_report.get("ranked_setups"))
+        ],
+        "failed_rows": _status_rows(watchlist_report.get("failed_symbols")),
+        "skipped_rows": _status_rows(watchlist_report.get("skipped_symbols")),
+        "provider_unavailable_context": _mapping_items(
+            provider_mode.get("unavailable_context")
+        ),
+        "provenance_rows": _mapping_items(watchlist_report.get("provenance")),
+        "rendering_contract": {
+            "source": "canonical watchlist report JSON",
+            "no_dashboard_analysis": True,
+            "empty_sections_mean_unavailable_or_not_emitted_by_backend": True,
+        },
+    }
+
+
+def _require_report_sections(watchlist_report: Mapping[str, Any]) -> None:
+    """Require the canonical watchlist report sections used by renderers."""
+
+    required = (
+        "watchlist",
+        "watchlist_model",
+        "generated_at",
+        "provider_mode",
+        "symbols",
+        "ranked_setups",
+        "failed_symbols",
+        "skipped_symbols",
+        "summary",
+        "provenance",
+    )
+    missing = [section for section in required if section not in watchlist_report]
+    if missing:
+        raise ValueError(
+            f"watchlist report missing presentation section(s): {', '.join(missing)}"
+        )
+
+
+def _mapping_section(watchlist_report: Mapping[str, Any], section: str) -> Mapping[str, Any]:
+    """Return a named report section after validating its JSON object shape."""
+
+    value = watchlist_report[section]
+    if not isinstance(value, Mapping):
+        raise ValueError(f"watchlist report {section} section must be a JSON object")
+    return value
+
+
+def _symbol_items(value: object) -> list[str]:
+    """Validate and normalize the report symbol list for the presentation headline."""
+
+    if value is None or isinstance(value, (str, bytes)):
+        raise ValueError("watchlist report symbols section must be a list of symbols")
+    if not isinstance(value, Iterable):
+        raise ValueError("watchlist report symbols section must be a list of symbols")
+    symbols: list[str] = []
+    for item in value:
+        if not isinstance(item, str) or not item.strip():
+            raise ValueError("watchlist report symbol entries must be non-empty strings")
+        symbols.append(item)
+    return symbols
+
+def _mapping_items(value: object) -> list[dict[str, Any]]:
+    """Normalize an optional object-or-list section into JSON object rows."""
+
+    if value is None:
+        return []
+    if isinstance(value, Mapping):
+        return [dict(value)]
+    if not isinstance(value, Iterable) or isinstance(value, (str, bytes)):
+        raise ValueError("watchlist presentation sections must be JSON objects or lists")
+    items: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, Mapping):
+            raise ValueError("watchlist presentation section entries must be JSON objects")
+        items.append(dict(item))
+    return items
+
+
+def _ranked_setup_row(result: Mapping[str, Any]) -> dict[str, Any]:
+    """Build a renderer row from one backend-ranked watchlist setup result."""
+
+    summary = result.get("summary")
+    if not isinstance(summary, Mapping):
+        raise ValueError("ranked watchlist setup rows must include a summary object")
+    levels = summary.get("levels") if isinstance(summary.get("levels"), Mapping) else {}
+    return {
+        "symbol": result.get("symbol") or summary.get("symbol"),
+        "status": result.get("status"),
+        "rank": result.get("rank"),
+        "provider": summary.get("provider"),
+        "latest_close": summary.get("latest_close"),
+        "trend_regime": summary.get("trend_regime"),
+        "setup_quality_score": summary.get("setup_quality_score"),
+        "risk_score": summary.get("risk_score"),
+        "confirmation": levels.get("confirmation") if isinstance(levels, Mapping) else None,
+        "invalidation": levels.get("invalidation") if isinstance(levels, Mapping) else None,
+        "unavailable_context": _mapping_items(summary.get("unavailable_context")),
+        "value": dict(result),
+    }
+
+
+def _status_rows(value: object) -> list[dict[str, Any]]:
+    """Build renderer rows for failed or skipped watchlist symbols."""
+
+    rows: list[dict[str, Any]] = []
+    for item in _mapping_items(value):
+        rows.append(
+            {
+                "symbol": item.get("symbol"),
+                "status": item.get("status"),
+                "reason": item.get("reason") or item.get("error"),
+                "value": item,
+            }
+        )
+    return rows
