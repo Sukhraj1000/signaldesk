@@ -1,5 +1,11 @@
 """Backend package for SignalDesk."""
 
+from signaldesk_backend.backtesting import (
+    SetupReplayMetrics,
+    SetupReplayObservation,
+    SetupReplayReport,
+    evaluate_setup_replay,
+)
 from signaldesk_backend.chart_overlay_presentation import (
     CHART_OVERLAY_PRESENTATION_SCHEMA_VERSION,
     build_chart_overlay_presentation,
@@ -169,6 +175,9 @@ __all__ = [
     "RiskFlag",
     "ScoreBreakdown",
     "ScoreReason",
+    "SetupReplayMetrics",
+    "SetupReplayObservation",
+    "SetupReplayReport",
     "Settings",
     "SignalCard",
     "SupportResistanceZones",
@@ -213,6 +222,7 @@ __all__ = [
     "detect_swing_lows",
     "detect_swing_points",
     "detect_trend_regime_shift_events",
+    "evaluate_setup_replay",
     "exponential_moving_average",
     "extract_ta_signal_card",
     "fallback_provider_call",
