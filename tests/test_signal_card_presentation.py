@@ -86,8 +86,11 @@ def test_fixture_signal_card_builds_dashboard_presentation_model() -> None:
         "price_provider": "local-fixture",
     }
     assert presentation["level_groups"]["support"][0]["label"] == "support"
+    assert "emphasis" not in presentation["level_groups"]["support"][0]
     assert presentation["level_groups"]["confirmation"][0]["label"] == "breakout_confirmation"
+    assert presentation["level_groups"]["confirmation"][0]["emphasis"] is True
     assert presentation["level_groups"]["invalidation"][0]["label"] == "setup_invalidation"
+    assert presentation["level_groups"]["invalidation"][0]["emphasis"] is True
     assert presentation["event_rows"][0]["label"] == "breakout"
     assert presentation["risk_panel"]["flags"][0]["label"] == "missing_context"
     assert {
@@ -95,6 +98,12 @@ def test_fixture_signal_card_builds_dashboard_presentation_model() -> None:
     } == {"fundamentals", "catalyst"}
     assert [row["label"] for row in presentation["score_rows"]] == ["setup_quality", "risk"]
     assert presentation["provenance_rows"][0]["label"] == "local-fixture"
+    assert presentation["rendering_contract"] == {
+        "canonical_source": "signal_card",
+        "no_dashboard_analysis": True,
+        "emphasized_level_groups": ["confirmation", "invalidation"],
+        "unavailable_context_visible": True,
+    }
 
 
 def test_dashboard_presentation_rejects_full_ta_report_shape() -> None:
