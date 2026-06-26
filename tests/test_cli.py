@@ -3908,6 +3908,75 @@ def test_backtest_setup_command_outputs_research_only_json() -> None:
     ]
 
 
+
+
+def test_backtest_setup_command_uses_local_fixture_when_provider_is_omitted() -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "backtest",
+            "setup",
+            "AMD",
+            "--setup-label",
+            "breakout watch",
+            "--signal-index",
+            "0",
+            "--horizon",
+            "1",
+            "--output",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["provenance"]["provider"] == "local-fixture"
+
+
+def test_backtest_setup_table_includes_provenance() -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "backtest",
+            "setup",
+            "AMD",
+            "--provider",
+            "local-fixture",
+            "--setup-label",
+            "breakout watch",
+            "--signal-index",
+            "0",
+            "--horizon",
+            "1",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "provider\tlocal-fixture" in result.stdout
+    assert "source\tcli_backtest_setup" in result.stdout
+    assert "generated_at\t" in result.stdout
+
+
+def test_backtest_setup_rejects_non_finite_decimal_level() -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "backtest",
+            "setup",
+            "AMD",
+            "--provider",
+            "local-fixture",
+            "--setup-label",
+            "breakout_watch",
+            "--signal-index",
+            "0",
+            "--confirmation-level",
+            "NaN",
+            "--output",
+            "json",
+        ],
+    )
+    assert result.exit_code == 2
+    assert "--confirmation-level must be a decimal price." in result.output
+
 def test_backtest_setup_command_requires_signal_index() -> None:
     result = CliRunner().invoke(
         app,

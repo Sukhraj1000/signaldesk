@@ -420,10 +420,14 @@ def _parse_optional_decimal(value: str | None, *, option_name: str) -> Decimal |
     if value is None:
         return None
     try:
-        return Decimal(value)
+        parsed = Decimal(value)
     except Exception as exc:
         typer.echo(f"{option_name} must be a decimal price.", err=True)
         raise typer.Exit(2) from exc
+    if not parsed.is_finite():
+        typer.echo(f"{option_name} must be a decimal price.", err=True)
+        raise typer.Exit(2)
+    return parsed
 
 
 def _fetch_backtest_candles(
@@ -506,11 +510,15 @@ def _setup_replay_report_payload(report: SetupReplayReport) -> dict[str, Any]:
 
 def _setup_replay_table_lines(payload: dict[str, Any]) -> tuple[str, ...]:
     metrics = payload["metrics"]
+    provenance = payload["provenance"]
     lines = [
         "field\tvalue",
         f"schema_version\t{payload['schema_version']}",
         f"symbol\t{payload['symbol']}",
         f"setup_label\t{payload['setup_label']}",
+        f"provider\t{provenance['provider']}",
+        f"source\t{provenance['source']}",
+        f"generated_at\t{provenance['generated_at']}",
         f"timeframe\t{payload['timeframe']}",
         f"sample_size\t{payload['sample_size']}",
         f"evaluable_signals\t{payload['evaluable_signals']}",
@@ -563,11 +571,20 @@ def backtest_setup(
     if not signal_indices:
         typer.echo("at least one --signal-index is required.", err=True)
         raise typer.Exit(2)
+    backtest_provider = provider
+    if backtest_provider is None and mode.strip().lower() == "default":
+        backtest_provider = "local-fixture"
+    parsed_confirmation_level = _parse_optional_decimal(
+        confirmation_level, option_name="--confirmation-level"
+    )
+    parsed_invalidation_level = _parse_optional_decimal(
+        invalidation_level, option_name="--invalidation-level"
+    )
     try:
         requested_symbol, provider_name, candles = _fetch_backtest_candles(
             default_provider_registry(),
             symbol=symbol,
-            provider=provider,
+            provider=backtest_provider,
             mode=mode,
             interval=interval,
             days=days,
@@ -578,12 +595,8 @@ def backtest_setup(
             candles=candles,
             signal_indices=signal_indices,
             horizons=horizons or [1, 5, 20],
-            confirmation_level=_parse_optional_decimal(
-                confirmation_level, option_name="--confirmation-level"
-            ),
-            invalidation_level=_parse_optional_decimal(
-                invalidation_level, option_name="--invalidation-level"
-            ),
+            confirmation_level=parsed_confirmation_level,
+            invalidation_level=parsed_invalidation_level,
             symbol=requested_symbol,
             provider=provider_name,
             source="cli_backtest_setup",
