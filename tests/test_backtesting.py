@@ -7,6 +7,7 @@ import pytest
 from signaldesk_backend import Candle, Symbol
 from signaldesk_backend.backtesting import (
     SetupReplayReport,
+    derive_setup_signal_indices,
     evaluate_setup_replay,
 )
 from signaldesk_cli.main import _setup_replay_report_payload
@@ -25,6 +26,42 @@ def _candle(day: int, close: str, high: str | None = None, low: str | None = Non
         close=price,
         volume=1_000,
     )
+
+
+def test_derive_setup_signal_indices_finds_deterministic_builtin_labels() -> None:
+    candles = (
+        _candle(0, "10", high="11", low="9"),
+        _candle(1, "10", high="11", low="9"),
+        _candle(2, "10", high="11", low="9"),
+        _candle(3, "12", high="12", low="10"),
+        _candle(4, "8", high="9", low="8"),
+    )
+
+    assert derive_setup_signal_indices(
+        setup_label="breakout-watch", candles=candles, lookback=3
+    ) == (3,)
+    assert derive_setup_signal_indices(
+        setup_label="breakdown_watch", candles=candles, lookback=3
+    ) == (4,)
+
+
+def test_derive_setup_signal_indices_rejects_unknown_label_but_replay_allows_manual_labels() -> (
+    None
+):
+    candles = (_candle(0, "100"), _candle(1, "101"))
+
+    with pytest.raises(ValueError, match="unsupported setup_label"):
+        derive_setup_signal_indices(setup_label="custom_label", candles=candles, lookback=1)
+
+    report = evaluate_setup_replay(
+        setup_label="custom label",
+        candles=candles,
+        signal_indices=(0,),
+        horizons=(1,),
+        generated_at=BASE_TIME,
+    )
+
+    assert report.setup_label == "custom_label"
 
 
 def test_evaluate_setup_replay_reports_forward_returns_and_limits_scope() -> None:

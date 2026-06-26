@@ -5,6 +5,7 @@ from signaldesk_backend.backtesting import (
     SetupReplayObservation,
     SetupReplayReport,
     SetupReplayWalkForwardWindow,
+    derive_setup_signal_indices,
     evaluate_setup_replay,
 )
 from signaldesk_backend.chart_overlay_presentation import (
@@ -214,6 +215,7 @@ __all__ = [
     "classify_volume_regime",
     "derive_confirmation_invalidation_levels",
     "default_provider_registry",
+    "derive_setup_signal_indices",
     "detect_breakout_breakdown_events",
     "detect_moving_average_cross_events",
     "detect_overextension_events",

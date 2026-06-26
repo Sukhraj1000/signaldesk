@@ -12,6 +12,21 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from signaldesk_backend.models import Candle, Provenance, Symbol
 
+_SETUP_LABEL_ALIASES = {
+    "breakout": "breakout_watch",
+    "breakout_watch": "breakout_watch",
+    "breakdown": "breakdown_watch",
+    "breakdown_watch": "breakdown_watch",
+    "moving_average_reclaim": "moving_average_reclaim",
+    "reclaimed_moving_average": "moving_average_reclaim",
+    "moving_average_loss": "moving_average_loss",
+    "lost_moving_average": "moving_average_loss",
+    "relative_volume_spike": "relative_volume_spike",
+    "volume_spike": "relative_volume_spike",
+}
+_SUPPORTED_SETUP_LABELS = frozenset(_SETUP_LABEL_ALIASES.values())
+
+
 _RESEARCH_ONLY_LIMITATION = (
     "Historical setup replay is deterministic research only; "
     "it is not live trading or broker execution."
@@ -74,6 +89,59 @@ class SetupReplayReport:
     unavailable_context: tuple[str, ...]
 
 
+def derive_setup_signal_indices(
+    *,
+    setup_label: str,
+    candles: Sequence[Candle],
+    lookback: int = 20,
+    volume_spike_threshold: Decimal = Decimal("1.5"),
+) -> tuple[int, ...]:
+    """Derive historical signal indices for built-in deterministic setup labels."""
+
+    normalized_label = _normalize_setup_label(setup_label)
+    if normalized_label not in _SUPPORTED_SETUP_LABELS:
+        supported = ", ".join(sorted(_SETUP_LABEL_ALIASES))
+        raise ValueError(f"unsupported setup_label {setup_label!r}; supported labels: {supported}")
+    if lookback <= 0:
+        raise ValueError("lookback must be a positive candle count")
+    normalized_candles = tuple(candles)
+    if len(normalized_candles) <= lookback:
+        return ()
+
+    signal_indices: list[int] = []
+    for index in range(lookback, len(normalized_candles)):
+        history = normalized_candles[index - lookback : index]
+        previous = normalized_candles[index - 1]
+        current = normalized_candles[index]
+        if normalized_label == "breakout_watch":
+            prior_high = max(candle.high for candle in history)
+            if previous.close <= prior_high and current.close > prior_high:
+                signal_indices.append(index)
+        elif normalized_label == "breakdown_watch":
+            prior_low = min(candle.low for candle in history)
+            if previous.close >= prior_low and current.close < prior_low:
+                signal_indices.append(index)
+        elif normalized_label == "moving_average_reclaim":
+            previous_average = _average_raw(tuple(candle.close for candle in history))
+            latest_average = _average_raw(
+                tuple(candle.close for candle in history[1:] + (current,))
+            )
+            if previous.close <= previous_average and current.close > latest_average:
+                signal_indices.append(index)
+        elif normalized_label == "moving_average_loss":
+            previous_average = _average_raw(tuple(candle.close for candle in history))
+            latest_average = _average_raw(
+                tuple(candle.close for candle in history[1:] + (current,))
+            )
+            if previous.close >= previous_average and current.close < latest_average:
+                signal_indices.append(index)
+        elif normalized_label == "relative_volume_spike":
+            average_volume = sum(candle.volume for candle in history) / Decimal(len(history))
+            if average_volume > 0 and current.volume >= average_volume * volume_spike_threshold:
+                signal_indices.append(index)
+    return tuple(signal_indices)
+
+
 def evaluate_setup_replay(
     *,
     setup_label: str,
@@ -100,9 +168,7 @@ def evaluate_setup_replay(
 
     if broker is not None:
         raise ValueError("setup replay must not include broker or execution assumptions")
-    normalized_label = setup_label.strip().lower().replace(" ", "_")
-    if not normalized_label:
-        raise ValueError("setup_label is required")
+    normalized_label = _normalize_setup_label(setup_label)
     normalized_horizons = _normalize_horizons(horizons)
     normalized_candles = tuple(candles)
     if not normalized_candles:
@@ -152,6 +218,13 @@ def evaluate_setup_replay(
         limitations=(_RESEARCH_ONLY_LIMITATION,),
         unavailable_context=unavailable_context,
     )
+
+
+def _normalize_setup_label(setup_label: str) -> str:
+    normalized_label = setup_label.strip().lower().replace(" ", "_").replace("-", "_")
+    if not normalized_label:
+        raise ValueError("setup_label is required")
+    return _SETUP_LABEL_ALIASES.get(normalized_label, normalized_label)
 
 
 def _normalize_horizons(horizons: Sequence[int]) -> tuple[int, ...]:
@@ -232,7 +305,6 @@ def _evaluate_observation(
     )
 
 
-
 def _build_walk_forward_windows(
     *,
     observations: Sequence[SetupReplayObservation],
@@ -247,12 +319,8 @@ def _build_walk_forward_windows(
         sorted(observations, key=lambda observation: observation.observed_at)
     )
     windows: list[SetupReplayWalkForwardWindow] = []
-    for window_index, start in enumerate(
-        range(0, len(chronological_observations), window_size)
-    ):
-        window_observations = tuple(
-            chronological_observations[start : start + window_size]
-        )
+    for window_index, start in enumerate(range(0, len(chronological_observations), window_size)):
+        window_observations = tuple(chronological_observations[start : start + window_size])
         if not window_observations:
             continue
         metrics, _ = _aggregate_metrics(window_observations, horizons)
@@ -339,7 +407,12 @@ def _event_usefulness(
 
 
 def _average(values: Sequence[Decimal]) -> Decimal:
-    return _quantize_decimal(sum(values) / Decimal(len(values)), Decimal("0.0001"))
+    return _quantize_decimal(_average_raw(values), Decimal("0.0001"))
+
+
+def _average_raw(values: Sequence[Decimal]) -> Decimal:
+    materialized = tuple(values)
+    return sum(materialized) / Decimal(len(materialized))
 
 
 def _boolean_rate(values: Sequence[bool]) -> Decimal | None:
