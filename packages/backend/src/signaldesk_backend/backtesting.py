@@ -31,6 +31,19 @@ class SetupReplayMetrics:
 
 
 @dataclass(frozen=True, kw_only=True)
+class SetupReplayWalkForwardWindow:
+    """One chronological walk-forward validation window."""
+
+    window_index: int
+    signal_indices: tuple[int, ...]
+    start_observed_at: datetime
+    end_observed_at: datetime
+    sample_size: int
+    evaluable_signals: int
+    metrics: SetupReplayMetrics
+
+
+@dataclass(frozen=True, kw_only=True)
 class SetupReplayObservation:
     """One setup label replayed from a candle index."""
 
@@ -55,6 +68,7 @@ class SetupReplayReport:
     horizons: tuple[int, ...]
     metrics: SetupReplayMetrics
     observations: tuple[SetupReplayObservation, ...]
+    walk_forward_windows: tuple[SetupReplayWalkForwardWindow, ...]
     provenance: Provenance
     limitations: tuple[str, ...]
     unavailable_context: tuple[str, ...]
@@ -73,6 +87,7 @@ def evaluate_setup_replay(
     source: str = "historical_candles",
     generated_at: datetime | None = None,
     timeframe: str = "1d",
+    walk_forward_window_size: int | None = None,
     broker: str | None = None,
 ) -> SetupReplayReport:
     """Replay setup labels over historical candles and return deterministic metrics.
@@ -107,6 +122,11 @@ def evaluate_setup_replay(
         for signal_index in normalized_indices
     )
     metrics, unavailable_context = _aggregate_metrics(observations, normalized_horizons)
+    walk_forward_windows = _build_walk_forward_windows(
+        observations=observations,
+        horizons=normalized_horizons,
+        window_size=walk_forward_window_size,
+    )
     return SetupReplayReport(
         setup_label=normalized_label,
         symbol=report_symbol,
@@ -120,6 +140,7 @@ def evaluate_setup_replay(
         horizons=normalized_horizons,
         metrics=metrics,
         observations=observations,
+        walk_forward_windows=walk_forward_windows,
         provenance=Provenance(
             provider=provider,
             source=source,
@@ -209,6 +230,46 @@ def _evaluate_observation(
         false_breakout=false_breakout,
         max_adverse_excursion=max_adverse_excursion,
     )
+
+
+
+def _build_walk_forward_windows(
+    *,
+    observations: Sequence[SetupReplayObservation],
+    horizons: tuple[int, ...],
+    window_size: int | None,
+) -> tuple[SetupReplayWalkForwardWindow, ...]:
+    if window_size is None:
+        window_size = len(observations)
+    if window_size <= 0:
+        raise ValueError("walk_forward_window_size must be a positive signal count")
+    windows: list[SetupReplayWalkForwardWindow] = []
+    for window_index, start in enumerate(range(0, len(observations), window_size)):
+        window_observations = tuple(observations[start : start + window_size])
+        if not window_observations:
+            continue
+        metrics, _ = _aggregate_metrics(window_observations, horizons)
+        windows.append(
+            SetupReplayWalkForwardWindow(
+                window_index=window_index,
+                signal_indices=tuple(
+                    observation.signal_index for observation in window_observations
+                ),
+                start_observed_at=window_observations[0].observed_at,
+                end_observed_at=window_observations[-1].observed_at,
+                sample_size=len(window_observations),
+                evaluable_signals=sum(
+                    1
+                    for observation in window_observations
+                    if any(
+                        value is not None
+                        for value in observation.forward_returns_by_horizon.values()
+                    )
+                ),
+                metrics=metrics,
+            )
+        )
+    return tuple(windows)
 
 
 def _aggregate_metrics(

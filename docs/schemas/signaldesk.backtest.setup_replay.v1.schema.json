@@ -15,6 +15,7 @@
     "horizons",
     "metrics",
     "observations",
+    "walk_forward_windows",
     "provenance",
     "limitations",
     "unavailable_context"
@@ -210,6 +211,101 @@
       "type": "array",
       "items": {
         "type": "string"
+      }
+    },
+    "walk_forward_windows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "window_index",
+          "signal_indices",
+          "start_observed_at",
+          "end_observed_at",
+          "sample_size",
+          "evaluable_signals",
+          "metrics"
+        ],
+        "properties": {
+          "window_index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "signal_indices": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "start_observed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "end_observed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sample_size": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "evaluable_signals": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "metrics": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "hit_rate",
+              "average_forward_return_by_horizon",
+              "false_breakout_rate",
+              "max_adverse_excursion",
+              "event_usefulness",
+              "data_availability_rate"
+            ],
+            "properties": {
+              "hit_rate": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "average_forward_return_by_horizon": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "false_breakout_rate": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "max_adverse_excursion": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "event_usefulness": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "data_availability_rate": {
+                "type": "string"
+              }
+            }
+          }
+        }
       }
     }
   }

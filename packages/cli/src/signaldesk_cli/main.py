@@ -460,6 +460,20 @@ def _decimal_or_none(value: Decimal | None) -> str | None:
     return None if value is None else str(value)
 
 
+
+def _setup_replay_metrics_payload(metrics: Any) -> dict[str, Any]:
+    return {
+        "hit_rate": _decimal_or_none(metrics.hit_rate),
+        "average_forward_return_by_horizon": {
+            str(k): _decimal_or_none(v)
+            for k, v in metrics.average_forward_return_by_horizon.items()
+        },
+        "false_breakout_rate": _decimal_or_none(metrics.false_breakout_rate),
+        "max_adverse_excursion": _decimal_or_none(metrics.max_adverse_excursion),
+        "event_usefulness": _decimal_or_none(metrics.event_usefulness),
+        "data_availability_rate": str(metrics.data_availability_rate),
+    }
+
 def _setup_replay_report_payload(report: SetupReplayReport) -> dict[str, Any]:
     return {
         "schema_version": "signaldesk.backtest.setup_replay.v1",
@@ -469,17 +483,7 @@ def _setup_replay_report_payload(report: SetupReplayReport) -> dict[str, Any]:
         "sample_size": report.sample_size,
         "evaluable_signals": report.evaluable_signals,
         "horizons": list(report.horizons),
-        "metrics": {
-            "hit_rate": _decimal_or_none(report.metrics.hit_rate),
-            "average_forward_return_by_horizon": {
-                str(k): _decimal_or_none(v)
-                for k, v in report.metrics.average_forward_return_by_horizon.items()
-            },
-            "false_breakout_rate": _decimal_or_none(report.metrics.false_breakout_rate),
-            "max_adverse_excursion": _decimal_or_none(report.metrics.max_adverse_excursion),
-            "event_usefulness": _decimal_or_none(report.metrics.event_usefulness),
-            "data_availability_rate": str(report.metrics.data_availability_rate),
-        },
+        "metrics": _setup_replay_metrics_payload(report.metrics),
         "observations": [
             {
                 "signal_index": observation.signal_index,
@@ -494,6 +498,18 @@ def _setup_replay_report_payload(report: SetupReplayReport) -> dict[str, Any]:
                 "max_adverse_excursion": _decimal_or_none(observation.max_adverse_excursion),
             }
             for observation in report.observations
+        ],
+        "walk_forward_windows": [
+            {
+                "window_index": window.window_index,
+                "signal_indices": list(window.signal_indices),
+                "start_observed_at": window.start_observed_at.isoformat(),
+                "end_observed_at": window.end_observed_at.isoformat(),
+                "sample_size": window.sample_size,
+                "evaluable_signals": window.evaluable_signals,
+                "metrics": _setup_replay_metrics_payload(window.metrics),
+            }
+            for window in report.walk_forward_windows
         ],
         "provenance": {
             "provider": report.provenance.provider,
@@ -562,6 +578,12 @@ def backtest_setup(
     invalidation_level: str | None = typer.Option(
         None, help="Optional invalidation close level used for false breakouts."
     ),
+    walk_forward_window_size: int | None = typer.Option(
+        None,
+        "--walk-forward-window-size",
+        min=1,
+        help="Optional signal count per chronological walk-forward validation window.",
+    ),
     output: str = typer.Option("table", help="Output format: table or json."),
 ) -> None:
     output_format = output.strip().lower()
@@ -602,6 +624,7 @@ def backtest_setup(
             source="cli_backtest_setup",
             generated_at=datetime.now(UTC),
             timeframe=interval,
+            walk_forward_window_size=walk_forward_window_size,
         )
     except (KeyError, ValueError) as exc:
         typer.echo(str(exc), err=True)
