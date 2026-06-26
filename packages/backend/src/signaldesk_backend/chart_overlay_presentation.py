@@ -58,7 +58,9 @@ def _require_card_sections(signal_card: Mapping[str, Any]) -> None:
     )
     missing = [section for section in required if section not in signal_card]
     if missing:
-        raise ValueError(f"signal_card missing chart overlay section(s): {", ".join(missing)}")
+        raise ValueError(
+            f"signal_card missing chart overlay section(s): {', '.join(missing)}"
+        )
 
 
 def _mapping_section(signal_card: Mapping[str, Any], section: str) -> Mapping[str, Any]:

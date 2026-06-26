@@ -482,7 +482,6 @@ def web_chart_overlays(
             as_of=datetime.now(UTC),
             llm_provider=llm_provider,
         )
-        report = _attach_live_llm_explanation_if_requested(report, llm_provider)
         presentation = build_chart_overlay_presentation(extract_ta_signal_card(report))
     except (KeyError, ValueError) as exc:
         typer.echo(str(exc), err=True)
