@@ -19,7 +19,7 @@ A future provider-response cache may speed up repeated scans, but it must not bl
 - request shape that changes provider output, such as adjusted/unadjusted price settings when supported;
 - SignalDesk/provider adapter schema version when normalized response fields change.
 
-Invalidate or bypass cached provider responses when any key input changes, when the adapter normalization changes, when a user asks for a refresh, or when a configured TTL expires. Until a concrete cache command exists, the safe manual invalidation path is to delete the local cache directory for the affected provider/symbol/date range and rerun the CLI command.
+Invalidate or bypass cached provider responses when any key input changes, when the adapter normalization changes, when a user asks for a refresh, or when a configured TTL expires. Until a concrete cache command exists, the safe manual invalidation path is to delete the entire local provider-cache namespace for the affected provider role, or explicitly purge every matching provider, symbol, interval, date range, provider mode, request shape, and adapter schema-version entry before rerunning the CLI command.
 
 Provider failures are cacheable only as explicit unavailable context with a short TTL. A cached failure must still render as `Unavailable context`; it must never become a silent all-clear or disappear from saved reports.
 

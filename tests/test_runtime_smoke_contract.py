@@ -54,11 +54,14 @@ def test_persistence_caching_scheduling_docs_define_cache_invalidation_policy() 
 
     assert "docs/persistence-caching-scheduling.md" in readme
     assert "## Provider-response cache invalidation" in docs
-    assert "provider" in docs
-    assert "symbol" in docs
-    assert "interval" in docs
-    assert "date range" in docs
+    assert "Cache keys should include at least:" in docs
+    assert "provider name and provider role" in docs
+    assert "symbol or watchlist member identity" in docs
+    assert "interval and requested date range for candles" in docs
     assert "provider mode" in docs
-    assert "Unavailable context" in docs
-    assert "not a report artifact" in docs
+    assert "request shape that changes provider output" in docs
+    assert "adapter schema version" in docs
+    assert "delete the entire local provider-cache namespace" in docs
+    assert "A cached failure must still render as `Unavailable context`" in docs
+    assert "not a report artifact cache key" in docs
 
