@@ -149,6 +149,7 @@ signaldesk health
 signaldesk providers list
 signaldesk providers check
 signaldesk fixtures generate --symbol AMD --output-dir fixtures/local --output json
+signaldesk backtest setup AMD --setup-label breakout_watch --signal-index 10 --signal-index 20 --horizon 1 --horizon 5 --provider local-fixture --output json
 ```
 
 Live default-mode TA check (`yfinance` is the default price provider when `--provider` is omitted):
