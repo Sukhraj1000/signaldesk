@@ -1,7 +1,9 @@
 
 from signaldesk_backend import (
     PRESENTATION_SCHEMA_VERSION,
+    PROVIDER_STATUS_PRESENTATION_SCHEMA_VERSION,
     assemble_ta_signal_card_report,
+    build_provider_status_presentation,
     build_signal_card_presentation,
     extract_ta_signal_card,
 )
@@ -120,3 +122,80 @@ def test_dashboard_presentation_rejects_missing_canonical_sections() -> None:
         assert "risk" in str(exc)
     else:
         raise AssertionError("missing risk section should fail")
+
+
+
+def test_provider_status_presentation_groups_provider_facts_without_live_checks() -> None:
+    presentation = build_provider_status_presentation(
+        provider_mode={
+            "mode": "default",
+            "price_provider": "yfinance",
+            "fundamentals_provider": None,
+            "catalyst_provider": None,
+            "llm_provider": None,
+            "unavailable_context": [
+                {
+                    "context_type": "fundamentals",
+                    "reason": "not configured in default mode",
+                    "provider": None,
+                    "details": {},
+                }
+            ],
+        },
+        provider_capabilities=(
+            {
+                "provider": "yfinance",
+                "tier": "default",
+                "role": "price",
+                "realtime": False,
+                "historical": True,
+                "asset_classes": ["equity"],
+                "intervals": ["1d"],
+                "credential_state": "not_required",
+                "live_check": False,
+                "max_history_days": 365,
+                "rate_limit_per_minute": None,
+            },
+            {
+                "provider": "fmp",
+                "tier": "enhanced",
+                "role": "fundamentals",
+                "realtime": False,
+                "historical": False,
+                "asset_classes": ["equity"],
+                "intervals": [],
+                "credential_state": "not_configured",
+                "live_check": False,
+                "max_history_days": None,
+                "rate_limit_per_minute": None,
+            },
+        ),
+    )
+
+    assert presentation["schema_version"] == PROVIDER_STATUS_PRESENTATION_SCHEMA_VERSION
+    assert presentation["mode_summary"] == {
+        "mode": "default",
+        "price_provider": "yfinance",
+        "fundamentals_provider": None,
+        "catalyst_provider": None,
+        "llm_provider": None,
+    }
+    assert [row["provider"] for row in presentation["provider_rows"]] == ["yfinance", "fmp"]
+    assert {section["label"] for section in presentation["credential_sections"]} == {
+        "not_configured",
+        "not_required",
+    }
+    assert {section["label"] for section in presentation["role_sections"]} == {
+        "fundamentals",
+        "price",
+    }
+    assert presentation["unavailable_context"][0]["context_type"] == "fundamentals"
+
+
+def test_provider_status_presentation_rejects_missing_mode_fields() -> None:
+    try:
+        build_provider_status_presentation(provider_mode={}, provider_capabilities=())
+    except ValueError as exc:
+        assert "mode" in str(exc)
+    else:
+        raise AssertionError("missing provider mode fields should fail")

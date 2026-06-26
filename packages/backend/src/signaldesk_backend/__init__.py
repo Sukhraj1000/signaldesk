@@ -72,6 +72,10 @@ from signaldesk_backend.models import (
     TechnicalSnapshot,
     UnavailableContext,
 )
+from signaldesk_backend.provider_status_presentation import (
+    PROVIDER_STATUS_PRESENTATION_SCHEMA_VERSION,
+    build_provider_status_presentation,
+)
 from signaldesk_backend.providers import (
     CatalystContextProvider,
     FallbackProvider,
@@ -133,6 +137,7 @@ __all__ = [
     "ProviderMode",
     "ProviderRegistry",
     "PRESENTATION_SCHEMA_VERSION",
+    "PROVIDER_STATUS_PRESENTATION_SCHEMA_VERSION",
     "ProviderResult",
     "ProviderRoleConfig",
     "Provenance",
@@ -157,6 +162,7 @@ __all__ = [
     "average_true_range",
     "build_openai_compatible_chat_messages",
     "build_openai_compatible_chat_request",
+    "build_provider_status_presentation",
     "build_signal_card_presentation",
     "build_ta_llm_prompt_payload",
     "parse_llm_explanation_response_content",

@@ -8,7 +8,7 @@ The web app should be a presentation adapter over canonical SignalDesk API/JSON 
 
 The dashboard should help users inspect:
 
-- provider status
+- provider status (current smoke: `signaldesk web provider-status --mode default --output json`)
 - single-symbol signal cards
 - watchlist scan results
 - chart overlays for moving averages, levels, events, confirmation, and invalidation
@@ -53,3 +53,14 @@ signaldesk web signal-card AMD --provider local-fixture --llm none --output json
 ```
 
 The command emits `signaldesk.web.signal_card_presentation.v1` by fetching the canonical TA report, extracting its nested `signal_card`, and building renderer-facing sections. It is intentionally JSON-only so downstream UI code consumes the same grouped facts, levels, events, risk, unavailable context, scores, and provenance that backend code already validates.
+
+
+## Provider status rendering contract
+
+The provider status dashboard slice is represented by `signaldesk.web.provider_status_presentation.v1`:
+
+```bash
+signaldesk web provider-status --mode default --output json
+```
+
+The command resolves the requested provider mode and groups declared provider capabilities for UI sections. It does not run live checks, read credentials, or infer provider availability. Missing enhanced roles remain explicit in `unavailable_context`, preserving the default-mode contract when paid keys are absent.

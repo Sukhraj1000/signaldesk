@@ -417,6 +417,32 @@ class ConcurrencyRecordingProvider(WorkingProvider):
                 object.__setattr__(self, "active", self.active - 1)
 
 
+
+def test_web_provider_status_command_renders_dashboard_payload() -> None:
+    result = CliRunner().invoke(
+        app,
+        ["web", "provider-status", "--mode", "default", "--output", "json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["schema_version"] == "signaldesk.web.provider_status_presentation.v1"
+    assert payload["mode_summary"]["mode"] == "default"
+    assert payload["mode_summary"]["price_provider"] == "yfinance"
+    assert any(row["provider"] == "yfinance" for row in payload["provider_rows"])
+    assert {section["label"] for section in payload["credential_sections"]} >= {
+        "not_required"
+    }
+    assert {section["label"] for section in payload["role_sections"]} >= {"price"}
+
+
+def test_web_provider_status_rejects_table_output() -> None:
+    result = CliRunner().invoke(app, ["web", "provider-status", "--output", "table"])
+
+    assert result.exit_code == 2
+    assert "--output must be 'json'." in result.stderr
+
+
 def test_health_command() -> None:
     result = CliRunner().invoke(app, ["health"])
 
