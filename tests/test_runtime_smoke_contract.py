@@ -46,3 +46,19 @@ def test_tox_smoke_covers_web_watchlist_scan_entrypoint() -> None:
         "--provider local-fixture --llm none --output json"
         in tox_ini
     )
+
+
+def test_persistence_caching_scheduling_docs_define_cache_invalidation_policy() -> None:
+    docs = Path("docs/persistence-caching-scheduling.md").read_text(encoding="utf-8")
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    assert "docs/persistence-caching-scheduling.md" in readme
+    assert "## Provider-response cache invalidation" in docs
+    assert "provider" in docs
+    assert "symbol" in docs
+    assert "interval" in docs
+    assert "date range" in docs
+    assert "provider mode" in docs
+    assert "Unavailable context" in docs
+    assert "not a report artifact" in docs
+

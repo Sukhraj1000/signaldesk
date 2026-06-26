@@ -60,7 +60,7 @@ Rules:
 - CLI/API/dashboard/reporting render the same canonical signal-card output.
 - LLMs consume structured facts only and are optional.
 
-See `docs/product-contract.md` for the durable product contract: supported default and enhanced provider modes, output category boundaries, unavailable-context handling, and non-goals. See `docs/enhanced-context.md` for the FMP-backed catalyst/fundamental context boundary and `docs/reporting.md` for the renderer contract used by JSON, table, and Markdown reports.
+See `docs/product-contract.md` for the durable product contract: supported default and enhanced provider modes, output category boundaries, unavailable-context handling, and non-goals. See `docs/enhanced-context.md` for the FMP-backed catalyst/fundamental context boundary, `docs/reporting.md` for the renderer contract used by JSON, table, and Markdown reports, and `docs/persistence-caching-scheduling.md` for the report artifact, provider-cache invalidation, and local scheduling policy.
 
 ## Non-goals
 
