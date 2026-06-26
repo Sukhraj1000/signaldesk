@@ -24,6 +24,7 @@ _SETUP_LABEL_ALIASES = {
     "relative_volume_spike": "relative_volume_spike",
     "volume_spike": "relative_volume_spike",
 }
+_SUPPORTED_SETUP_LABELS = frozenset(_SETUP_LABEL_ALIASES.values())
 
 
 _RESEARCH_ONLY_LIMITATION = (
@@ -98,10 +99,9 @@ def derive_setup_signal_indices(
     """Derive historical signal indices for built-in deterministic setup labels."""
 
     normalized_label = _normalize_setup_label(setup_label)
-    if normalized_label not in _SETUP_LABEL_ALIASES:
+    if normalized_label not in _SUPPORTED_SETUP_LABELS:
         supported = ", ".join(sorted(_SETUP_LABEL_ALIASES))
         raise ValueError(f"unsupported setup_label {setup_label!r}; supported labels: {supported}")
-    normalized_label = _SETUP_LABEL_ALIASES[normalized_label]
     if lookback <= 0:
         raise ValueError("lookback must be a positive candle count")
     normalized_candles = tuple(candles)
