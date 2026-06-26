@@ -3730,6 +3730,65 @@ def test_report_watchlist_saves_canonical_json_artifact(
     assert saved_payload["report_type"] == "watchlist"
     assert saved_payload["summary"]["total"] == 1
 
+
+def test_ta_command_reports_artifact_save_errors(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
+    def fail_save(payload: dict[str, Any], save_dir: Path) -> Path:
+        raise OSError("permission denied")
+
+    monkeypatch.setattr(cli_main, "_save_report_artifact", fail_save)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "ta",
+            "AMD",
+            "--provider",
+            "local-fixture",
+            "--llm",
+            "none",
+            "--output",
+            "json",
+            "--save-dir",
+            str(tmp_path / "reports"),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "could not save report artifact: permission denied" in result.stderr
+
+
+def test_report_watchlist_reports_artifact_save_errors(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        cli_main, "default_provider_registry", lambda: ProviderRegistry((WorkingProvider(),))
+    )
+
+    def fail_save(payload: dict[str, Any], save_dir: Path) -> Path:
+        raise OSError("disk full")
+
+    monkeypatch.setattr(cli_main, "_save_report_artifact", fail_save)
+    watchlist = tmp_path / "watchlist.yaml"
+    watchlist.write_text("symbols:\n  - AMD\n", encoding="utf-8")
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "report",
+            "--watchlist",
+            str(watchlist),
+            "--provider",
+            "working",
+            "--format",
+            "json",
+            "--save-dir",
+            str(tmp_path / "reports"),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "could not save report artifact: disk full" in result.stderr
+
 def test_web_report_archive_command_renders_saved_report_rows(tmp_path: Path) -> None:
     report = cli_main._fetch_ta_report(
         default_provider_registry(),

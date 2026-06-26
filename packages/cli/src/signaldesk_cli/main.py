@@ -378,7 +378,11 @@ def technical_analysis(
 
     validate_ta_signal_card_report(report)
     if save_dir is not None:
-        _save_report_artifact(report, save_dir)
+        try:
+            _save_report_artifact(report, save_dir)
+        except OSError as exc:
+            typer.echo(f"could not save report artifact: {exc}", err=True)
+            raise typer.Exit(1) from exc
     if output_format == "json":
         typer.echo(json.dumps(report, indent=2, sort_keys=True))
         return
@@ -2093,7 +2097,11 @@ def report_watchlist(
         typer.echo(str(exc), err=True)
         raise typer.Exit(2) from exc
     if save_dir is not None:
-        _save_report_artifact(payload, save_dir)
+        try:
+            _save_report_artifact(payload, save_dir)
+        except OSError as exc:
+            typer.echo(f"could not save report artifact: {exc}", err=True)
+            raise typer.Exit(1) from exc
     if normalized_report_format == "json":
         typer.echo(json.dumps(payload, indent=2, sort_keys=True))
     elif normalized_report_format == "table":
