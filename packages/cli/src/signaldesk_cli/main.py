@@ -26,6 +26,7 @@ from signaldesk_backend import (
     average_true_range,
     build_openai_compatible_chat_messages,
     build_openai_compatible_chat_request,
+    build_signal_card_presentation,
     build_ta_llm_prompt_payload,
     calculate_fibonacci_retracement_levels,
     classify_trend_regime,
@@ -70,10 +71,12 @@ fixtures_app = typer.Typer(help="Generate deterministic local fixture data.")
 llm_app = typer.Typer(
     help="Inspect guarded optional LLM explanation payloads without calling an LLM."
 )
+web_app = typer.Typer(help="Render dashboard-facing payloads from canonical SignalDesk JSON.")
 app.add_typer(providers_app, name="providers")
 app.add_typer(config_app, name="config")
 app.add_typer(fixtures_app, name="fixtures")
 app.add_typer(llm_app, name="llm")
+app.add_typer(web_app, name="web")
 
 
 @app.callback()
@@ -374,6 +377,63 @@ def technical_analysis(
 
     for key, value in _ta_table_report_values(report).items():
         typer.echo(f"{key}\t{value}")
+
+
+@web_app.command("signal-card")
+def web_signal_card(
+    symbol: str,
+    provider: str | None = typer.Option(
+        None,
+        help=(
+            "Registered market-data provider to use. When omitted, SignalDesk "
+            "uses --mode role resolution."
+        ),
+    ),
+    mode: str = typer.Option(
+        "default",
+        help="Provider role mode to resolve when --provider is omitted: default or enhanced.",
+    ),
+    llm: str = typer.Option("none", help="LLM provider: none, openrouter, or openai."),
+    interval: str = typer.Option("1d", help="Historical candle interval."),
+    days: int = typer.Option(120, min=1, help="Number of calendar days of history to request."),
+    output: str = typer.Option("json", help="Output format: json."),
+) -> None:
+    """Render the dashboard-facing signal-card presentation model.
+
+    This command is a UI adapter smoke path: it fetches the canonical TA report,
+    extracts the nested signal_card, and builds renderer-facing groups without
+    re-running indicators or inventing dashboard-only analysis.
+    """
+
+    llm_provider = _normalize_live_llm_provider(llm)
+    output_format = output.strip().lower()
+    if output_format != "json":
+        typer.echo("--output must be 'json'.", err=True)
+        raise typer.Exit(2)
+
+    registry = default_provider_registry()
+    try:
+        report = _fetch_ta_report(
+            registry,
+            symbol=symbol,
+            provider=provider,
+            mode=mode,
+            interval=interval,
+            days=days,
+            as_of=datetime.now(UTC),
+            llm_provider=llm_provider,
+        )
+        report = _attach_live_llm_explanation_if_requested(report, llm_provider)
+        signal_card = extract_ta_signal_card(report)
+        presentation = build_signal_card_presentation(signal_card)
+    except (KeyError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from exc
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
+
+    typer.echo(json.dumps(presentation, indent=2, sort_keys=True))
 
 
 
