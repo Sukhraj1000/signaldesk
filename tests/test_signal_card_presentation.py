@@ -7,7 +7,7 @@ from signaldesk_backend import (
 )
 
 
-def _fixture_signal_card() -> dict[str, object]:
+def _fixture_ta_report() -> dict[str, object]:
     unavailable_context = [
         {
             "context_type": "fundamentals",
@@ -54,7 +54,11 @@ def _fixture_signal_card() -> dict[str, object]:
         deterministic_signals={"events": ({"kind": "breakout"},)},
         flat_fields={"symbol": "AMD", "provider": "local-fixture"},
     )
-    return extract_ta_signal_card(report)
+    return report
+
+
+def _fixture_signal_card() -> dict[str, object]:
+    return extract_ta_signal_card(_fixture_ta_report())
 
 
 def test_fixture_signal_card_builds_dashboard_presentation_model() -> None:
@@ -85,11 +89,22 @@ def test_fixture_signal_card_builds_dashboard_presentation_model() -> None:
     assert presentation["provenance_rows"][0]["label"] == "local-fixture"
 
 
-def test_dashboard_presentation_accepts_only_nested_signal_card_contract() -> None:
-    signal_card = _fixture_signal_card()
-    signal_card["facts"] = {"symbol": "NESTED", "provider": "nested-provider"}
+def test_dashboard_presentation_rejects_full_ta_report_shape() -> None:
+    report = _fixture_ta_report()
+    report["facts"] = {"symbol": "REPORT", "provider": "report-provider"}
 
-    presentation = build_signal_card_presentation(signal_card)
+    try:
+        build_signal_card_presentation(report)
+    except ValueError as exc:
+        assert "nested signal_card" in str(exc)
+    else:
+        raise AssertionError("full TA report should fail before presentation rendering")
+
+
+def test_dashboard_presentation_accepts_extracted_signal_card_contract() -> None:
+    report = _fixture_ta_report()
+
+    presentation = build_signal_card_presentation(extract_ta_signal_card(report))
 
     assert presentation["headline"]["symbol"] == "AMD"
     assert presentation["provider_badge"]["price_provider"] == "local-fixture"

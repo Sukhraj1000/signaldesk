@@ -8,6 +8,10 @@ PRESENTATION_SCHEMA_VERSION = "signaldesk.web.signal_card_presentation.v1"
 
 
 def build_signal_card_presentation(signal_card: Mapping[str, Any]) -> dict[str, Any]:
+    if "signal_card" in signal_card:
+        raise ValueError(
+            "build_signal_card_presentation expects the nested signal_card, not the full TA report"
+        )
     _require_card_sections(signal_card)
 
     identity = _mapping_section(signal_card, "identity")
