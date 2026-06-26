@@ -24,6 +24,18 @@ The dashboard should help users inspect:
 - Avoid chart clutter and false precision.
 - No dashboard-only analysis logic.
 
+
+
+## Current fixture rendering contract
+
+The first dashboard slice is a renderer-facing presentation model for fixture signal cards:
+
+- call extract_ta_signal_card(report) to select the nested canonical card
+- call build_signal_card_presentation(signal_card) to group labels for UI sections
+- render headline, provider_badge, level_groups, event_rows, risk_panel, score_rows, and provenance_rows
+
+This keeps the future web app as a presentation adapter. It must not re-run indicators, infer support/resistance, hide unavailable context, or choose conflicting top-level aliases from the TA report.
+
 ## Future acceptance criteria
 
 - dashboard renders fixture signal cards

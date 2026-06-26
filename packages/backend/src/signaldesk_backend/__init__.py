@@ -96,6 +96,10 @@ from signaldesk_backend.providers import (
 )
 from signaldesk_backend.risks import assess_technical_analysis_risks
 from signaldesk_backend.scoring import score_technical_analysis
+from signaldesk_backend.signal_card_presentation import (
+    PRESENTATION_SCHEMA_VERSION,
+    build_signal_card_presentation,
+)
 from signaldesk_backend.signal_cards import (
     assemble_ta_signal_card_report,
     extract_ta_signal_card,
@@ -128,6 +132,7 @@ __all__ = [
     "ProviderCapability",
     "ProviderMode",
     "ProviderRegistry",
+    "PRESENTATION_SCHEMA_VERSION",
     "ProviderResult",
     "ProviderRoleConfig",
     "Provenance",
@@ -152,6 +157,7 @@ __all__ = [
     "average_true_range",
     "build_openai_compatible_chat_messages",
     "build_openai_compatible_chat_request",
+    "build_signal_card_presentation",
     "build_ta_llm_prompt_payload",
     "parse_llm_explanation_response_content",
     "parse_openai_compatible_chat_response",
