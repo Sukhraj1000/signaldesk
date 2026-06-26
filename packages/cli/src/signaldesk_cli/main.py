@@ -26,6 +26,7 @@ from signaldesk_backend import (
     average_true_range,
     build_openai_compatible_chat_messages,
     build_openai_compatible_chat_request,
+    build_provider_status_presentation,
     build_signal_card_presentation,
     build_ta_llm_prompt_payload,
     calculate_fibonacci_retracement_levels,
@@ -435,6 +436,39 @@ def web_signal_card(
 
     typer.echo(json.dumps(presentation, indent=2, sort_keys=True))
 
+
+
+@web_app.command("provider-status")
+def web_provider_status(
+    mode: str = typer.Option(
+        "default",
+        help="Provider mode to resolve for the dashboard status view: default or enhanced.",
+    ),
+    output: str = typer.Option("json", help="Output format: json."),
+) -> None:
+    """Render the dashboard-facing provider status presentation model.
+
+    This command is a UI adapter smoke path: it groups provider mode resolution
+    and declared capabilities without running live checks, reading secrets, or
+    inventing provider availability.
+    """
+
+    output_format = output.strip().lower()
+    if output_format != "json":
+        typer.echo("--output must be 'json'.", err=True)
+        raise typer.Exit(2)
+    try:
+        provider_mode = _provider_mode_payload(mode)
+        capabilities = _provider_capabilities_payload(default_provider_registry())
+        presentation = build_provider_status_presentation(
+            provider_mode=provider_mode,
+            provider_capabilities=capabilities,
+        )
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from exc
+
+    typer.echo(json.dumps(presentation, indent=2, sort_keys=True))
 
 
 def _attach_live_llm_explanation_if_requested(
