@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -120,9 +121,12 @@ class ProviderResponseCache:
             )
         path = self._path_for(key)
         path.parent.mkdir(parents=True, exist_ok=True)
-        tmp_path = path.with_suffix(".tmp")
-        tmp_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
-        tmp_path.replace(path)
+        tmp_path = path.with_name(f"{path.name}.{uuid.uuid4().hex}.tmp")
+        try:
+            tmp_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+            tmp_path.replace(path)
+        finally:
+            tmp_path.unlink(missing_ok=True)
 
     def _path_for(self, key: HistoricalCandleCacheKey) -> Path:
         provider = _safe_path_part(key.provider)
@@ -141,16 +145,20 @@ class ProviderResponseCache:
         expected = {
             "schema_version": PROVIDER_CACHE_SCHEMA_VERSION,
             "adapter_schema_version": key.adapter_schema_version,
-            "provider": key.provider,
-            "provider_mode": key.provider_mode,
+            "provider": _normalized_cache_dimension(key.provider),
+            "provider_mode": _normalized_cache_dimension(key.provider_mode),
             "symbol": key.symbol.ticker,
-            "interval": key.interval,
+            "interval": _normalized_cache_dimension(key.interval),
             "start": _cache_range_value(key.start, key.interval),
             "end": _cache_range_value(key.end, key.interval),
-            "request_shape": key.request_shape,
+            "request_shape": _normalized_cache_dimension(key.request_shape),
         }
+        normalized_fields = {"provider", "provider_mode", "interval", "request_shape"}
         for field, value in expected.items():
-            if payload.get(field) != value:
+            actual = payload.get(field)
+            if field in normalized_fields and isinstance(actual, str):
+                actual = _normalized_cache_dimension(actual)
+            if actual != value:
                 raise ValueError(f"cache metadata mismatch: {field}")
         if payload.get("status") not in {"success", "failure"}:
             raise ValueError("cache status must be success or failure")
@@ -202,6 +210,12 @@ class CachedHistoricalCandleProvider:
         result = self.provider.get_historical_candles(
             symbol, start=start, end=end, interval=interval
         )
+        if not result.ok:
+            result = ProviderResult.failure(
+                provider=result.provider,
+                error=redact_provider_diagnostic(result.error or "provider failed"),
+                warnings=result.warnings,
+            )
         if result.ok or self.cache_failures:
             self.cache.write_historical_candles(key, result)
         return result
@@ -211,6 +225,10 @@ class CachedHistoricalCandleProvider:
 
     def health_check(self) -> ProviderResult[str]:
         return self.provider.health_check()
+
+
+def _normalized_cache_dimension(value: str) -> str:
+    return value.strip().lower()
 
 
 def _cache_range_value(value: datetime, interval: str) -> str:

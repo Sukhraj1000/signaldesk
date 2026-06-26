@@ -91,6 +91,42 @@ def test_historical_candle_cache_round_trips_by_provider_symbol_interval_range(
     assert "provider-cache: hit" in result.warnings
 
 
+
+def test_cache_metadata_validation_uses_cache_id_normalization(tmp_path: Path) -> None:
+    cache = ProviderResponseCache(tmp_path)
+    mixed_case = HistoricalCandleCacheKey(
+        provider="Fixture",
+        provider_mode="Default",
+        symbol=Symbol("AMD"),
+        interval="1D",
+        start=START,
+        end=END,
+        request_shape="Default",
+    )
+    normalized = HistoricalCandleCacheKey(
+        provider="fixture",
+        provider_mode="default",
+        symbol=Symbol("AMD"),
+        interval="1d",
+        start=START,
+        end=END,
+        request_shape="default",
+    )
+
+    assert mixed_case.cache_id() == normalized.cache_id()
+
+    cache.write_historical_candles(
+        mixed_case,
+        ProviderResult.success(provider="Fixture", data=(_candle(),)),
+        now=NOW,
+    )
+
+    result = cache.read_historical_candles(normalized, now=NOW)
+
+    assert result is not None
+    assert result.ok is True
+    assert "provider-cache: hit" in result.warnings
+
 def test_cached_provider_reuses_success_without_calling_provider_again(tmp_path: Path) -> None:
     provider = CountingProvider()
     cached_provider = CachedHistoricalCandleProvider(
@@ -134,7 +170,7 @@ def test_cached_provider_refresh_bypasses_existing_entry(tmp_path: Path) -> None
     assert provider.calls == 2
 
 
-def test_cache_key_changes_with_provider_mode_and_date_range() -> None:
+def test_cache_key_changes_with_provider_mode_date_range_request_shape_and_schema() -> None:
     base = HistoricalCandleCacheKey(
         provider="fixture",
         provider_mode="default",
@@ -159,9 +195,29 @@ def test_cache_key_changes_with_provider_mode_and_date_range() -> None:
         start=START + timedelta(days=1),
         end=END,
     )
+    shaped = HistoricalCandleCacheKey(
+        provider="fixture",
+        provider_mode="default",
+        symbol=Symbol("AMD"),
+        interval="1d",
+        start=START,
+        end=END,
+        request_shape="adjusted",
+    )
+    v2_schema = HistoricalCandleCacheKey(
+        provider="fixture",
+        provider_mode="default",
+        symbol=Symbol("AMD"),
+        interval="1d",
+        start=START,
+        end=END,
+        adapter_schema_version="historical_candles.v2",
+    )
 
     assert base.cache_id() != enhanced.cache_id()
     assert base.cache_id() != later.cache_id()
+    assert base.cache_id() != shaped.cache_id()
+    assert base.cache_id() != v2_schema.cache_id()
 
 
 def test_cached_provider_failure_remains_explicit_unavailable_context_shape(
@@ -184,6 +240,8 @@ def test_cached_provider_failure_remains_explicit_unavailable_context_shape(
     assert first.ok is False
     assert second.ok is False
     assert provider.calls == 1
+    assert "secret" not in (first.error or "")
+    assert "token=<redacted>" in (first.error or "")
     assert "secret" not in (second.error or "")
     assert "token=<redacted>" in (second.error or "")
     assert "provider-cache: cached failure" in second.warnings
