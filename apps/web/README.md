@@ -13,7 +13,7 @@ The dashboard should help users inspect:
 - watchlist scan results (current smoke: `signaldesk web watchlist-scan --watchlist watchlists/default.yaml --provider local-fixture --llm none --output json`)
 - chart overlays for backend-emitted levels, events, confirmation, and invalidation (current smoke: `signaldesk web chart-overlays AMD --provider local-fixture --llm none --output json`)
 - risk flags and unavailable context
-- report history once persistence exists
+- report archive rows for saved canonical TA reports
 
 ## Design principles
 
@@ -86,3 +86,14 @@ signaldesk web watchlist-scan --watchlist watchlists/default.yaml --provider loc
 ```
 
 The command reuses the canonical watchlist report payload, then groups ranked setup rows, failed/skipped rows, provider unavailable context, and provenance for renderer consumption. Ranking, scores, confirmation/invalidation levels, risk, and unavailable context remain backend-emitted facts; dashboard code must not rescore symbols, infer missing levels, or hide provider gaps.
+
+
+## Report archive rendering contract
+
+The report archive dashboard slice is represented by `signaldesk.web.report_archive_presentation.v1`:
+
+```bash
+signaldesk web report-archive --reports-dir reports/local --output json
+```
+
+The command reads saved canonical TA report JSON files and groups them into archive rows for a future dashboard. It does not fetch providers, rescore setups, infer missing risk, or calculate dashboard-only summaries beyond counts from backend-emitted risk and unavailable-context sections.

@@ -28,6 +28,7 @@ from signaldesk_backend import (
     build_openai_compatible_chat_messages,
     build_openai_compatible_chat_request,
     build_provider_status_presentation,
+    build_report_archive_presentation,
     build_signal_card_presentation,
     build_ta_llm_prompt_payload,
     build_watchlist_scan_presentation,
@@ -552,6 +553,47 @@ def web_watchlist_scan(
     typer.echo(json.dumps(presentation, indent=2, sort_keys=True))
     if exit_code:
         raise typer.Exit(exit_code)
+
+
+def _load_report_archive_reports(reports_dir: Path) -> list[dict[str, Any]]:
+    if not reports_dir.exists() or not reports_dir.is_dir():
+        raise ValueError(
+            "--reports-dir must point to a directory of canonical TA report JSON files"
+        )
+    reports: list[dict[str, Any]] = []
+    for path in sorted(reports_dir.glob("*.json")):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ValueError(f"invalid report archive JSON file {path}: {exc}") from exc
+        if not isinstance(payload, dict):
+            raise ValueError(f"report archive file {path} must contain a JSON object")
+        reports.append(payload)
+    return reports
+
+
+@web_app.command("report-archive")
+def web_report_archive(
+    reports_dir: Path = typer.Option(  # noqa: B008
+        ..., help="Directory containing saved canonical TA report JSON files."
+    ),
+    output: str = typer.Option("json", help="Output format: json."),
+) -> None:
+    """Render dashboard-facing report archive rows from saved canonical reports."""
+
+    output_format = output.strip().lower()
+    if output_format != "json":
+        typer.echo("--output must be 'json'.", err=True)
+        raise typer.Exit(2)
+    try:
+        presentation = build_report_archive_presentation(
+            _load_report_archive_reports(reports_dir)
+        )
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from exc
+
+    typer.echo(json.dumps(presentation, indent=2, sort_keys=True))
 
 
 @web_app.command("provider-status")

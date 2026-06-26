@@ -3,10 +3,12 @@ from signaldesk_backend import (
     CHART_OVERLAY_PRESENTATION_SCHEMA_VERSION,
     PRESENTATION_SCHEMA_VERSION,
     PROVIDER_STATUS_PRESENTATION_SCHEMA_VERSION,
+    REPORT_ARCHIVE_PRESENTATION_SCHEMA_VERSION,
     WATCHLIST_SCAN_PRESENTATION_SCHEMA_VERSION,
     assemble_ta_signal_card_report,
     build_chart_overlay_presentation,
     build_provider_status_presentation,
+    build_report_archive_presentation,
     build_signal_card_presentation,
     build_watchlist_scan_presentation,
     extract_ta_signal_card,
@@ -373,3 +375,52 @@ def test_watchlist_scan_presentation_rejects_string_symbols() -> None:
         assert "symbols section must be a list" in str(exc)
     else:
         raise AssertionError("string symbols should fail before presentation rendering")
+
+
+def test_report_archive_presentation_groups_canonical_ta_reports() -> None:
+    first = _fixture_ta_report()
+    second = _fixture_ta_report()
+    second_signal_card = second["signal_card"]
+    assert isinstance(second_signal_card, dict)
+    second_identity = second_signal_card["identity"]
+    assert isinstance(second_identity, dict)
+    second_identity["symbol"] = "MSFT"
+    second_identity["generated_at"] = "2024-01-02T00:00:00+00:00"
+
+    presentation = build_report_archive_presentation([first, second])
+
+    assert presentation["schema_version"] == REPORT_ARCHIVE_PRESENTATION_SCHEMA_VERSION
+    assert presentation["summary_tiles"] == {
+        "total": 2,
+        "with_unavailable_context": 2,
+        "with_risk_flags": 2,
+    }
+    assert [row["symbol"] for row in presentation["report_rows"]] == ["MSFT", "AMD"]
+    row = presentation["report_rows"][0]
+    assert row["provider_badge"] == {"mode": "explicit", "price_provider": "local-fixture"}
+    assert row["score_summary"] == {"setup_quality": "70", "risk": "40"}
+    assert row["unavailable_context_count"] == 2
+    assert presentation["rendering_contract"]["no_dashboard_analysis"] is True
+
+
+def test_report_archive_presentation_rejects_non_report_shape() -> None:
+    try:
+        build_report_archive_presentation([_fixture_signal_card()])
+    except ValueError as exc:
+        assert "signal_card" in str(exc)
+    else:
+        raise AssertionError("archive presentation should require full canonical TA reports")
+
+
+def test_report_archive_presentation_rejects_missing_nested_rows() -> None:
+    report = _fixture_ta_report()
+    signal_card = report["signal_card"]
+    assert isinstance(signal_card, dict)
+    signal_card.pop("provenance")
+
+    try:
+        build_report_archive_presentation([report])
+    except ValueError as exc:
+        assert "provenance section is required" in str(exc)
+    else:
+        raise AssertionError("archive presentation should fail fast on missing nested rows")

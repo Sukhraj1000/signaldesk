@@ -21,6 +21,7 @@ from signaldesk_backend import (
     Quote,
     Settings,
     Symbol,
+    default_provider_registry,
 )
 from signaldesk_cli.main import (
     _config_inspect_payload,
@@ -3652,3 +3653,56 @@ def test_web_watchlist_scan_command_renders_dashboard_presentation() -> None:
     assert payload["summary_tiles"]["total"] == 2
     assert {row["symbol"] for row in payload["ranked_setup_rows"]} == {"AMD", "MSFT"}
     assert payload["rendering_contract"]["no_dashboard_analysis"] is True
+
+
+def test_web_report_archive_command_renders_saved_report_rows(tmp_path: Path) -> None:
+    report = cli_main._fetch_ta_report(
+        default_provider_registry(),
+        symbol="AMD",
+        provider="local-fixture",
+        mode="default",
+        interval="1d",
+        days=120,
+        as_of=datetime(2024, 12, 31, tzinfo=UTC),
+        llm_provider="none",
+    )
+    reports_dir = tmp_path / "reports"
+    reports_dir.mkdir()
+    (reports_dir / "amd.json").write_text(json.dumps(report), encoding="utf-8")
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "web",
+            "report-archive",
+            "--reports-dir",
+            str(reports_dir),
+            "--output",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["schema_version"] == "signaldesk.web.report_archive_presentation.v1"
+    assert payload["summary_tiles"]["total"] == 1
+    assert payload["report_rows"][0]["symbol"] == "AMD"
+    assert payload["report_rows"][0]["provider_badge"]["price_provider"] == "local-fixture"
+    assert payload["rendering_contract"]["no_dashboard_analysis"] is True
+
+
+def test_web_report_archive_rejects_non_json_output(tmp_path: Path) -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "web",
+            "report-archive",
+            "--reports-dir",
+            str(tmp_path),
+            "--output",
+            "table",
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert "--output must be 'json'." in result.output
