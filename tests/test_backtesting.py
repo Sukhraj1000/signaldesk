@@ -88,6 +88,51 @@ def test_evaluate_setup_replay_marks_unavailable_forward_windows() -> None:
     )
 
 
+def test_evaluate_setup_replay_defaults_generated_at_to_latest_candle_timestamp() -> None:
+    candles = (_candle(0, "100"), _candle(1, "101"), _candle(2, "102"))
+
+    first = evaluate_setup_replay(
+        setup_label="breakout_watch",
+        candles=candles,
+        signal_indices=(0,),
+        horizons=(1,),
+    )
+    second = evaluate_setup_replay(
+        setup_label="breakout_watch",
+        candles=candles,
+        signal_indices=(0,),
+        horizons=(1,),
+    )
+
+    assert first.provenance.generated_at == candles[-1].timestamp
+    assert second.provenance.generated_at == first.provenance.generated_at
+
+
+def test_evaluate_setup_replay_bounds_outcome_checks_to_max_horizon() -> None:
+    candles = (
+        _candle(0, "100", low="100"),
+        _candle(1, "99", low="98"),
+        _candle(2, "99", low="97"),
+        _candle(3, "110", low="50"),
+        _candle(4, "80", low="80"),
+    )
+
+    report = evaluate_setup_replay(
+        setup_label="breakout_watch",
+        candles=candles,
+        signal_indices=(0,),
+        horizons=(1, 2),
+        confirmation_level=Decimal("105"),
+        invalidation_level=Decimal("90"),
+        generated_at=BASE_TIME,
+    )
+
+    observation = report.observations[0]
+    assert observation.hit is False
+    assert observation.false_breakout is False
+    assert observation.max_adverse_excursion == Decimal("-0.0300")
+
+
 def test_evaluate_setup_replay_rejects_ambiguous_or_execution_like_inputs() -> None:
     candles = (_candle(0, "100"), _candle(1, "101"))
 

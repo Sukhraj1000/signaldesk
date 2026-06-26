@@ -7,7 +7,7 @@ position sizing, slippage, or recommendations.
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
 
 from signaldesk_backend.models import Candle, Provenance, Symbol
@@ -123,7 +123,7 @@ def evaluate_setup_replay(
         provenance=Provenance(
             provider=provider,
             source=source,
-            generated_at=generated_at or datetime.now(tz=UTC),
+            generated_at=generated_at or normalized_candles[-1].timestamp,
             timeframe=timeframe.strip() or "1d",
             inputs=(report_symbol.ticker, normalized_label),
             warnings=unavailable_context,
@@ -177,7 +177,7 @@ def _evaluate_observation(
         else:
             forward_returns[horizon] = _rate_of_return(entry.close, candles[forward_index].close)
 
-    future_window = candles[signal_index + 1 :]
+    future_window = candles[signal_index + 1 : signal_index + 1 + max(horizons)]
     primary_forward_return = forward_returns[horizons[0]]
     if confirmation_level is not None and future_window:
         hit = any(candle.close >= confirmation_level for candle in future_window)
