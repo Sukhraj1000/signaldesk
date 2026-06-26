@@ -1,8 +1,10 @@
 
 from signaldesk_backend import (
+    CHART_OVERLAY_PRESENTATION_SCHEMA_VERSION,
     PRESENTATION_SCHEMA_VERSION,
     PROVIDER_STATUS_PRESENTATION_SCHEMA_VERSION,
     assemble_ta_signal_card_report,
+    build_chart_overlay_presentation,
     build_provider_status_presentation,
     build_signal_card_presentation,
     extract_ta_signal_card,
@@ -199,3 +201,53 @@ def test_provider_status_presentation_rejects_missing_mode_fields() -> None:
         assert "mode" in str(exc)
     else:
         raise AssertionError("missing provider mode fields should fail")
+
+
+def test_fixture_signal_card_builds_chart_overlay_presentation_model() -> None:
+    presentation = build_chart_overlay_presentation(_fixture_signal_card())
+
+    assert presentation["schema_version"] == CHART_OVERLAY_PRESENTATION_SCHEMA_VERSION
+    assert presentation["chart"] == {
+        "symbol": "AMD",
+        "timeframe": "1d",
+        "generated_at": "2024-01-01T00:00:00+00:00",
+        "price_provider": "local-fixture",
+    }
+    assert [level["role"] for level in presentation["horizontal_levels"]] == [
+        "support",
+        "resistance",
+        "fibonacci",
+        "confirmation",
+        "invalidation",
+    ]
+    assert presentation["horizontal_levels"][3]["emphasis"] is True
+    assert presentation["horizontal_levels"][4]["emphasis"] is True
+    assert presentation["event_markers"][0]["label"] == "breakout"
+    assert {badge["label"] for badge in presentation["trend_badges"]} == {"price"}
+    assert presentation["risk_markers"][0]["severity"] == "info"
+    assert {row["context_type"] for row in presentation["unavailable_context"]} == {
+        "fundamentals",
+        "catalyst",
+    }
+    assert presentation["rendering_contract"]["no_dashboard_analysis"] is True
+
+
+def test_chart_overlay_presentation_rejects_full_ta_report_shape() -> None:
+    try:
+        build_chart_overlay_presentation(_fixture_ta_report())
+    except ValueError as exc:
+        assert "nested signal_card" in str(exc)
+    else:
+        raise AssertionError("full TA report should fail before chart overlay rendering")
+
+
+def test_chart_overlay_presentation_rejects_non_mapping_events() -> None:
+    signal_card = _fixture_signal_card()
+    signal_card["events"] = ["not-an-event"]
+
+    try:
+        build_chart_overlay_presentation(signal_card)
+    except ValueError as exc:
+        assert "entries must be JSON objects" in str(exc)
+    else:
+        raise AssertionError("non-object event markers should fail")
