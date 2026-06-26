@@ -27,15 +27,58 @@ Provider failures are cacheable only as explicit unavailable context with a shor
 
 ## Scheduling policy
 
-Scheduling should remain local/manual first. Cron examples should be added only after the report command and artifact readback path are stable for default-mode providers.
+Scheduling remains local/manual first. Default-mode schedules should use the same installed CLI entrypoints that a user can run by hand, write canonical artifacts, and capture both stdout and stderr so provider failures are visible in the job log.
+
+A minimal default-mode cron entry can keep the core workflow recoverable without requiring paid provider keys:
+
+```cron
+# Run a weekday after-market report with open/default providers only.
+# stdout contains the rendered report; stderr contains provider/cache/save failures.
+5 21 * * 1-5 cd /path/to/signaldesk && \
+  .venv/bin/signaldesk report \
+    --watchlist watchlists/default.yaml \
+    --mode default \
+    --llm none \
+    --format json \
+    --save-dir reports/daily \
+    --cache-dir .signaldesk-cache/provider-responses \
+    >> logs/signaldesk-report.log 2>&1
+```
 
 Scheduled reports should:
 
 - run the same installed CLI entrypoints as manual usage;
 - write canonical JSON artifacts with provider provenance;
-- surface non-zero exits and provider unavailable context in logs or notifications;
+- keep cache and report directories separate because provider responses are reusable inputs while report artifacts are audit/readback outputs;
+- capture command output and non-zero exits in a durable log;
+- inspect saved JSON for `unavailable_context` entries before treating a run as complete;
 - avoid paid/enhanced provider requirements for default-mode schedules;
 - avoid autonomous PR or issue loops unless product runtime gates remain green.
+
+A simple local follow-up check can fail a shell wrapper when any saved report contains unavailable context:
+
+```bash
+python - <<PY
+import json
+import pathlib
+import sys
+
+reports_dir = pathlib.Path("reports/daily")
+latest = max(reports_dir.glob("*.json"), key=lambda path: path.stat().st_mtime)
+payload = json.loads(latest.read_text(encoding="utf-8"))
+results = payload.get("results") or [payload]
+missing = []
+for result in results:
+    card = result.get("signal_card") or result.get("summary", {}).get("signal_card") or {}
+    summary = result.get("summary") or {}
+    missing.extend(card.get("unavailable_context") or [])
+    missing.extend(summary.get("unavailable_context") or [])
+if missing:
+    print(f"{latest}: unavailable context: {missing}", file=sys.stderr)
+    sys.exit(1)
+print(f"{latest}: no unavailable context")
+PY
+```
 
 ## Database and queue threshold
 
