@@ -45,6 +45,13 @@ def _report_row(report: Mapping[str, Any]) -> dict[str, Any]:
     risk = _mapping_section(signal_card, "risk")
     score = _mapping_section(signal_card, "score")
 
+    risk_flags = _required_mapping_items(risk, "flags", "TA report risk")
+    score_breakdowns = _required_mapping_items(score, "breakdowns", "TA report score")
+    unavailable_context = _required_mapping_items(
+        signal_card, "unavailable_context", "TA report signal_card"
+    )
+    provenance = _required_mapping_items(signal_card, "provenance", "TA report signal_card")
+
     return {
         "symbol": identity.get("symbol") or facts.get("symbol"),
         "timeframe": identity.get("timeframe") or facts.get("interval"),
@@ -55,12 +62,10 @@ def _report_row(report: Mapping[str, Any]) -> dict[str, Any]:
             "price_provider": provider_mode.get("price_provider") or facts.get("provider"),
         },
         "latest_close": facts.get("latest_close"),
-        "score_summary": _score_summary(score.get("breakdowns")),
-        "risk_flag_count": len(_mapping_items(risk.get("flags"))),
-        "unavailable_context_count": len(
-            _mapping_items(signal_card.get("unavailable_context"))
-        ),
-        "provenance_rows": _mapping_items(signal_card.get("provenance")),
+        "score_summary": _score_summary(score_breakdowns),
+        "risk_flag_count": len(risk_flags),
+        "unavailable_context_count": len(unavailable_context),
+        "provenance_rows": provenance,
         "value": signal_card,
     }
 
@@ -77,6 +82,14 @@ def _mapping_section(parent: Mapping[str, Any], section: str) -> Mapping[str, An
     if not isinstance(value, Mapping):
         raise ValueError(f"TA report {section} section must be a JSON object")
     return value
+
+
+def _required_mapping_items(
+    parent: Mapping[str, Any], section: str, parent_label: str
+) -> list[dict[str, Any]]:
+    if section not in parent:
+        raise ValueError(f"{parent_label} {section} section is required")
+    return _mapping_items(parent[section])
 
 
 def _mapping_items(value: object) -> list[dict[str, Any]]:

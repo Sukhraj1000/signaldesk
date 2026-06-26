@@ -410,3 +410,17 @@ def test_report_archive_presentation_rejects_non_report_shape() -> None:
         assert "signal_card" in str(exc)
     else:
         raise AssertionError("archive presentation should require full canonical TA reports")
+
+
+def test_report_archive_presentation_rejects_missing_nested_rows() -> None:
+    report = _fixture_ta_report()
+    signal_card = report["signal_card"]
+    assert isinstance(signal_card, dict)
+    signal_card.pop("provenance")
+
+    try:
+        build_report_archive_presentation([report])
+    except ValueError as exc:
+        assert "provenance section is required" in str(exc)
+    else:
+        raise AssertionError("archive presentation should fail fast on missing nested rows")
