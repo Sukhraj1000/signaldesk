@@ -419,7 +419,6 @@ class ConcurrencyRecordingProvider(WorkingProvider):
                 object.__setattr__(self, "active", self.active - 1)
 
 
-
 def test_web_provider_status_command_renders_dashboard_payload() -> None:
     result = CliRunner().invoke(
         app,
@@ -432,9 +431,7 @@ def test_web_provider_status_command_renders_dashboard_payload() -> None:
     assert payload["mode_summary"]["mode"] == "default"
     assert payload["mode_summary"]["price_provider"] == "yfinance"
     assert any(row["provider"] == "yfinance" for row in payload["provider_rows"])
-    assert {section["label"] for section in payload["credential_sections"]} >= {
-        "not_required"
-    }
+    assert {section["label"] for section in payload["credential_sections"]} >= {"not_required"}
     assert {section["label"] for section in payload["role_sections"]} >= {"price"}
 
 
@@ -461,7 +458,10 @@ def test_config_inspect_reports_sanitized_table(monkeypatch: MonkeyPatch) -> Non
     monkeypatch.setenv("REDIS_URL", "redis://:redispass@cache.test:6379/0")
     monkeypatch.setenv("LLM_PROVIDER", "openrouter")
     monkeypatch.setenv("LLM_MODEL", "openrouter/test-model")
-    monkeypatch.setenv("LLM_ENDPOINT_URL", "https://user:endpointpass@openrouter.example.test/api/v1/chat/completions")
+    monkeypatch.setenv(
+        "LLM_ENDPOINT_URL",
+        "https://user:endpointpass@openrouter.example.test/api/v1/chat/completions",
+    )
     monkeypatch.setenv("LLM_API_KEY", "unit-test-secret")
 
     result = CliRunner().invoke(app, ["config", "inspect"])
@@ -805,7 +805,10 @@ def test_config_inspect_helpers_redact_secrets_from_payload() -> None:
     assert payload["redis_url"] == "redis://<redacted>@redis.test:6379/0"
     assert payload["llm_provider"] == "openrouter"
     assert payload["llm_model"] == "openrouter/test-model"
-    assert payload["llm_endpoint_url"] == "https://<redacted>@openrouter.example.test/api/v1/chat/completions"
+    assert (
+        payload["llm_endpoint_url"]
+        == "https://<redacted>@openrouter.example.test/api/v1/chat/completions"
+    )
     assert payload["llm_api_key_configured"] == "yes"
     assert "password" not in json.dumps(payload)
     assert "endpointpass" not in json.dumps(payload)
@@ -2230,9 +2233,7 @@ def test_ta_command_requires_api_key_for_live_llm_mode(monkeypatch: MonkeyPatch)
     )
     monkeypatch.delenv("LLM_API_KEY", raising=False)
 
-    result = CliRunner().invoke(
-        app, ["ta", "AMD", "--provider", "working", "--llm", "openai"]
-    )
+    result = CliRunner().invoke(app, ["ta", "AMD", "--provider", "working", "--llm", "openai"])
 
     assert result.exit_code == 2
     assert "--llm openai requires LLM_API_KEY" in result.stderr
@@ -2299,8 +2300,7 @@ def test_ta_command_attaches_live_llm_explanation_through_guarded_adapter(
     assert payload["llm"] == "openai"
     assert payload["narrative"].startswith("### LLM explanation")
     assert not any(
-        item["context_type"] == "llm_explanation"
-        for item in payload["unavailable_context"]
+        item["context_type"] == "llm_explanation" for item in payload["unavailable_context"]
     )
     assert calls == [
         {
@@ -2335,15 +2335,12 @@ def test_ta_command_sanitizes_live_llm_transport_failures(
 
     monkeypatch.setattr(cli_main, "request_openai_compatible_llm_explanation", fail_request)
 
-    result = CliRunner().invoke(
-        app, ["ta", "AMD", "--provider", "working", "--llm", "openai"]
-    )
+    result = CliRunner().invoke(app, ["ta", "AMD", "--provider", "working", "--llm", "openai"])
 
     assert result.exit_code == 2
     assert "--llm openai request failed" in result.stderr
     assert "unit-test-secret" not in result.stderr
     assert "secret@" not in result.stderr
-
 
 
 def test_ta_command_reports_validation_errors(monkeypatch: MonkeyPatch) -> None:
@@ -2947,11 +2944,13 @@ def test_llm_output_schema_command_emits_public_contract() -> None:
         "unavailable_context",
     ]
 
+
 def test_llm_output_schema_command_rejects_non_json_output() -> None:
     result = CliRunner().invoke(app, ["llm", "output-schema", "--output", "table"])
 
     assert result.exit_code == 2
     assert "--output must be \x27json\x27." in result.stderr
+
 
 def test_llm_prompt_payload_command_emits_guarded_structured_json(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(
@@ -3232,6 +3231,7 @@ def test_llm_input_schema_outputs_guarded_prompt_schema() -> None:
     assert "signal_card" in schema["required"]
     assert "output_schema" in schema["required"]
 
+
 def test_llm_validate_chat_response_accepts_schema_valid_assistant_json(tmp_path: Path) -> None:
     response = {
         "choices": [
@@ -3300,7 +3300,6 @@ def test_llm_validate_chat_response_rejects_malformed_json_without_leaking_text(
 
     assert result.exit_code == 1
     assert "invalid LLM chat response: JSON parse failed" in result.stderr
-
 
 
 def test_llm_attach_output_attaches_validated_narrative_without_mutating_facts(
@@ -3388,6 +3387,7 @@ def test_llm_attach_output_fails_closed_without_leaking_invalid_content(
     assert "BUY NOW" not in result.stderr
     assert "BUY NOW" not in result.stdout
 
+
 def test_llm_prompt_payload_accepts_explicit_no_llm_option() -> None:
     result = CliRunner().invoke(
         app,
@@ -3435,7 +3435,6 @@ def test_llm_prompt_payload_accepts_guarded_enhanced_llm_inspection() -> None:
         and "inspection only" in item["reason"]
         for item in payload["signal_card"]["unavailable_context"]
     )
-
 
 
 def _assert_guarded_openrouter_prompt_payload(payload: dict[str, Any]) -> None:
@@ -3489,6 +3488,7 @@ def test_llm_chat_request_accepts_guarded_enhanced_llm_inspection() -> None:
     payload = json.loads(request_body["messages"][1]["content"])
     _assert_guarded_openrouter_prompt_payload(payload)
 
+
 def test_llm_prompt_payload_rejects_unknown_live_llm_option() -> None:
     result = CliRunner().invoke(
         app,
@@ -3538,9 +3538,7 @@ def test_web_signal_card_renders_fixture_presentation_json() -> None:
         "confirmation",
         "invalidation",
     }
-    unavailable_labels = {
-        row["label"] for row in payload["risk_panel"]["unavailable_context"]
-    }
+    unavailable_labels = {row["label"] for row in payload["risk_panel"]["unavailable_context"]}
     assert {"fundamentals", "catalyst", "llm_explanation"} <= unavailable_labels
     assert payload["narrative"] is None
 
@@ -3656,7 +3654,6 @@ def test_web_watchlist_scan_command_renders_dashboard_presentation() -> None:
     assert payload["rendering_contract"]["no_dashboard_analysis"] is True
 
 
-
 def test_ta_command_saves_canonical_report_artifact_for_archive_readback(tmp_path: Path) -> None:
     reports_dir = tmp_path / "reports"
 
@@ -3704,7 +3701,7 @@ def test_report_watchlist_saves_canonical_json_artifact(
         cli_main, "default_provider_registry", lambda: ProviderRegistry((WorkingProvider(),))
     )
     watchlist = tmp_path / "watchlist.yaml"
-    watchlist.write_text('symbols:\n  - AMD\n', encoding="utf-8")
+    watchlist.write_text("symbols:\n  - AMD\n", encoding="utf-8")
     reports_dir = tmp_path / "watchlist-reports"
 
     result = CliRunner().invoke(
@@ -3790,6 +3787,7 @@ def test_report_watchlist_reports_artifact_save_errors(
     assert result.exit_code == 1
     assert "could not save report artifact: disk full" in result.stderr
 
+
 def test_web_report_archive_command_renders_saved_report_rows(tmp_path: Path) -> None:
     report = cli_main._fetch_ta_report(
         default_provider_registry(),
@@ -3872,3 +3870,127 @@ def test_fetch_ta_report_normalizes_cache_io_failure(
         assert "provider cache unavailable: permission denied" in str(exc)
     else:
         raise AssertionError("expected cache OSError to be normalized to RuntimeError")
+
+
+def test_backtest_setup_command_outputs_research_only_json() -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "backtest",
+            "setup",
+            "AMD",
+            "--provider",
+            "local-fixture",
+            "--setup-label",
+            "breakout watch",
+            "--signal-index",
+            "0",
+            "--signal-index",
+            "1",
+            "--horizon",
+            "1",
+            "--output",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["schema_version"] == "signaldesk.backtest.setup_replay.v1"
+    assert payload["setup_label"] == "breakout_watch"
+    assert payload["symbol"] == "AMD"
+    assert payload["sample_size"] == 2
+    assert payload["horizons"] == [1]
+    assert payload["provenance"]["provider"] == "local-fixture"
+    assert payload["provenance"]["source"] == "cli_backtest_setup"
+    assert payload["limitations"] == [
+        "Historical setup replay is deterministic research only; "
+        "it is not live trading or broker execution."
+    ]
+
+
+
+
+def test_backtest_setup_command_uses_local_fixture_when_provider_is_omitted() -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "backtest",
+            "setup",
+            "AMD",
+            "--setup-label",
+            "breakout watch",
+            "--signal-index",
+            "0",
+            "--horizon",
+            "1",
+            "--output",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["provenance"]["provider"] == "local-fixture"
+
+
+def test_backtest_setup_table_includes_provenance() -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "backtest",
+            "setup",
+            "AMD",
+            "--provider",
+            "local-fixture",
+            "--setup-label",
+            "breakout watch",
+            "--signal-index",
+            "0",
+            "--horizon",
+            "1",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "provider\tlocal-fixture" in result.stdout
+    assert "source\tcli_backtest_setup" in result.stdout
+    assert "generated_at\t" in result.stdout
+
+
+def test_backtest_setup_rejects_non_finite_decimal_level() -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "backtest",
+            "setup",
+            "AMD",
+            "--provider",
+            "local-fixture",
+            "--setup-label",
+            "breakout_watch",
+            "--signal-index",
+            "0",
+            "--confirmation-level",
+            "NaN",
+            "--output",
+            "json",
+        ],
+    )
+    assert result.exit_code == 2
+    assert "--confirmation-level must be a decimal price." in result.output
+
+def test_backtest_setup_command_requires_signal_index() -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "backtest",
+            "setup",
+            "AMD",
+            "--provider",
+            "local-fixture",
+            "--setup-label",
+            "breakout_watch",
+            "--output",
+            "json",
+        ],
+    )
+    assert result.exit_code == 2
+    assert "at least one --signal-index is required" in result.output
