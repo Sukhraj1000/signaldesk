@@ -341,6 +341,11 @@ def technical_analysis(
     interval: str = typer.Option("1d", help="Historical candle interval."),
     days: int = typer.Option(120, min=1, help="Number of calendar days of history to request."),
     output: str = typer.Option("table", help="Output format: table, json, or markdown."),
+    save_dir: Path | None = typer.Option(  # noqa: B008
+        None,
+        "--save-dir",
+        help="Directory where the canonical TA report JSON artifact should be saved.",
+    ),
 ) -> None:
     """Fetch candles and run deterministic technical analysis for one symbol."""
 
@@ -372,6 +377,8 @@ def technical_analysis(
         raise typer.Exit(1) from exc
 
     validate_ta_signal_card_report(report)
+    if save_dir is not None:
+        _save_report_artifact(report, save_dir)
     if output_format == "json":
         typer.echo(json.dumps(report, indent=2, sort_keys=True))
         return
@@ -553,6 +560,35 @@ def web_watchlist_scan(
     typer.echo(json.dumps(presentation, indent=2, sort_keys=True))
     if exit_code:
         raise typer.Exit(exit_code)
+
+
+def _safe_report_artifact_stem(value: object) -> str:
+    stem = "".join(
+        character if character.isalnum() or character in {"-", "_"} else "-"
+        for character in str(value).strip().lower()
+    ).strip("-")
+    return stem or "report"
+
+
+def _report_artifact_path(payload: dict[str, Any], save_dir: Path) -> Path:
+    report_type = _safe_report_artifact_stem(payload.get("report_type", "ta"))
+    generated_at = _safe_report_artifact_stem(
+        payload.get("generated_at")
+        or payload.get("scanned_at")
+        or datetime.now(UTC).isoformat()
+    )
+    symbol = payload.get("symbol")
+    if symbol is None and isinstance(payload.get("facts"), dict):
+        symbol = payload["facts"].get("symbol")
+    subject = _safe_report_artifact_stem(symbol or payload.get("watchlist") or "report")
+    return save_dir / f"{report_type}-{subject}-{generated_at}.json"
+
+
+def _save_report_artifact(payload: dict[str, Any], save_dir: Path) -> Path:
+    save_dir.mkdir(parents=True, exist_ok=True)
+    path = _report_artifact_path(payload, save_dir)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return path
 
 
 def _load_report_archive_reports(reports_dir: Path) -> list[dict[str, Any]]:
@@ -2029,6 +2065,11 @@ def report_watchlist(
     report_format: str = typer.Option(
         "markdown", "--format", help="Report format: markdown, table, or json."
     ),
+    save_dir: Path | None = typer.Option(  # noqa: B008
+        None,
+        "--save-dir",
+        help="Directory where the canonical watchlist report JSON artifact should be saved.",
+    ),
 ) -> None:
     """Generate a deterministic report for a watchlist."""
 
@@ -2051,6 +2092,8 @@ def report_watchlist(
     except (KeyError, ValueError) as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(2) from exc
+    if save_dir is not None:
+        _save_report_artifact(payload, save_dir)
     if normalized_report_format == "json":
         typer.echo(json.dumps(payload, indent=2, sort_keys=True))
     elif normalized_report_format == "table":

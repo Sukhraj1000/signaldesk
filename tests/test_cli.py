@@ -3655,6 +3655,81 @@ def test_web_watchlist_scan_command_renders_dashboard_presentation() -> None:
     assert payload["rendering_contract"]["no_dashboard_analysis"] is True
 
 
+
+def test_ta_command_saves_canonical_report_artifact_for_archive_readback(tmp_path: Path) -> None:
+    reports_dir = tmp_path / "reports"
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "ta",
+            "AMD",
+            "--provider",
+            "local-fixture",
+            "--llm",
+            "none",
+            "--output",
+            "json",
+            "--save-dir",
+            str(reports_dir),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    artifacts = sorted(reports_dir.glob("*.json"))
+    assert len(artifacts) == 1
+    saved_payload = json.loads(artifacts[0].read_text(encoding="utf-8"))
+    stdout_payload = json.loads(result.stdout)
+    assert saved_payload == stdout_payload
+    assert saved_payload["schema_version"] == "signaldesk.ta.v1"
+    assert saved_payload["signal_card"]["facts"]["provider"] == "local-fixture"
+
+    archive_result = CliRunner().invoke(
+        app,
+        ["web", "report-archive", "--reports-dir", str(reports_dir), "--output", "json"],
+    )
+
+    assert archive_result.exit_code == 0, archive_result.output
+    archive_payload = json.loads(archive_result.stdout)
+    assert archive_payload["summary_tiles"]["total"] == 1
+    assert archive_payload["report_rows"][0]["symbol"] == "AMD"
+    assert archive_payload["report_rows"][0]["provider_badge"]["price_provider"] == "local-fixture"
+
+
+def test_report_watchlist_saves_canonical_json_artifact(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        cli_main, "default_provider_registry", lambda: ProviderRegistry((WorkingProvider(),))
+    )
+    watchlist = tmp_path / "watchlist.yaml"
+    watchlist.write_text('symbols:\n  - AMD\n', encoding="utf-8")
+    reports_dir = tmp_path / "watchlist-reports"
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "report",
+            "--watchlist",
+            str(watchlist),
+            "--provider",
+            "working",
+            "--format",
+            "json",
+            "--save-dir",
+            str(reports_dir),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    artifacts = sorted(reports_dir.glob("*.json"))
+    assert len(artifacts) == 1
+    saved_payload = json.loads(artifacts[0].read_text(encoding="utf-8"))
+    assert saved_payload == json.loads(result.stdout)
+    assert saved_payload["schema_version"] == "signaldesk.watchlist_report.v1"
+    assert saved_payload["report_type"] == "watchlist"
+    assert saved_payload["summary"]["total"] == 1
+
 def test_web_report_archive_command_renders_saved_report_rows(tmp_path: Path) -> None:
     report = cli_main._fetch_ta_report(
         default_provider_registry(),
