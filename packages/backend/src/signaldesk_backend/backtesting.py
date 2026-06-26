@@ -243,9 +243,16 @@ def _build_walk_forward_windows(
         window_size = len(observations)
     if window_size <= 0:
         raise ValueError("walk_forward_window_size must be a positive signal count")
+    chronological_observations = tuple(
+        sorted(observations, key=lambda observation: observation.observed_at)
+    )
     windows: list[SetupReplayWalkForwardWindow] = []
-    for window_index, start in enumerate(range(0, len(observations), window_size)):
-        window_observations = tuple(observations[start : start + window_size])
+    for window_index, start in enumerate(
+        range(0, len(chronological_observations), window_size)
+    ):
+        window_observations = tuple(
+            chronological_observations[start : start + window_size]
+        )
         if not window_observations:
             continue
         metrics, _ = _aggregate_metrics(window_observations, horizons)

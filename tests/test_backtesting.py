@@ -140,6 +140,32 @@ def test_evaluate_setup_replay_reports_walk_forward_windows() -> None:
     }
 
 
+def test_walk_forward_windows_are_chronological_for_unsorted_signal_indices() -> None:
+    candles = (
+        _candle(0, "100"),
+        _candle(1, "101"),
+        _candle(2, "102"),
+        _candle(3, "99"),
+        _candle(4, "98"),
+        _candle(5, "105"),
+    )
+
+    report = evaluate_setup_replay(
+        setup_label="breakout_watch",
+        candles=candles,
+        signal_indices=(4, 0, 3, 1),
+        horizons=(1,),
+        walk_forward_window_size=2,
+        generated_at=BASE_TIME,
+    )
+
+    assert [window.signal_indices for window in report.walk_forward_windows] == [(0, 1), (3, 4)]
+    assert report.walk_forward_windows[0].start_observed_at == candles[0].timestamp
+    assert report.walk_forward_windows[0].end_observed_at == candles[1].timestamp
+    assert report.walk_forward_windows[1].start_observed_at == candles[3].timestamp
+    assert report.walk_forward_windows[1].end_observed_at == candles[4].timestamp
+
+
 def test_evaluate_setup_replay_defaults_generated_at_to_latest_candle_timestamp() -> None:
     candles = (_candle(0, "100"), _candle(1, "101"), _candle(2, "102"))
 
@@ -231,9 +257,12 @@ def test_setup_replay_json_schema_documents_cli_payload_contract() -> None:
     )
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
 
+    metrics_schema_ref = schema["properties"]["metrics"]["$ref"]
+    metrics_schema = schema["$defs"][metrics_schema_ref.rsplit("/", 1)[-1]]
+
     assert payload["schema_version"] == schema["properties"]["schema_version"]["const"]
     assert set(schema["required"]) == set(payload)
-    assert set(schema["properties"]["metrics"]["required"]) == set(payload["metrics"])
+    assert set(metrics_schema["required"]) == set(payload["metrics"])
     assert set(schema["properties"]["provenance"]["required"]) == set(payload["provenance"])
     forbidden_execution_fields = {"broker", "order", "fill", "position_size", "slippage"}
     assert forbidden_execution_fields.isdisjoint(schema["properties"])

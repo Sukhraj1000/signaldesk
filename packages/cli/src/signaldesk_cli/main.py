@@ -21,6 +21,7 @@ from signaldesk_backend import (
     RiskFlag,
     ScoreBreakdown,
     Settings,
+    SetupReplayMetrics,
     SetupReplayReport,
     Symbol,
     assemble_ta_signal_card_report,
@@ -461,7 +462,7 @@ def _decimal_or_none(value: Decimal | None) -> str | None:
 
 
 
-def _setup_replay_metrics_payload(metrics: Any) -> dict[str, Any]:
+def _setup_replay_metrics_payload(metrics: SetupReplayMetrics) -> dict[str, Any]:
     return {
         "hit_rate": _decimal_or_none(metrics.hit_rate),
         "average_forward_return_by_horizon": {
