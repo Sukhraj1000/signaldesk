@@ -76,6 +76,11 @@ from signaldesk_backend.models import (
     TechnicalSnapshot,
     UnavailableContext,
 )
+from signaldesk_backend.provider_cache import (
+    CachedHistoricalCandleProvider,
+    HistoricalCandleCacheKey,
+    ProviderResponseCache,
+)
 from signaldesk_backend.provider_status_presentation import (
     PROVIDER_STATUS_PRESENTATION_SCHEMA_VERSION,
     build_provider_status_presentation,
@@ -123,6 +128,9 @@ from signaldesk_backend.watchlist_scan_presentation import (
 )
 
 __all__ = [
+    "CachedHistoricalCandleProvider",
+    "HistoricalCandleCacheKey",
+    "ProviderResponseCache",
     "Candle",
     "CHART_OVERLAY_PRESENTATION_SCHEMA_VERSION",
     "CatalystContext",

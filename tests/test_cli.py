@@ -17,6 +17,7 @@ from signaldesk_backend import (
     FundamentalContext,
     ProviderCapability,
     ProviderRegistry,
+    ProviderResponseCache,
     ProviderResult,
     Quote,
     Settings,
@@ -3840,3 +3841,34 @@ def test_web_report_archive_rejects_non_json_output(tmp_path: Path) -> None:
 
     assert result.exit_code == 2
     assert "--output must be 'json'." in result.output
+
+
+def test_fetch_ta_report_normalizes_cache_io_failure(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
+    registry = ProviderRegistry([WorkingProvider()])
+
+    def fail_write(*args: object, **kwargs: object) -> None:
+        raise OSError("permission denied")
+
+    monkeypatch.setattr(
+        ProviderResponseCache,
+        "write_historical_candles",
+        fail_write,
+    )
+
+    try:
+        cli_main._fetch_ta_report(
+            registry,
+            symbol="AMD",
+            provider="working",
+            mode="default",
+            interval="1d",
+            days=40,
+            as_of=datetime(2024, 2, 15, tzinfo=UTC),
+            cache_dir=tmp_path,
+        )
+    except RuntimeError as exc:
+        assert "provider cache unavailable: permission denied" in str(exc)
+    else:
+        raise AssertionError("expected cache OSError to be normalized to RuntimeError")
