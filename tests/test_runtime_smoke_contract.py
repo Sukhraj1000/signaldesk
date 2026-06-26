@@ -46,3 +46,22 @@ def test_tox_smoke_covers_web_watchlist_scan_entrypoint() -> None:
         "--provider local-fixture --llm none --output json"
         in tox_ini
     )
+
+
+def test_persistence_caching_scheduling_docs_define_cache_invalidation_policy() -> None:
+    docs = Path("docs/persistence-caching-scheduling.md").read_text(encoding="utf-8")
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    assert "docs/persistence-caching-scheduling.md" in readme
+    assert "## Provider-response cache invalidation" in docs
+    assert "Cache keys should include at least:" in docs
+    assert "provider name and provider role" in docs
+    assert "symbol or watchlist member identity" in docs
+    assert "interval and requested date range for candles" in docs
+    assert "provider mode" in docs
+    assert "request shape that changes provider output" in docs
+    assert "adapter schema version" in docs
+    assert "delete the entire local provider-cache namespace" in docs
+    assert "A cached failure must still render as `Unavailable context`" in docs
+    assert "not a report artifact cache key" in docs
+
