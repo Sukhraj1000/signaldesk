@@ -3,10 +3,12 @@ from signaldesk_backend import (
     CHART_OVERLAY_PRESENTATION_SCHEMA_VERSION,
     PRESENTATION_SCHEMA_VERSION,
     PROVIDER_STATUS_PRESENTATION_SCHEMA_VERSION,
+    WATCHLIST_SCAN_PRESENTATION_SCHEMA_VERSION,
     assemble_ta_signal_card_report,
     build_chart_overlay_presentation,
     build_provider_status_presentation,
     build_signal_card_presentation,
+    build_watchlist_scan_presentation,
     extract_ta_signal_card,
 )
 
@@ -251,3 +253,123 @@ def test_chart_overlay_presentation_rejects_non_mapping_events() -> None:
         assert "entries must be JSON objects" in str(exc)
     else:
         raise AssertionError("non-object event markers should fail")
+
+
+def test_watchlist_scan_presentation_groups_canonical_report_rows() -> None:
+    payload = {
+        "schema_version": "signaldesk.watchlist_report.v1",
+        "report_type": "watchlist",
+        "generated_at": "2024-01-01T00:00:00+00:00",
+        "watchlist": "watchlists/default.yaml",
+        "watchlist_model": {
+            "name": "Default TA Watchlist",
+            "tags": ["default-mode"],
+            "asset_class": "equity",
+            "enabled": True,
+            "symbols": ["AMD", "MSFT"],
+        },
+        "provider_mode": {
+            "mode": "explicit",
+            "price_provider": "local-fixture",
+            "unavailable_context": [
+                {"context_type": "fundamentals", "reason": "not configured"}
+            ],
+        },
+        "symbols": ["AMD", "MSFT"],
+        "ranked_setups": [
+            {
+                "symbol": "AMD",
+                "status": "ok",
+                "rank": 1,
+                "summary": {
+                    "symbol": "AMD",
+                    "provider": "local-fixture",
+                    "latest_close": "100.00",
+                    "trend_regime": "uptrend",
+                    "setup_quality_score": "70",
+                    "risk_score": "40",
+                    "levels": {
+                        "confirmation": [{"kind": "breakout", "price": "101.00"}],
+                        "invalidation": [{"kind": "stop", "price": "90.00"}],
+                    },
+                    "unavailable_context": [
+                        {"context_type": "catalyst", "reason": "not configured"}
+                    ],
+                },
+            }
+        ],
+        "failed_symbols": [
+            {"symbol": "MSFT", "status": "error", "error": "provider unavailable"}
+        ],
+        "skipped_symbols": [],
+        "summary": {"total": 2, "ok": 1, "failed": 1, "skipped": 0},
+        "provenance": [{"provider": "local-fixture", "source": "historical_candles"}],
+    }
+
+    presentation = build_watchlist_scan_presentation(payload)
+
+    assert presentation["schema_version"] == WATCHLIST_SCAN_PRESENTATION_SCHEMA_VERSION
+    assert presentation["headline"]["name"] == "Default TA Watchlist"
+    assert presentation["provider_badge"] == {
+        "mode": "explicit",
+        "price_provider": "local-fixture",
+    }
+    assert presentation["summary_tiles"] == {
+        "total": 2,
+        "ok": 1,
+        "failed": 1,
+        "skipped": 0,
+    }
+    assert presentation["ranked_setup_rows"][0]["symbol"] == "AMD"
+    assert presentation["ranked_setup_rows"][0]["confirmation"][0]["kind"] == "breakout"
+    assert (
+        presentation["ranked_setup_rows"][0]["unavailable_context"][0]["context_type"]
+        == "catalyst"
+    )
+    assert presentation["failed_rows"][0]["reason"] == "provider unavailable"
+    assert presentation["provider_unavailable_context"][0]["context_type"] == "fundamentals"
+    assert presentation["rendering_contract"]["no_dashboard_analysis"] is True
+
+
+def test_watchlist_scan_presentation_rejects_non_mapping_ranked_rows() -> None:
+    payload = {
+        "watchlist": "watchlists/default.yaml",
+        "watchlist_model": {"name": "Default TA Watchlist"},
+        "generated_at": "2024-01-01T00:00:00+00:00",
+        "provider_mode": {"mode": "explicit", "price_provider": "local-fixture"},
+        "symbols": ["AMD"],
+        "ranked_setups": ["AMD"],
+        "failed_symbols": [],
+        "skipped_symbols": [],
+        "summary": {"total": 1, "ok": 1, "failed": 0, "skipped": 0},
+        "provenance": [],
+    }
+
+    try:
+        build_watchlist_scan_presentation(payload)
+    except ValueError as exc:
+        assert "entries must be JSON objects" in str(exc)
+    else:
+        raise AssertionError("non-object ranked rows should fail")
+
+
+def test_watchlist_scan_presentation_rejects_string_symbols() -> None:
+    payload = {
+        "watchlist": "watchlists/default.yaml",
+        "watchlist_model": {"name": "Default TA Watchlist"},
+        "generated_at": "2024-01-01T00:00:00+00:00",
+        "provider_mode": {"mode": "explicit", "price_provider": "local-fixture"},
+        "symbols": "AMD",
+        "ranked_setups": [],
+        "failed_symbols": [],
+        "skipped_symbols": [],
+        "summary": {"total": 1, "ok": 0, "failed": 0, "skipped": 0},
+        "provenance": [],
+    }
+
+    try:
+        build_watchlist_scan_presentation(payload)
+    except ValueError as exc:
+        assert "symbols section must be a list" in str(exc)
+    else:
+        raise AssertionError("string symbols should fail before presentation rendering")

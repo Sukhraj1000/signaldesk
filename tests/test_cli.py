@@ -3621,3 +3621,34 @@ def test_web_chart_overlays_cli_skips_live_llm_attach(monkeypatch: MonkeyPatch) 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.stdout)
     assert payload["rendering_contract"]["no_dashboard_analysis"] is True
+
+
+def test_web_watchlist_scan_command_renders_dashboard_presentation() -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "web",
+            "watchlist-scan",
+            "--watchlist",
+            "watchlists/default.yaml",
+            "--provider",
+            "local-fixture",
+            "--llm",
+            "none",
+            "--output",
+            "json",
+            "--max-workers",
+            "1",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["schema_version"] == "signaldesk.web.watchlist_scan_presentation.v1"
+    assert payload["provider_badge"] == {
+        "mode": "explicit",
+        "price_provider": "local-fixture",
+    }
+    assert payload["summary_tiles"]["total"] == 2
+    assert {row["symbol"] for row in payload["ranked_setup_rows"]} == {"AMD", "MSFT"}
+    assert payload["rendering_contract"]["no_dashboard_analysis"] is True

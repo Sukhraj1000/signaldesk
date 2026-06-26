@@ -10,7 +10,7 @@ The dashboard should help users inspect:
 
 - provider status (current smoke: `signaldesk web provider-status --mode default --output json`)
 - single-symbol signal cards
-- watchlist scan results
+- watchlist scan results (current smoke: `signaldesk web watchlist-scan --watchlist watchlists/default.yaml --provider local-fixture --llm none --output json`)
 - chart overlays for backend-emitted levels, events, confirmation, and invalidation (current smoke: `signaldesk web chart-overlays AMD --provider local-fixture --llm none --output json`)
 - risk flags and unavailable context
 - report history once persistence exists
@@ -75,3 +75,14 @@ signaldesk web chart-overlays AMD --provider local-fixture --llm none --output j
 ```
 
 The command groups canonical signal-card levels into horizontal chart overlays, backend events into markers, trend regimes into badges, and risk/unavailable/provenance rows into separate renderer sections. It does not calculate moving averages, infer missing levels, fetch extra candles, or hide unavailable context; empty overlay sections mean the backend did not emit that context.
+
+
+## Watchlist scan rendering contract
+
+The watchlist scan dashboard slice is represented by `signaldesk.web.watchlist_scan_presentation.v1`:
+
+```bash
+signaldesk web watchlist-scan --watchlist watchlists/default.yaml --provider local-fixture --llm none --output json
+```
+
+The command reuses the canonical watchlist report payload, then groups ranked setup rows, failed/skipped rows, provider unavailable context, and provenance for renderer consumption. Ranking, scores, confirmation/invalidation levels, risk, and unavailable context remain backend-emitted facts; dashboard code must not rescore symbols, infer missing levels, or hide provider gaps.

@@ -36,3 +36,13 @@ def test_tox_smoke_covers_api_openapi_entrypoint() -> None:
     tox_ini = Path("tox.ini").read_text(encoding="utf-8")
 
     assert "signaldesk-api openapi" in tox_ini
+
+
+def test_tox_smoke_covers_web_watchlist_scan_entrypoint() -> None:
+    tox_ini = Path("tox.ini").read_text(encoding="utf-8")
+
+    assert (
+        "signaldesk web watchlist-scan --watchlist watchlists/default.yaml "
+        "--provider local-fixture --llm none --output json"
+        in tox_ini
+    )

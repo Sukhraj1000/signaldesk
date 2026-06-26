@@ -113,6 +113,10 @@ from signaldesk_backend.signal_cards import (
     extract_ta_signal_card,
     validate_ta_signal_card_report,
 )
+from signaldesk_backend.watchlist_scan_presentation import (
+    WATCHLIST_SCAN_PRESENTATION_SCHEMA_VERSION,
+    build_watchlist_scan_presentation,
+)
 
 __all__ = [
     "Candle",
@@ -163,6 +167,7 @@ __all__ = [
     "TwelveDataProvider",
     "UnavailableContext",
     "YFinanceProvider",
+    "WATCHLIST_SCAN_PRESENTATION_SCHEMA_VERSION",
     "attach_validated_llm_explanation_to_report",
     "average_true_range",
     "build_openai_compatible_chat_messages",
@@ -171,6 +176,7 @@ __all__ = [
     "build_provider_status_presentation",
     "build_signal_card_presentation",
     "build_ta_llm_prompt_payload",
+    "build_watchlist_scan_presentation",
     "parse_llm_explanation_response_content",
     "parse_openai_compatible_chat_response",
     "request_openai_compatible_llm_explanation",
