@@ -24,6 +24,7 @@ from signaldesk_backend import (
     assess_technical_analysis_risks,
     attach_validated_llm_explanation_to_report,
     average_true_range,
+    build_chart_overlay_presentation,
     build_openai_compatible_chat_messages,
     build_openai_compatible_chat_request,
     build_provider_status_presentation,
@@ -436,6 +437,61 @@ def web_signal_card(
 
     typer.echo(json.dumps(presentation, indent=2, sort_keys=True))
 
+
+@web_app.command("chart-overlays")
+def web_chart_overlays(
+    symbol: str,
+    provider: str | None = typer.Option(
+        None,
+        help=(
+            "Registered market-data provider to use. When omitted, SignalDesk "
+            "uses --mode role resolution."
+        ),
+    ),
+    mode: str = typer.Option(
+        "default",
+        help="Provider role mode to resolve when --provider is omitted: default or enhanced.",
+    ),
+    llm: str = typer.Option("none", help="LLM provider: none, openrouter, or openai."),
+    interval: str = typer.Option("1d", help="Historical candle interval."),
+    days: int = typer.Option(120, min=1, help="Number of calendar days of history to request."),
+    output: str = typer.Option("json", help="Output format: json."),
+) -> None:
+    """Render dashboard-facing chart overlays from canonical signal-card JSON.
+
+    This command is a UI adapter smoke path: it groups backend-emitted levels,
+    events, trend badges, risks, unavailable context, and provenance for chart
+    rendering without calculating indicators or inventing missing overlays.
+    """
+
+    llm_provider = _normalize_live_llm_provider(llm)
+    output_format = output.strip().lower()
+    if output_format != "json":
+        typer.echo("--output must be json.", err=True)
+        raise typer.Exit(2)
+
+    registry = default_provider_registry()
+    try:
+        report = _fetch_ta_report(
+            registry,
+            symbol=symbol,
+            provider=provider,
+            mode=mode,
+            interval=interval,
+            days=days,
+            as_of=datetime.now(UTC),
+            llm_provider=llm_provider,
+        )
+        report = _attach_live_llm_explanation_if_requested(report, llm_provider)
+        presentation = build_chart_overlay_presentation(extract_ta_signal_card(report))
+    except (KeyError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from exc
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
+
+    typer.echo(json.dumps(presentation, indent=2, sort_keys=True))
 
 
 @web_app.command("provider-status")

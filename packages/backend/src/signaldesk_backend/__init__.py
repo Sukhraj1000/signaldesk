@@ -1,5 +1,9 @@
 """Backend package for SignalDesk."""
 
+from signaldesk_backend.chart_overlay_presentation import (
+    CHART_OVERLAY_PRESENTATION_SCHEMA_VERSION,
+    build_chart_overlay_presentation,
+)
 from signaldesk_backend.config import Settings
 from signaldesk_backend.indicators import (
     ConfirmationInvalidationLevel,
@@ -112,6 +116,7 @@ from signaldesk_backend.signal_cards import (
 
 __all__ = [
     "Candle",
+    "CHART_OVERLAY_PRESENTATION_SCHEMA_VERSION",
     "CatalystContext",
     "CatalystContextProvider",
     "CatalystEvent",
@@ -162,6 +167,7 @@ __all__ = [
     "average_true_range",
     "build_openai_compatible_chat_messages",
     "build_openai_compatible_chat_request",
+    "build_chart_overlay_presentation",
     "build_provider_status_presentation",
     "build_signal_card_presentation",
     "build_ta_llm_prompt_payload",

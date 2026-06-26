@@ -3559,3 +3559,31 @@ def test_web_signal_card_rejects_non_json_output() -> None:
 
     assert result.exit_code == 2
     assert "--output must be 'json'." in result.output
+
+
+def test_web_chart_overlays_cli_renders_fixture_json(monkeypatch: MonkeyPatch) -> None:
+    registry = ProviderRegistry()
+    registry.register(SwingingProvider())
+    monkeypatch.setattr(cli_main, "default_provider_registry", lambda: registry)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "web",
+            "chart-overlays",
+            "AMD",
+            "--provider",
+            "swinging",
+            "--llm",
+            "none",
+            "--output",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["schema_version"] == "signaldesk.web.chart_overlay_presentation.v1"
+    assert payload["chart"]["symbol"] == "AMD"
+    assert payload["horizontal_levels"]
+    assert payload["rendering_contract"]["no_dashboard_analysis"] is True

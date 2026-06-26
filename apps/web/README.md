@@ -11,7 +11,7 @@ The dashboard should help users inspect:
 - provider status (current smoke: `signaldesk web provider-status --mode default --output json`)
 - single-symbol signal cards
 - watchlist scan results
-- chart overlays for moving averages, levels, events, confirmation, and invalidation
+- chart overlays for backend-emitted levels, events, confirmation, and invalidation (current smoke: `signaldesk web chart-overlays AMD --provider local-fixture --llm none --output json`)
 - risk flags and unavailable context
 - report history once persistence exists
 
@@ -64,3 +64,14 @@ signaldesk web provider-status --mode default --output json
 ```
 
 The command resolves the requested provider mode and groups declared provider capabilities for UI sections. It does not run live checks, read credentials, or infer provider availability. Missing enhanced roles remain explicit in `unavailable_context`, preserving the default-mode contract when paid keys are absent.
+
+
+## Chart overlay rendering contract
+
+The chart overlay dashboard slice is represented by `signaldesk.web.chart_overlay_presentation.v1`:
+
+```bash
+signaldesk web chart-overlays AMD --provider local-fixture --llm none --output json
+```
+
+The command groups canonical signal-card levels into horizontal chart overlays, backend events into markers, trend regimes into badges, and risk/unavailable/provenance rows into separate renderer sections. It does not calculate moving averages, infer missing levels, fetch extra candles, or hide unavailable context; empty overlay sections mean the backend did not emit that context.
