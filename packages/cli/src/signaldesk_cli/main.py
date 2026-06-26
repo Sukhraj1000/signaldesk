@@ -21,6 +21,7 @@ from signaldesk_backend import (
     RiskFlag,
     ScoreBreakdown,
     Settings,
+    SetupReplayReport,
     Symbol,
     assemble_ta_signal_card_report,
     assess_technical_analysis_risks,
@@ -48,6 +49,7 @@ from signaldesk_backend import (
     detect_swing_lows,
     detect_trend_regime_shift_events,
     detect_volatility_regime_events,
+    evaluate_setup_replay,
     exponential_moving_average,
     extract_ta_signal_card,
     llm_explanation_output_schema,
@@ -78,11 +80,13 @@ llm_app = typer.Typer(
     help="Inspect guarded optional LLM explanation payloads without calling an LLM."
 )
 web_app = typer.Typer(help="Render dashboard-facing payloads from canonical SignalDesk JSON.")
+backtest_app = typer.Typer(help="Evaluate historical deterministic setup labels.")
 app.add_typer(providers_app, name="providers")
 app.add_typer(config_app, name="config")
 app.add_typer(fixtures_app, name="fixtures")
 app.add_typer(llm_app, name="llm")
 app.add_typer(web_app, name="web")
+app.add_typer(backtest_app, name="backtest")
 
 
 @app.callback()
@@ -251,6 +255,7 @@ def _config_inspect_payload(settings: Settings) -> dict[str, str]:
 
 _ENHANCED_LLM_INSPECTION_PROVIDERS = {"openrouter", "openai"}
 
+
 def _normalize_llm_provider(llm: str, *, allow_enhanced_inspection: bool = False) -> str:
     """Normalize CLI LLM selection while keeping live narrative generation explicit."""
 
@@ -268,6 +273,7 @@ def _normalize_llm_provider(llm: str, *, allow_enhanced_inspection: bool = False
         typer.echo("Only --llm none is currently supported.", err=True)
     raise typer.Exit(2)
 
+
 def _ensure_no_llm_provider(llm: str) -> None:
     """Keep live/default runtime paths explicit until narrative generation is wired in."""
 
@@ -282,6 +288,7 @@ def _normalize_live_llm_provider(llm: str) -> str:
         return normalized
     typer.echo("--llm must be none, openrouter, or openai for live TA mode.", err=True)
     raise typer.Exit(2)
+
 
 def _llm_unavailable_context(llm_provider: str) -> dict[str, Any]:
     if llm_provider == "none":
@@ -298,6 +305,7 @@ def _llm_unavailable_context(llm_provider: str) -> dict[str, Any]:
         ),
         "provider": llm_provider,
     }
+
 
 def _format_config_inspect(payload: dict[str, str]) -> tuple[str, ...]:
     lines = ["setting\tvalue"]
@@ -406,6 +414,194 @@ def technical_analysis(
 
     for key, value in _ta_table_report_values(report).items():
         typer.echo(f"{key}\t{value}")
+
+
+def _parse_optional_decimal(value: str | None, *, option_name: str) -> Decimal | None:
+    if value is None:
+        return None
+    try:
+        return Decimal(value)
+    except Exception as exc:
+        typer.echo(f"{option_name} must be a decimal price.", err=True)
+        raise typer.Exit(2) from exc
+
+
+def _fetch_backtest_candles(
+    registry: ProviderRegistry,
+    *,
+    symbol: str,
+    provider: str | None,
+    mode: str,
+    interval: str,
+    days: int,
+    as_of: datetime,
+) -> tuple[Symbol, str, tuple[Candle, ...]]:
+    requested_symbol = Symbol(symbol)
+    market_data_provider, _, _ = _resolve_ta_provider(registry, provider=provider, mode=mode)
+    result = market_data_provider.get_historical_candles(
+        requested_symbol,
+        start=as_of - timedelta(days=days),
+        end=as_of,
+        interval=interval,
+    )
+    if not result.ok or not result.data:
+        diagnostic = redact_provider_diagnostic(result.error or "provider returned no candles")
+        raise RuntimeError(
+            f"{market_data_provider.name} failed for {requested_symbol.ticker}: {diagnostic}"
+        )
+    return requested_symbol, market_data_provider.name, tuple(result.data)
+
+
+def _decimal_or_none(value: Decimal | None) -> str | None:
+    return None if value is None else str(value)
+
+
+def _setup_replay_report_payload(report: SetupReplayReport) -> dict[str, Any]:
+    return {
+        "schema_version": "signaldesk.backtest.setup_replay.v1",
+        "setup_label": report.setup_label,
+        "symbol": report.symbol.ticker,
+        "timeframe": report.timeframe,
+        "sample_size": report.sample_size,
+        "evaluable_signals": report.evaluable_signals,
+        "horizons": list(report.horizons),
+        "metrics": {
+            "hit_rate": _decimal_or_none(report.metrics.hit_rate),
+            "average_forward_return_by_horizon": {
+                str(k): _decimal_or_none(v)
+                for k, v in report.metrics.average_forward_return_by_horizon.items()
+            },
+            "false_breakout_rate": _decimal_or_none(report.metrics.false_breakout_rate),
+            "max_adverse_excursion": _decimal_or_none(report.metrics.max_adverse_excursion),
+            "event_usefulness": _decimal_or_none(report.metrics.event_usefulness),
+            "data_availability_rate": str(report.metrics.data_availability_rate),
+        },
+        "observations": [
+            {
+                "signal_index": observation.signal_index,
+                "observed_at": observation.observed_at.isoformat(),
+                "entry_close": str(observation.entry_close),
+                "forward_returns_by_horizon": {
+                    str(k): _decimal_or_none(v)
+                    for k, v in observation.forward_returns_by_horizon.items()
+                },
+                "hit": observation.hit,
+                "false_breakout": observation.false_breakout,
+                "max_adverse_excursion": _decimal_or_none(observation.max_adverse_excursion),
+            }
+            for observation in report.observations
+        ],
+        "provenance": {
+            "provider": report.provenance.provider,
+            "source": report.provenance.source,
+            "generated_at": report.provenance.generated_at.isoformat(),
+            "timeframe": report.provenance.timeframe,
+            "inputs": list(report.provenance.inputs),
+            "warnings": list(report.provenance.warnings),
+        },
+        "limitations": list(report.limitations),
+        "unavailable_context": list(report.unavailable_context),
+    }
+
+
+def _setup_replay_table_lines(payload: dict[str, Any]) -> tuple[str, ...]:
+    metrics = payload["metrics"]
+    lines = [
+        "field\tvalue",
+        f"schema_version\t{payload['schema_version']}",
+        f"symbol\t{payload['symbol']}",
+        f"setup_label\t{payload['setup_label']}",
+        f"timeframe\t{payload['timeframe']}",
+        f"sample_size\t{payload['sample_size']}",
+        f"evaluable_signals\t{payload['evaluable_signals']}",
+        f"horizons\t{','.join(str(item) for item in payload['horizons'])}",
+        f"hit_rate\t{metrics['hit_rate']}",
+        f"data_availability_rate\t{metrics['data_availability_rate']}",
+        f"event_usefulness\t{metrics['event_usefulness']}",
+        f"limitation\t{'; '.join(payload['limitations'])}",
+    ]
+    if payload["unavailable_context"]:
+        lines.append(f"unavailable_context\t{'; '.join(payload['unavailable_context'])}")
+    return tuple(lines)
+
+
+@backtest_app.command("setup")
+def backtest_setup(
+    symbol: str,
+    setup_label: str = typer.Option(
+        ..., "--setup-label", help="Deterministic setup label to replay."
+    ),
+    signal_indices: list[int] | None = typer.Option(  # noqa: B008
+        None,
+        "--signal-index",
+        help="Zero-based candle index where the setup label was known. Repeatable.",
+    ),
+    horizons: list[int] | None = typer.Option(  # noqa: B008
+        None,
+        "--horizon",
+        help="Forward candle horizon to evaluate. Repeatable.",
+    ),
+    provider: str | None = typer.Option(
+        None,
+        help="Registered price provider. When omitted, SignalDesk uses --mode.",
+    ),
+    mode: str = typer.Option("default", help="Provider role mode."),
+    interval: str = typer.Option("1d", help="Historical candle interval."),
+    days: int = typer.Option(120, min=1, help="Number of calendar days of history to request."),
+    confirmation_level: str | None = typer.Option(
+        None, help="Optional confirmation close level used to score hits."
+    ),
+    invalidation_level: str | None = typer.Option(
+        None, help="Optional invalidation close level used for false breakouts."
+    ),
+    output: str = typer.Option("table", help="Output format: table or json."),
+) -> None:
+    output_format = output.strip().lower()
+    if output_format not in {"table", "json"}:
+        typer.echo("--output must be 'table' or 'json'.", err=True)
+        raise typer.Exit(2)
+    if not signal_indices:
+        typer.echo("at least one --signal-index is required.", err=True)
+        raise typer.Exit(2)
+    try:
+        requested_symbol, provider_name, candles = _fetch_backtest_candles(
+            default_provider_registry(),
+            symbol=symbol,
+            provider=provider,
+            mode=mode,
+            interval=interval,
+            days=days,
+            as_of=datetime.now(UTC),
+        )
+        report = evaluate_setup_replay(
+            setup_label=setup_label,
+            candles=candles,
+            signal_indices=signal_indices,
+            horizons=horizons or [1, 5, 20],
+            confirmation_level=_parse_optional_decimal(
+                confirmation_level, option_name="--confirmation-level"
+            ),
+            invalidation_level=_parse_optional_decimal(
+                invalidation_level, option_name="--invalidation-level"
+            ),
+            symbol=requested_symbol,
+            provider=provider_name,
+            source="cli_backtest_setup",
+            generated_at=datetime.now(UTC),
+            timeframe=interval,
+        )
+    except (KeyError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from exc
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
+    payload = _setup_replay_report_payload(report)
+    if output_format == "json":
+        typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+        return
+    for line in _setup_replay_table_lines(payload):
+        typer.echo(line)
 
 
 @web_app.command("signal-card")
@@ -603,9 +799,7 @@ def _safe_report_artifact_stem(value: object) -> str:
 def _report_artifact_path(payload: dict[str, Any], save_dir: Path) -> Path:
     report_type = _safe_report_artifact_stem(payload.get("report_type", "ta"))
     generated_at = _safe_report_artifact_stem(
-        payload.get("generated_at")
-        or payload.get("scanned_at")
-        or datetime.now(UTC).isoformat()
+        payload.get("generated_at") or payload.get("scanned_at") or datetime.now(UTC).isoformat()
     )
     symbol = payload.get("symbol")
     if symbol is None and isinstance(payload.get("facts"), dict):
@@ -652,9 +846,7 @@ def web_report_archive(
         typer.echo("--output must be 'json'.", err=True)
         raise typer.Exit(2)
     try:
-        presentation = build_report_archive_presentation(
-            _load_report_archive_reports(reports_dir)
-        )
+        presentation = build_report_archive_presentation(_load_report_archive_reports(reports_dir))
     except ValueError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(2) from exc
@@ -736,10 +928,7 @@ def _remove_llm_unavailable_context(report: dict[str, Any]) -> None:
         return [
             item
             for item in items
-            if not (
-                isinstance(item, dict)
-                and item.get("context_type") == "llm_explanation"
-            )
+            if not (isinstance(item, dict) and item.get("context_type") == "llm_explanation")
         ]
 
     report["unavailable_context"] = without_llm(report.get("unavailable_context"))
@@ -753,9 +942,8 @@ def _remove_llm_unavailable_context(report: dict[str, Any]) -> None:
         )
         signal_risk = report["signal_card"].get("risk")
         if isinstance(signal_risk, dict):
-            signal_risk["unavailable_context"] = without_llm(
-                signal_risk.get("unavailable_context")
-            )
+            signal_risk["unavailable_context"] = without_llm(signal_risk.get("unavailable_context"))
+
 
 def _format_ta_markdown(report: dict[str, Any]) -> str:
     """Render a compact Markdown report from the canonical TA signal card."""
@@ -1336,7 +1524,7 @@ def llm_input_schema(
     """Render the guarded LLM prompt payload JSON schema."""
 
     if output.strip().lower() != "json":
-        typer.echo("--output must be \"json\".", err=True)
+        typer.echo('--output must be "json".', err=True)
         raise typer.Exit(2)
     typer.echo(json.dumps(llm_prompt_payload_schema(), indent=2, sort_keys=True))
 
@@ -1590,6 +1778,7 @@ def llm_validate_chat_response(
         raise typer.Exit(1) from exc
 
     typer.echo(json.dumps(validated, indent=2, sort_keys=True))
+
 
 @llm_app.command("render-output")
 def llm_render_output(
