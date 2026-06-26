@@ -10,10 +10,12 @@ from urllib.parse import urlsplit, urlunsplit
 
 import typer
 from signaldesk_backend import (
+    CachedHistoricalCandleProvider,
     Candle,
     ConfirmationInvalidationLevel,
     FibonacciRetracementLevel,
     ProviderRegistry,
+    ProviderResponseCache,
     ProviderResult,
     ProviderRoleConfig,
     RiskFlag,
@@ -346,6 +348,16 @@ def technical_analysis(
         "--save-dir",
         help="Directory where the canonical TA report JSON artifact should be saved.",
     ),
+    cache_dir: Path | None = typer.Option(  # noqa: B008
+        None,
+        "--cache-dir",
+        help="Optional provider-response cache directory for historical candle payloads.",
+    ),
+    refresh_cache: bool = typer.Option(
+        False,
+        "--refresh-cache",
+        help="Bypass an existing provider-response cache entry and replace it with a fresh fetch.",
+    ),
 ) -> None:
     """Fetch candles and run deterministic technical analysis for one symbol."""
 
@@ -367,6 +379,8 @@ def technical_analysis(
             days=days,
             as_of=datetime.now(UTC),
             llm_provider=llm_provider,
+            cache_dir=cache_dir,
+            refresh_cache=refresh_cache,
         )
         report = _attach_live_llm_explanation_if_requested(report, llm_provider)
     except (KeyError, ValueError) as exc:
@@ -532,6 +546,16 @@ def web_watchlist_scan(
         max=16,
         help="Maximum concurrent symbol fetches for the watchlist scan.",
     ),
+    cache_dir: Path | None = typer.Option(  # noqa: B008
+        None,
+        "--cache-dir",
+        help="Optional provider-response cache directory for historical candle payloads.",
+    ),
+    refresh_cache: bool = typer.Option(
+        False,
+        "--refresh-cache",
+        help="Bypass existing provider-response cache entries and replace them with fresh fetches.",
+    ),
 ) -> None:
     """Render dashboard-facing watchlist scan rows from canonical report JSON.
 
@@ -555,6 +579,8 @@ def web_watchlist_scan(
             interval=interval,
             days=days,
             max_workers=max_workers,
+            cache_dir=cache_dir,
+            refresh_cache=refresh_cache,
         )
         presentation = build_watchlist_scan_presentation(payload)
     except (KeyError, ValueError) as exc:
@@ -1097,6 +1123,8 @@ def _fetch_ta_report(
     days: int,
     as_of: datetime,
     llm_provider: str = "none",
+    cache_dir: Path | None = None,
+    refresh_cache: bool = False,
 ) -> dict[str, Any]:
     requested_symbol = Symbol(symbol)
     (
@@ -1104,6 +1132,14 @@ def _fetch_ta_report(
         provider_mode_payload,
         mode_unavailable_context,
     ) = _resolve_ta_provider(registry, provider=provider, mode=mode)
+
+    if cache_dir is not None:
+        market_data_provider = CachedHistoricalCandleProvider(
+            provider=market_data_provider,
+            cache=ProviderResponseCache(cache_dir),
+            provider_mode=str(provider_mode_payload["mode"]),
+            refresh=refresh_cache,
+        )
 
     start = as_of - timedelta(days=days)
     result = market_data_provider.get_historical_candles(
@@ -1595,6 +1631,16 @@ def scan_watchlist(
         max=16,
         help="Maximum concurrent symbol fetches for the watchlist scan.",
     ),
+    cache_dir: Path | None = typer.Option(  # noqa: B008
+        None,
+        "--cache-dir",
+        help="Optional provider-response cache directory for historical candle payloads.",
+    ),
+    refresh_cache: bool = typer.Option(
+        False,
+        "--refresh-cache",
+        help="Bypass existing provider-response cache entries and replace them with fresh fetches.",
+    ),
 ) -> None:
     """Run deterministic TA summaries for every symbol in a watchlist."""
 
@@ -1621,6 +1667,8 @@ def scan_watchlist(
             interval=interval,
             days=days,
             max_workers=max_workers,
+            cache_dir=cache_dir,
+            refresh_cache=refresh_cache,
         )
     except (KeyError, ValueError) as exc:
         typer.echo(str(exc), err=True)
@@ -1742,6 +1790,8 @@ def _scan_watchlist_payload(
     interval: str,
     days: int,
     max_workers: int = 4,
+    cache_dir: Path | None = None,
+    refresh_cache: bool = False,
 ) -> tuple[int, dict[str, Any]]:
     registry = default_provider_registry()
     scanned_at = datetime.now(UTC)
@@ -1790,6 +1840,8 @@ def _scan_watchlist_payload(
                 interval=interval,
                 days=days,
                 as_of=scanned_at,
+                cache_dir=cache_dir,
+                refresh_cache=refresh_cache,
             ): symbol
             for symbol in symbols
         }
@@ -1836,6 +1888,8 @@ def _scan_symbol_result(
     interval: str,
     days: int,
     as_of: datetime,
+    cache_dir: Path | None = None,
+    refresh_cache: bool = False,
 ) -> dict[str, Any]:
     try:
         report = _fetch_ta_report(
@@ -1846,6 +1900,8 @@ def _scan_symbol_result(
             interval=interval,
             days=days,
             as_of=as_of,
+            cache_dir=cache_dir,
+            refresh_cache=refresh_cache,
         )
     except RuntimeError as exc:
         return {
@@ -2074,6 +2130,16 @@ def report_watchlist(
         "--save-dir",
         help="Directory where the canonical watchlist report JSON artifact should be saved.",
     ),
+    cache_dir: Path | None = typer.Option(  # noqa: B008
+        None,
+        "--cache-dir",
+        help="Optional provider-response cache directory for historical candle payloads.",
+    ),
+    refresh_cache: bool = typer.Option(
+        False,
+        "--refresh-cache",
+        help="Bypass existing provider-response cache entries and replace them with fresh fetches.",
+    ),
 ) -> None:
     """Generate a deterministic report for a watchlist."""
 
@@ -2092,6 +2158,8 @@ def report_watchlist(
             interval=interval,
             days=days,
             max_workers=max_workers,
+            cache_dir=cache_dir,
+            refresh_cache=refresh_cache,
         )
     except (KeyError, ValueError) as exc:
         typer.echo(str(exc), err=True)
