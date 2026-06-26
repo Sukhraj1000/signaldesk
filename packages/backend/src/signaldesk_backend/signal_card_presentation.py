@@ -37,8 +37,8 @@ def build_signal_card_presentation(signal_card: Mapping[str, Any]) -> dict[str, 
             "support": _display_items(levels.get("support")),
             "resistance": _display_items(levels.get("resistance")),
             "fibonacci": _display_items(levels.get("fibonacci")),
-            "confirmation": _display_items(levels.get("confirmation")),
-            "invalidation": _display_items(levels.get("invalidation")),
+            "confirmation": _emphasized_display_items(levels.get("confirmation")),
+            "invalidation": _emphasized_display_items(levels.get("invalidation")),
         },
         "event_rows": _display_items(signal_card.get("events")),
         "risk_panel": {
@@ -47,6 +47,12 @@ def build_signal_card_presentation(signal_card: Mapping[str, Any]) -> dict[str, 
         },
         "score_rows": _display_items(score.get("breakdowns")),
         "provenance_rows": _display_items(signal_card.get("provenance")),
+        "rendering_contract": {
+            "canonical_source": "signal_card",
+            "no_dashboard_analysis": True,
+            "emphasized_level_groups": ["confirmation", "invalidation"],
+            "unavailable_context_visible": True,
+        },
         "narrative": signal_card.get("narrative"),
     }
 
@@ -83,6 +89,10 @@ def _display_items(value: object) -> list[dict[str, Any]]:
     if isinstance(value, Iterable) and not isinstance(value, (str, bytes)):
         return [_display_item(item) for item in value]
     return [{"label": "value", "value": value}]
+
+
+def _emphasized_display_items(value: object) -> list[dict[str, Any]]:
+    return [{**item, "emphasis": True} for item in _display_items(value)]
 
 
 def _display_item(item: object) -> dict[str, Any]:
