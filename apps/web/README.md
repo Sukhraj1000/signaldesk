@@ -42,3 +42,14 @@ This keeps the future web app as a presentation adapter. It must not re-run indi
 - `/health` or equivalent app smoke is tested
 - chart overlays are derived from backend level/event models
 - visual tests or screenshots are added once UI becomes active
+
+
+## Runtime smoke path
+
+Until a browser dashboard exists, the fixture rendering contract is exercised through the CLI adapter:
+
+```bash
+signaldesk web signal-card AMD --provider local-fixture --llm none --output json
+```
+
+The command emits `signaldesk.web.signal_card_presentation.v1` by fetching the canonical TA report, extracting its nested `signal_card`, and building renderer-facing sections. It is intentionally JSON-only so downstream UI code consumes the same grouped facts, levels, events, risk, unavailable context, scores, and provenance that backend code already validates.

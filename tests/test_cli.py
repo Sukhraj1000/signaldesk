@@ -3477,3 +3477,59 @@ def test_llm_prompt_payload_rejects_unknown_live_llm_option() -> None:
 
     assert result.exit_code == 2
     assert "--llm must be none, openrouter, or openai" in result.output
+
+
+def test_web_signal_card_renders_fixture_presentation_json() -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "web",
+            "signal-card",
+            "AMD",
+            "--provider",
+            "local-fixture",
+            "--llm",
+            "none",
+            "--output",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["schema_version"] == "signaldesk.web.signal_card_presentation.v1"
+    assert payload["headline"]["symbol"] == "AMD"
+    assert payload["provider_badge"] == {
+        "mode": "explicit",
+        "price_provider": "local-fixture",
+    }
+    assert set(payload["level_groups"]) == {
+        "support",
+        "resistance",
+        "fibonacci",
+        "confirmation",
+        "invalidation",
+    }
+    unavailable_labels = {
+        row["label"] for row in payload["risk_panel"]["unavailable_context"]
+    }
+    assert {"fundamentals", "catalyst", "llm_explanation"} <= unavailable_labels
+    assert payload["narrative"] is None
+
+
+def test_web_signal_card_rejects_non_json_output() -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "web",
+            "signal-card",
+            "AMD",
+            "--provider",
+            "local-fixture",
+            "--output",
+            "table",
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert "--output must be 'json'." in result.output
