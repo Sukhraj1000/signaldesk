@@ -1,0 +1,216 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:signaldesk:schema:backtest-setup-replay-v1",
+  "title": "SignalDesk backtest setup replay report",
+  "description": "Machine-readable deterministic historical setup replay output from signaldesk backtest setup. Research-only; no broker, order, fill, position-sizing, slippage, recommendation, or live-trading fields are permitted.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "setup_label",
+    "symbol",
+    "timeframe",
+    "sample_size",
+    "evaluable_signals",
+    "horizons",
+    "metrics",
+    "observations",
+    "provenance",
+    "limitations",
+    "unavailable_context"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "signaldesk.backtest.setup_replay.v1"
+    },
+    "setup_label": {
+      "type": "string",
+      "minLength": 1
+    },
+    "symbol": {
+      "type": "string",
+      "minLength": 1
+    },
+    "timeframe": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sample_size": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "evaluable_signals": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "horizons": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "minItems": 1
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "hit_rate",
+        "average_forward_return_by_horizon",
+        "false_breakout_rate",
+        "max_adverse_excursion",
+        "event_usefulness",
+        "data_availability_rate"
+      ],
+      "properties": {
+        "hit_rate": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "average_forward_return_by_horizon": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "false_breakout_rate": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "max_adverse_excursion": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "event_usefulness": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "data_availability_rate": {
+          "type": "string"
+        }
+      }
+    },
+    "observations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "signal_index",
+          "observed_at",
+          "entry_close",
+          "forward_returns_by_horizon",
+          "hit",
+          "false_breakout",
+          "max_adverse_excursion"
+        ],
+        "properties": {
+          "signal_index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "entry_close": {
+            "type": "string"
+          },
+          "forward_returns_by_horizon": {
+            "type": "object",
+            "additionalProperties": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "hit": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "false_breakout": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "max_adverse_excursion": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "source",
+        "generated_at",
+        "timeframe",
+        "inputs",
+        "warnings"
+      ],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "generated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "timeframe": {
+          "type": "string",
+          "minLength": 1
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "unavailable_context": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}
