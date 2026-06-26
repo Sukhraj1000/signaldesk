@@ -23,6 +23,7 @@ signaldesk ta AMD --llm none --output json
 signaldesk scan --watchlist watchlists/default.yaml --provider local-fixture --max-workers 4 --output json
 signaldesk report --watchlist watchlists/default.yaml --provider local-fixture --format json
 signaldesk fixtures generate --symbol AMD --output-dir fixtures/local --output json
+signaldesk backtest setup AMD --setup-label breakout_watch --signal-index 10 --horizon 5 --provider local-fixture --output json
 ```
 
 ## Provider modes
@@ -69,6 +70,8 @@ Each configured provider must be registered, advertise the requested role, and b
 Enhanced signal-card behavior is documented in `../../docs/enhanced-context.md`. Future provider configuration can build on these resolved roles to split price, catalyst, fundamentals, and LLM providers.
 
 `signaldesk fixtures generate` writes deterministic `local-csv` compatible OHLCV CSV files for demos, docs, and no-network provider experiments without committing live market-data dumps. Use `--output json` for machine-readable file paths and row counts.
+
+`signaldesk backtest setup` replays already-labeled deterministic setup points over historical candles and emits `signaldesk.backtest.setup_replay.v1`. The command defaults to `local-fixture` in default mode so the core backtest smoke path remains useful without paid keys or network access. Reports include metrics, provenance, limitations, and unavailable forward-window context, but intentionally exclude broker, order, fill, position-sizing, slippage, recommendation, and live-trading fields. The machine-readable schema lives at [`../../docs/schemas/signaldesk.backtest.setup_replay.v1.schema.json`](../../docs/schemas/signaldesk.backtest.setup_replay.v1.schema.json).
 
 `signaldesk scan --watchlist watchlists/default.yaml` reads a small YAML watchlist with a top-level `symbols:` list and renders deterministic TA summaries for each symbol from the same canonical signal-card object used by `signaldesk ta`. Use `--output json` for machine-readable summaries that preserve provider/provenance and unavailable context. For no-network smoke checks, run with `--provider local-fixture` or set `SIGNALDESK_DEFAULT_PRICE_PROVIDER=local-fixture`.
 

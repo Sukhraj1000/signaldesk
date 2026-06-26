@@ -55,6 +55,21 @@ The machine-readable prompt payload schema lives at [`docs/schemas/signaldesk.ll
 
 Future OpenAI-compatible or local LLM adapters should call these same backend contracts before and after provider invocation. `parse_openai_compatible_chat_response()` is the no-network adapter boundary for OpenRouter/OpenAI-compatible responses: it accepts exactly one assistant message choice as raw JSON, rejects tool calls, and validates the explanation schema before narrative attachment. Adapters must not receive provider clients, tool handles, hidden market context, credentials, or authority to override unavailable context from external text.
 
+
+## Backtest setup replay JSON
+
+`signaldesk backtest setup <SYMBOL> --setup-label <LABEL> --signal-index <N> --output json` emits `signaldesk.backtest.setup_replay.v1`, a deterministic research report for historical setup labels. In default mode the command uses `local-fixture` when no provider is passed, keeping the smoke path no-network and useful without paid keys.
+
+The payload contains:
+
+- `setup_label`, `symbol`, `timeframe`, `sample_size`, `evaluable_signals`, and evaluated `horizons`.
+- `metrics`: hit rate, average forward return by horizon, false breakout rate, max adverse excursion proxy, event usefulness, and data availability rate. Decimal values are serialized as strings, and unavailable metric values are `null`.
+- `observations`: one row per supplied signal index, including the observed candle timestamp, entry close, forward returns by horizon, hit/false-breakout flags, and max adverse excursion proxy.
+- `provenance`: provider, source, generated timestamp, timeframe, inputs, and warnings.
+- `limitations` and `unavailable_context`: required explicit report sections so missing forward windows or scope limits are visible instead of silently omitted.
+
+Backtest setup replay is research-only. The JSON schema deliberately has no broker, order, fill, position-sizing, slippage, recommendation, or live-trading fields. The schema lives at [`docs/schemas/signaldesk.backtest.setup_replay.v1.schema.json`](schemas/signaldesk.backtest.setup_replay.v1.schema.json).
+
 ## TA and watchlist Markdown reports
 
 `signaldesk ta <SYMBOL> --llm none --output markdown` renders a compact human-readable report from the same canonical `signal_card` object used by JSON output. The Markdown report separates facts, deterministic signals, risks, unavailable context, provenance, and optional narrative state. It includes the generated timestamp, price provider, latest observed close, explicit missing enhanced/LLM context, and provider/source/timeframe/input/generated-at provenance without introducing LLM-derived facts or extra provider data.

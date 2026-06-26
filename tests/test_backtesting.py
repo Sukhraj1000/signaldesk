@@ -1,5 +1,7 @@
+import json
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 from signaldesk_backend import Candle, Symbol
@@ -7,6 +9,7 @@ from signaldesk_backend.backtesting import (
     SetupReplayReport,
     evaluate_setup_replay,
 )
+from signaldesk_cli.main import _setup_replay_report_payload
 
 BASE_TIME = datetime(2026, 1, 1, tzinfo=UTC)
 
@@ -157,3 +160,33 @@ def test_evaluate_setup_replay_rejects_ambiguous_or_execution_like_inputs() -> N
             signal_indices=(0,),
             symbol=Symbol("NVDA"),
         )
+
+
+def test_setup_replay_json_schema_documents_cli_payload_contract() -> None:
+    candles = (_candle(0, "100"), _candle(1, "101"), _candle(2, "102"))
+    report = evaluate_setup_replay(
+        setup_label="breakout_watch",
+        candles=candles,
+        signal_indices=(0, 1),
+        horizons=(1,),
+        generated_at=BASE_TIME,
+        timeframe="1d",
+    )
+
+    payload = _setup_replay_report_payload(report)
+    schema_path = (
+        Path(__file__).resolve().parents[1]
+        / "docs"
+        / "schemas"
+        / "signaldesk.backtest.setup_replay.v1.schema.json"
+    )
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+
+    assert payload["schema_version"] == schema["properties"]["schema_version"]["const"]
+    assert set(schema["required"]) == set(payload)
+    assert set(schema["properties"]["metrics"]["required"]) == set(payload["metrics"])
+    assert set(schema["properties"]["provenance"]["required"]) == set(payload["provenance"])
+    forbidden_execution_fields = {"broker", "order", "fill", "position_size", "slippage"}
+    assert forbidden_execution_fields.isdisjoint(schema["properties"])
+    assert schema["additionalProperties"] is False
+    assert payload["limitations"]
