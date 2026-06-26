@@ -42,6 +42,7 @@ from signaldesk_backend import (
     classify_volume_regime,
     default_provider_registry,
     derive_confirmation_invalidation_levels,
+    derive_setup_signal_indices,
     detect_breakout_breakdown_events,
     detect_moving_average_cross_events,
     detect_overextension_events,
@@ -461,7 +462,6 @@ def _decimal_or_none(value: Decimal | None) -> str | None:
     return None if value is None else str(value)
 
 
-
 def _setup_replay_metrics_payload(metrics: SetupReplayMetrics) -> dict[str, Any]:
     return {
         "hit_rate": _decimal_or_none(metrics.hit_rate),
@@ -474,6 +474,7 @@ def _setup_replay_metrics_payload(metrics: SetupReplayMetrics) -> dict[str, Any]
         "event_usefulness": _decimal_or_none(metrics.event_usefulness),
         "data_availability_rate": str(metrics.data_availability_rate),
     }
+
 
 def _setup_replay_report_payload(report: SetupReplayReport) -> dict[str, Any]:
     return {
@@ -559,7 +560,10 @@ def backtest_setup(
     signal_indices: list[int] | None = typer.Option(  # noqa: B008
         None,
         "--signal-index",
-        help="Zero-based candle index where the setup label was known. Repeatable.",
+        help=(
+            "Zero-based candle index where the setup label was known. Repeatable. "
+            "When omitted, built-in deterministic setup labels are derived from history."
+        ),
     ),
     horizons: list[int] | None = typer.Option(  # noqa: B008
         None,
@@ -591,9 +595,6 @@ def backtest_setup(
     if output_format not in {"table", "json"}:
         typer.echo("--output must be 'table' or 'json'.", err=True)
         raise typer.Exit(2)
-    if not signal_indices:
-        typer.echo("at least one --signal-index is required.", err=True)
-        raise typer.Exit(2)
     backtest_provider = provider
     if backtest_provider is None and mode.strip().lower() == "default":
         backtest_provider = "local-fixture"
@@ -613,10 +614,20 @@ def backtest_setup(
             days=days,
             as_of=datetime.now(UTC),
         )
+        replay_signal_indices = tuple(signal_indices or ())
+        if not replay_signal_indices:
+            replay_signal_indices = derive_setup_signal_indices(
+                setup_label=setup_label, candles=candles
+            )
+        if not replay_signal_indices:
+            raise ValueError(
+                "no historical signals matched --setup-label; provide --signal-index "
+                "or choose a supported deterministic setup label with matching history"
+            )
         report = evaluate_setup_replay(
             setup_label=setup_label,
             candles=candles,
-            signal_indices=signal_indices,
+            signal_indices=replay_signal_indices,
             horizons=horizons or [1, 5, 20],
             confirmation_level=parsed_confirmation_level,
             invalidation_level=parsed_invalidation_level,

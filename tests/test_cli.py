@@ -3908,8 +3908,6 @@ def test_backtest_setup_command_outputs_research_only_json() -> None:
     ]
 
 
-
-
 def test_backtest_setup_command_uses_local_fixture_when_provider_is_omitted() -> None:
     result = CliRunner().invoke(
         app,
@@ -3977,7 +3975,8 @@ def test_backtest_setup_rejects_non_finite_decimal_level() -> None:
     assert result.exit_code == 2
     assert "--confirmation-level must be a decimal price." in result.output
 
-def test_backtest_setup_command_requires_signal_index() -> None:
+
+def test_backtest_setup_command_reports_no_derived_setup_signals() -> None:
     result = CliRunner().invoke(
         app,
         [
@@ -3993,4 +3992,4 @@ def test_backtest_setup_command_requires_signal_index() -> None:
         ],
     )
     assert result.exit_code == 2
-    assert "at least one --signal-index is required" in result.output
+    assert "no historical signals matched --setup-label" in result.output
