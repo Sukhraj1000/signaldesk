@@ -102,6 +102,10 @@ from signaldesk_backend.providers import (
     redact_provider_diagnostic,
     resolve_provider_mode,
 )
+from signaldesk_backend.report_archive_presentation import (
+    REPORT_ARCHIVE_PRESENTATION_SCHEMA_VERSION,
+    build_report_archive_presentation,
+)
 from signaldesk_backend.risks import assess_technical_analysis_risks
 from signaldesk_backend.scoring import score_technical_analysis
 from signaldesk_backend.signal_card_presentation import (
@@ -147,6 +151,7 @@ __all__ = [
     "ProviderRegistry",
     "PRESENTATION_SCHEMA_VERSION",
     "PROVIDER_STATUS_PRESENTATION_SCHEMA_VERSION",
+    "REPORT_ARCHIVE_PRESENTATION_SCHEMA_VERSION",
     "ProviderResult",
     "ProviderRoleConfig",
     "Provenance",
@@ -174,6 +179,7 @@ __all__ = [
     "build_openai_compatible_chat_request",
     "build_chart_overlay_presentation",
     "build_provider_status_presentation",
+    "build_report_archive_presentation",
     "build_signal_card_presentation",
     "build_ta_llm_prompt_payload",
     "build_watchlist_scan_presentation",
