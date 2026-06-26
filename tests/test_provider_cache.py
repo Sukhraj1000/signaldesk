@@ -51,7 +51,9 @@ class CountingProvider:
         self.calls += 1
         if self.fail:
             return ProviderResult.failure(
-                provider=self.name, error="token=secret upstream unavailable"
+                provider=self.name,
+                error="token=secret upstream unavailable",
+                warnings=("api_key=secret warning",),
             )
         return ProviderResult.success(provider=self.name, data=(_candle(),))
 
@@ -244,4 +246,8 @@ def test_cached_provider_failure_remains_explicit_unavailable_context_shape(
     assert "token=<redacted>" in (first.error or "")
     assert "secret" not in (second.error or "")
     assert "token=<redacted>" in (second.error or "")
+    assert "secret" not in " ".join(first.warnings)
+    assert any("api_key=<redacted>" in warning for warning in first.warnings)
+    assert "secret" not in " ".join(second.warnings)
+    assert any("api_key=<redacted>" in warning for warning in second.warnings)
     assert "provider-cache: cached failure" in second.warnings

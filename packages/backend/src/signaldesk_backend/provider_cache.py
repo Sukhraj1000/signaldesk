@@ -214,7 +214,7 @@ class CachedHistoricalCandleProvider:
             result = ProviderResult.failure(
                 provider=result.provider,
                 error=redact_provider_diagnostic(result.error or "provider failed"),
-                warnings=result.warnings,
+                warnings=tuple(redact_provider_diagnostic(warning) for warning in result.warnings),
             )
         if result.ok or self.cache_failures:
             self.cache.write_historical_candles(key, result)
