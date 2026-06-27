@@ -794,6 +794,73 @@ def _setup_batch_table_lines(payload: dict[str, Any]) -> tuple[str, ...]:
     return tuple(lines)
 
 
+def _setup_batch_markdown(payload: dict[str, Any]) -> str:
+    """Render a user-facing batch setup replay report from canonical payload data."""
+
+    summary = payload["summary"]
+    best_label = summary["best_setup_label_by_event_usefulness"] or "unavailable"
+    best_event_usefulness = summary["best_event_usefulness"] or "unavailable"
+    average_data_availability = summary["average_data_availability_rate"] or "unavailable"
+    lines = [
+        f"# SignalDesk setup batch replay: {payload["symbol"]}",
+        "",
+        "## Report boundaries",
+        "- Historical setup replay is deterministic research only.",
+        (
+            "- It does not include broker, order, fill, position sizing, slippage, "
+            "or live trading behavior."
+        ),
+        "- Labels with no signals or insufficient history are unavailable context.",
+        "",
+        "## Batch sample",
+        f"- Schema version: `{payload["schema_version"]}`",
+        f"- Symbol: `{payload["symbol"]}`",
+        f"- Timeframe: `{payload["timeframe"]}`",
+        f"- Provider: `{payload["provider"]}`",
+        f"- Source: `{payload["source"]}`",
+        (
+            f"- Candles: `{payload["candle_count"]}` "
+            f"from `{payload["data_start"]}` to `{payload["data_end"]}`"
+        ),
+        "",
+        "## Summary",
+        f"- Evaluated labels: `{summary["evaluated_label_count"]}`",
+        f"- Unavailable labels: `{summary["unavailable_label_count"]}`",
+        f"- Total signal count: `{summary["total_signal_count"]}`",
+        f"- Evaluation coverage rate: `{summary["evaluation_coverage_rate"]}`",
+        f"- Average data availability rate: `{average_data_availability}`",
+        (
+            "- Best setup label by event usefulness: "
+            f"`{best_label}` (`{best_event_usefulness}`)"
+        ),
+        "",
+        "## Label results",
+        (
+            "| setup_label | status | signals | evaluable_signals | "
+            "data_availability_rate | unavailable_context |"
+        ),
+        "| --- | --- | ---: | ---: | --- | --- |",
+    ]
+    for item in payload["labels"]:
+        report = item["report"]
+        evaluable_signals = "0" if report is None else str(report["evaluable_signals"])
+        data_availability_rate = (
+            "unavailable" if report is None else report["metrics"]["data_availability_rate"]
+        )
+        unavailable_context = "; ".join(item["unavailable_context"]) or "none"
+        lines.append(
+            f"| {item["setup_label"]} | {item["status"]} | "
+            f"{len(item["signal_indices"])} | {evaluable_signals} | "
+            f"{data_availability_rate} | {unavailable_context} |"
+        )
+    lines.extend(["", "## Limitations"])
+    for item in payload["limitations"]:
+        lines.append(f"- {item}")
+    for item in summary["limitations"]:
+        lines.append(f"- {item}")
+    return "\n".join(lines) + "\n"
+
+
 @backtest_app.command("setup-batch")
 def backtest_setup_batch(
     symbol: str,
@@ -815,13 +882,13 @@ def backtest_setup_batch(
         min=1,
         help="Optional signal count per chronological walk-forward validation window.",
     ),
-    output: str = typer.Option("table", help="Output format: table or json."),
+    output: str = typer.Option("table", help="Output format: table, json, or markdown."),
 ) -> None:
     """Replay every built-in deterministic setup label over the same candle history."""
 
     output_format = output.strip().lower()
-    if output_format not in {"table", "json"}:
-        typer.echo("--output must be 'table' or 'json'.", err=True)
+    if output_format not in {"table", "json", "markdown", "md"}:
+        typer.echo("--output must be table, json, markdown, or md.", err=True)
         raise typer.Exit(2)
     backtest_provider = provider
     if backtest_provider is None and mode.strip().lower() == "default":
@@ -853,6 +920,9 @@ def backtest_setup_batch(
         raise typer.Exit(1) from exc
     if output_format == "json":
         typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+        return
+    if output_format in {"markdown", "md"}:
+        typer.echo(_setup_batch_markdown(payload), nl=False)
         return
     for line in _setup_batch_table_lines(payload):
         typer.echo(line)

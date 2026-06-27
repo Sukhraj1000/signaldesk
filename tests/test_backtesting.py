@@ -12,7 +12,7 @@ from signaldesk_backend.backtesting import (
     evaluate_setup_replay,
     supported_setup_labels,
 )
-from signaldesk_cli.main import _setup_replay_report_payload
+from signaldesk_cli.main import _setup_batch_markdown, _setup_replay_report_payload
 
 BASE_TIME = datetime(2026, 1, 1, tzinfo=UTC)
 
@@ -475,6 +475,87 @@ def test_setup_replay_json_schema_documents_cli_payload_contract() -> None:
     assert forbidden_execution_fields.isdisjoint(schema["properties"])
     assert schema["additionalProperties"] is False
     assert payload["limitations"]
+
+
+
+def test_setup_batch_markdown_renders_summary_limitations_and_unavailable_context() -> None:
+    report = evaluate_setup_replay(
+        setup_label="breakdown_watch",
+        candles=(
+            _candle(0, "100"),
+            _candle(1, "99"),
+            _candle(2, "98"),
+        ),
+        signal_indices=(0,),
+        horizons=(1,),
+        provider="local-fixture",
+        source="cli_backtest_setup_batch",
+        generated_at=BASE_TIME,
+        timeframe="1d",
+    )
+    payload: dict[str, Any] = {
+        "schema_version": "signaldesk.backtest.setup_batch.v1",
+        "symbol": "AMD",
+        "timeframe": "1d",
+        "candle_count": 3,
+        "data_start": BASE_TIME.isoformat(),
+        "data_end": (BASE_TIME + timedelta(days=2)).isoformat(),
+        "provider": "local-fixture",
+        "source": "cli_backtest_setup_batch",
+        "summary": {
+            "evaluated_label_count": 1,
+            "unavailable_label_count": 1,
+            "total_signal_count": 1,
+            "evaluation_coverage_rate": "0.50",
+            "average_data_availability_rate": "1.00",
+            "best_setup_label_by_event_usefulness": "breakdown_watch",
+            "best_event_usefulness": "-0.0050",
+            "limitations": [
+                "Summary rankings are deterministic historical research only; they are not "
+                "recommendations or live trading instructions.",
+                "Labels with no signals or insufficient history remain counted as unavailable "
+                "context rather than negative setup evidence.",
+            ],
+        },
+        "labels": [
+            {
+                "setup_label": "breakdown_watch",
+                "status": "evaluated",
+                "signal_indices": [0],
+                "report": _setup_replay_report_payload(report),
+                "unavailable_context": [],
+            },
+            {
+                "setup_label": "breakout_watch",
+                "status": "no_signals",
+                "signal_indices": [],
+                "report": None,
+                "unavailable_context": [
+                    "No historical candles matched this deterministic setup label."
+                ],
+            },
+        ],
+        "limitations": [
+            "Historical setup replay is deterministic research only; "
+            "it is not live trading or broker execution."
+        ],
+    }
+
+    markdown = _setup_batch_markdown(payload)
+
+    assert markdown.startswith("# SignalDesk setup batch replay: AMD\n")
+    assert "- Schema version: `signaldesk.backtest.setup_batch.v1`" in markdown
+    assert "- Provider: `local-fixture`" in markdown
+    assert "- Evaluation coverage rate: `0.50`" in markdown
+    assert "- Best setup label by event usefulness: `breakdown_watch` (`-0.0050`)" in markdown
+    assert "| breakdown_watch | evaluated | 1 | 1 | 1.00 | none |" in markdown
+    assert (
+        "| breakout_watch | no_signals | 0 | 0 | unavailable | "
+        "No historical candles matched this deterministic setup label. |"
+    ) in markdown
+    assert "## Limitations" in markdown
+    assert "not live trading or broker execution" in markdown
+    assert "not recommendations or live trading instructions" in markdown
 
 
 def test_setup_batch_json_schema_documents_batch_payload_contract() -> None:
