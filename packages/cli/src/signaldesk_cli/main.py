@@ -1456,6 +1456,8 @@ def _format_ta_markdown(report: dict[str, Any]) -> str:
     risk_scores = [item for item in score["breakdowns"] if item["category"] == "risk"]
     trend_regime = trend["regimes"]["trend"]
     generated_at = identity["generated_at"]
+    run = report.get("run", {})
+    provider_fetch_duration_ms = run.get("provider_fetch_duration_ms", "unavailable")
     setup_quality_score = setup_scores[0]["score"] if setup_scores else "unavailable"
     risk_score = risk_scores[0]["score"] if risk_scores else "unavailable"
     confirmation_level = _format_optional_level(levels["confirmation"])
@@ -1466,6 +1468,8 @@ def _format_ta_markdown(report: dict[str, Any]) -> str:
         "",
         "## Facts",
         f"- Generated at: `{generated_at}`",
+        f"- Run ID: `{identity.get('run_id', 'unavailable')}`",
+        f"- Provider fetch duration: `{provider_fetch_duration_ms} ms`",
         f"- Schema version: `{identity['schema_version']}`",
         f"- Symbol: `{identity['symbol']}`",
         f"- Timeframe: `{identity['timeframe']}`",
@@ -1824,12 +1828,15 @@ def _fetch_ta_report(
         )
 
     start = as_of - timedelta(days=days)
+    run_id = f"ta-{uuid4()}"
+    provider_fetch_started = perf_counter()
     try:
         result = market_data_provider.get_historical_candles(
             requested_symbol, start=start, end=as_of, interval=interval
         )
-    except OSError as exc:
-        raise RuntimeError(f"provider cache unavailable: {exc}") from exc
+    except OSError:
+        raise RuntimeError("provider cache unavailable") from None
+    provider_fetch_duration_ms = int((perf_counter() - provider_fetch_started) * 1000)
     if not result.ok or not result.data:
         diagnostic = redact_provider_diagnostic(result.error or "provider returned no candles")
         raise RuntimeError(
@@ -1858,6 +1865,8 @@ def _fetch_ta_report(
         enhanced_provenance=context_payloads["provenance"],
         enhanced_unavailable_context=context_payloads["unavailable_context"],
         llm_provider=llm_provider,
+        run_id=run_id,
+        provider_fetch_duration_ms=provider_fetch_duration_ms,
     )
     validate_ta_signal_card_report(report)
     return report
@@ -3271,6 +3280,8 @@ def _technical_analysis_report(
     enhanced_provenance: list[dict[str, Any]] | None = None,
     enhanced_unavailable_context: tuple[dict[str, Any], ...] = (),
     llm_provider: str = "none",
+    run_id: str | None = None,
+    provider_fetch_duration_ms: int = 0,
 ) -> dict[str, Any]:
     closes = tuple(candle.close for candle in candles)
     sma_20 = simple_moving_average(closes, period=20)[-1]
@@ -3394,11 +3405,13 @@ def _technical_analysis_report(
         )
     )
 
+    report_run_id = run_id or f"ta-{uuid4()}"
     identity = {
         "symbol": symbol.ticker,
         "timeframe": interval,
         "generated_at": as_of.isoformat(),
         "schema_version": "signaldesk.ta.v1",
+        "run_id": report_run_id,
     }
     trend = {
         "moving_averages": {
@@ -3467,6 +3480,13 @@ def _technical_analysis_report(
         },
         llm=llm_provider,
         flat_fields={
+            "run_id": report_run_id,
+            "run": {
+                "run_id": report_run_id,
+                "generated_at": as_of.isoformat(),
+                "provider_fetch_duration_ms": max(0, provider_fetch_duration_ms),
+                "price_provider": provider_name,
+            },
             "symbol": facts["symbol"],
             "provider": facts["provider"],
             "interval": facts["interval"],
