@@ -4091,3 +4091,58 @@ def test_backtest_setup_labels_command_lists_discoverable_research_labels() -> N
     assert table_result.exit_code == 0, table_result.output
     assert "setup_label" in table_result.stdout
     assert "relative_volume_spike" in table_result.stdout
+
+
+
+
+def test_backtest_setup_batch_command_reports_every_builtin_label() -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "backtest",
+            "setup-batch",
+            "AMD",
+            "--provider",
+            "local-fixture",
+            "--horizon",
+            "1",
+            "--output",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["schema_version"] == "signaldesk.backtest.setup_batch.v1"
+    assert payload["symbol"] == "AMD"
+    assert payload["provider"] == "local-fixture"
+    assert [item["setup_label"] for item in payload["labels"]] == [
+        "breakdown_watch",
+        "breakout_watch",
+        "moving_average_loss",
+        "moving_average_reclaim",
+        "relative_volume_spike",
+    ]
+    assert {item["status"] for item in payload["labels"]} <= {"evaluated", "no_signals"}
+    assert payload["limitations"] == [
+        "Historical setup replay is deterministic research only; "
+        "it is not live trading or broker execution."
+    ]
+    for item in payload["labels"]:
+        if item["status"] == "evaluated":
+            assert item["report"]["provenance"]["source"] == "cli_backtest_setup_batch"
+        else:
+            assert item["report"] is None
+            assert item["unavailable_context"] == [
+                "No historical candles matched this deterministic setup label."
+            ]
+
+
+def test_backtest_setup_batch_table_keeps_no_signal_labels_visible() -> None:
+    result = CliRunner().invoke(
+        app,
+        ["backtest", "setup-batch", "AMD", "--provider", "local-fixture"],
+    )
+    assert result.exit_code == 0, result.output
+    assert "setup_label\tstatus\tsignal_count" in result.stdout
+    assert "breakout_watch" in result.stdout
+    assert "No historical candles matched this deterministic setup label." in result.stdout

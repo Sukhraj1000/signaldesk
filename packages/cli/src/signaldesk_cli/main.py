@@ -623,6 +623,152 @@ def _setup_replay_markdown(payload: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
+
+def _setup_batch_payload(
+    *,
+    symbol: Symbol,
+    provider_name: str,
+    candles: tuple[Candle, ...],
+    setup_labels: tuple[str, ...],
+    horizons: list[int] | None,
+    interval: str,
+    walk_forward_window_size: int | None,
+) -> dict[str, Any]:
+    """Evaluate every requested deterministic setup label over one candle history."""
+
+    labels: list[dict[str, Any]] = []
+    for setup_label in setup_labels:
+        signal_indices = derive_setup_signal_indices(setup_label=setup_label, candles=candles)
+        if not signal_indices:
+            labels.append({
+                "setup_label": setup_label,
+                "status": "no_signals",
+                "signal_indices": [],
+                "report": None,
+                "unavailable_context": [
+                    "No historical candles matched this deterministic setup label."
+                ],
+            })
+            continue
+        report = evaluate_setup_replay(
+            setup_label=setup_label,
+            candles=candles,
+            signal_indices=signal_indices,
+            horizons=horizons or [1, 5, 20],
+            symbol=symbol,
+            provider=provider_name,
+            source="cli_backtest_setup_batch",
+            generated_at=datetime.now(UTC),
+            timeframe=interval,
+            walk_forward_window_size=walk_forward_window_size,
+        )
+        labels.append({
+            "setup_label": setup_label,
+            "status": "evaluated",
+            "signal_indices": list(signal_indices),
+            "report": _setup_replay_report_payload(report),
+            "unavailable_context": list(report.unavailable_context),
+        })
+    return {
+        "schema_version": "signaldesk.backtest.setup_batch.v1",
+        "symbol": symbol.ticker,
+        "timeframe": interval,
+        "candle_count": len(candles),
+        "data_start": candles[0].timestamp.isoformat(),
+        "data_end": candles[-1].timestamp.isoformat(),
+        "provider": provider_name,
+        "source": "cli_backtest_setup_batch",
+        "labels": labels,
+        "limitations": [
+            "Historical setup replay is deterministic research only; "
+            "it is not live trading or broker execution."
+        ],
+    }
+
+
+def _setup_batch_table_lines(payload: dict[str, Any]) -> tuple[str, ...]:
+    lines = [
+        "setup_label\tstatus\tsignal_count\tevaluable_signals\t"
+        "data_availability_rate\tunavailable_context"
+    ]
+    for item in payload["labels"]:
+        report = item["report"]
+        evaluable_signals = "0" if report is None else str(report["evaluable_signals"])
+        data_availability_rate = (
+            "unavailable" if report is None else report["metrics"]["data_availability_rate"]
+        )
+        unavailable_context = "; ".join(item["unavailable_context"]) or "none"
+        lines.append(
+            f"{item['setup_label']}	{item['status']}	{len(item['signal_indices'])}	"
+            f"{evaluable_signals}	{data_availability_rate}	{unavailable_context}"
+        )
+    return tuple(lines)
+
+
+@backtest_app.command("setup-batch")
+def backtest_setup_batch(
+    symbol: str,
+    horizons: list[int] | None = typer.Option(  # noqa: B008
+        None,
+        "--horizon",
+        help="Forward candle horizon to evaluate. Repeatable.",
+    ),
+    provider: str | None = typer.Option(
+        None,
+        help="Registered price provider. When omitted, SignalDesk uses --mode.",
+    ),
+    mode: str = typer.Option("default", help="Provider role mode."),
+    interval: str = typer.Option("1d", help="Historical candle interval."),
+    days: int = typer.Option(120, min=1, help="Number of calendar days of history to request."),
+    walk_forward_window_size: int | None = typer.Option(
+        None,
+        "--walk-forward-window-size",
+        min=1,
+        help="Optional signal count per chronological walk-forward validation window.",
+    ),
+    output: str = typer.Option("table", help="Output format: table or json."),
+) -> None:
+    """Replay every built-in deterministic setup label over the same candle history."""
+
+    output_format = output.strip().lower()
+    if output_format not in {"table", "json"}:
+        typer.echo("--output must be 'table' or 'json'.", err=True)
+        raise typer.Exit(2)
+    backtest_provider = provider
+    if backtest_provider is None and mode.strip().lower() == "default":
+        backtest_provider = "local-fixture"
+    try:
+        requested_symbol, provider_name, candles = _fetch_backtest_candles(
+            default_provider_registry(),
+            symbol=symbol,
+            provider=backtest_provider,
+            mode=mode,
+            interval=interval,
+            days=days,
+            as_of=datetime.now(UTC),
+        )
+        payload = _setup_batch_payload(
+            symbol=requested_symbol,
+            provider_name=provider_name,
+            candles=candles,
+            setup_labels=supported_setup_labels(),
+            horizons=horizons,
+            interval=interval,
+            walk_forward_window_size=walk_forward_window_size,
+        )
+    except (KeyError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from exc
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
+    if output_format == "json":
+        typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+        return
+    for line in _setup_batch_table_lines(payload):
+        typer.echo(line)
+
+
 @backtest_app.command("setup-labels")
 def backtest_setup_labels(
     output: str = typer.Option("table", help="Output format: table or json."),
