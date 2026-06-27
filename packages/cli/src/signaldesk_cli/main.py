@@ -67,6 +67,7 @@ from signaldesk_backend import (
     resolve_provider_mode,
     score_technical_analysis,
     simple_moving_average,
+    supported_setup_labels,
     validate_ta_signal_card_report,
     volume_moving_average,
 )
@@ -549,6 +550,35 @@ def _setup_replay_table_lines(payload: dict[str, Any]) -> tuple[str, ...]:
     if payload["unavailable_context"]:
         lines.append(f"unavailable_context\t{'; '.join(payload['unavailable_context'])}")
     return tuple(lines)
+
+
+@backtest_app.command("setup-labels")
+def backtest_setup_labels(
+    output: str = typer.Option("table", help="Output format: table or json."),
+) -> None:
+    """List deterministic setup labels that can be derived from historical candles."""
+
+    output_format = output.strip().lower()
+    if output_format not in {"table", "json"}:
+        typer.echo("--output must be 'table' or 'json'.", err=True)
+        raise typer.Exit(2)
+    labels = supported_setup_labels()
+    payload = {
+        "schema_version": "signaldesk.backtest.setup_labels.v1",
+        "setup_labels": list(labels),
+        "default_provider": "local-fixture",
+        "source": "deterministic_candle_rules",
+        "limitations": [
+            "Labels are deterministic research setup rules derived from historical candles; "
+            "they are not recommendations, orders, broker instructions, or live trading behavior."
+        ],
+    }
+    if output_format == "json":
+        typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+        return
+    typer.echo("setup_label")
+    for label in labels:
+        typer.echo(label)
 
 
 @backtest_app.command("setup")

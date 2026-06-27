@@ -3993,3 +3993,31 @@ def test_backtest_setup_command_reports_no_derived_setup_signals() -> None:
     )
     assert result.exit_code == 2
     assert "no historical signals matched --setup-label" in result.output
+
+
+def test_backtest_setup_labels_command_lists_discoverable_research_labels() -> None:
+    result = CliRunner().invoke(app, ["backtest", "setup-labels", "--output", "json"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload == {
+        "schema_version": "signaldesk.backtest.setup_labels.v1",
+        "setup_labels": [
+            "breakdown_watch",
+            "breakout_watch",
+            "moving_average_loss",
+            "moving_average_reclaim",
+            "relative_volume_spike",
+        ],
+        "default_provider": "local-fixture",
+        "source": "deterministic_candle_rules",
+        "limitations": [
+            "Labels are deterministic research setup rules derived from historical candles; "
+            "they are not recommendations, orders, broker instructions, or live trading behavior."
+        ],
+    }
+
+    table_result = CliRunner().invoke(app, ["backtest", "setup-labels"])
+    assert table_result.exit_code == 0, table_result.output
+    assert "setup_label" in table_result.stdout
+    assert "relative_volume_spike" in table_result.stdout

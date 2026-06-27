@@ -9,6 +9,7 @@ from signaldesk_backend.backtesting import (
     SetupReplayReport,
     derive_setup_signal_indices,
     evaluate_setup_replay,
+    supported_setup_labels,
 )
 from signaldesk_cli.main import _setup_replay_report_payload
 
@@ -25,6 +26,16 @@ def _candle(day: int, close: str, high: str | None = None, low: str | None = Non
         low=Decimal(low) if low is not None else price,
         close=price,
         volume=1_000,
+    )
+
+
+def test_supported_setup_labels_are_canonical_and_discoverable() -> None:
+    assert supported_setup_labels() == (
+        "breakdown_watch",
+        "breakout_watch",
+        "moving_average_loss",
+        "moving_average_reclaim",
+        "relative_volume_spike",
     )
 
 

@@ -89,6 +89,12 @@ class SetupReplayReport:
     unavailable_context: tuple[str, ...]
 
 
+def supported_setup_labels() -> tuple[str, ...]:
+    """Return deterministic setup labels that SignalDesk can derive from candles."""
+
+    return tuple(sorted(_SUPPORTED_SETUP_LABELS))
+
+
 def derive_setup_signal_indices(
     *,
     setup_label: str,
