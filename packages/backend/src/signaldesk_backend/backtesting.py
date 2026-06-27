@@ -78,6 +78,9 @@ class SetupReplayReport:
     setup_label: str
     symbol: Symbol
     timeframe: str
+    candle_count: int
+    data_start: datetime
+    data_end: datetime
     sample_size: int
     evaluable_signals: int
     horizons: tuple[int, ...]
@@ -203,6 +206,9 @@ def evaluate_setup_replay(
         setup_label=normalized_label,
         symbol=report_symbol,
         timeframe=timeframe.strip() or "1d",
+        candle_count=len(normalized_candles),
+        data_start=normalized_candles[0].timestamp,
+        data_end=normalized_candles[-1].timestamp,
         sample_size=len(normalized_indices),
         evaluable_signals=sum(
             1

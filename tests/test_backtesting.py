@@ -99,6 +99,9 @@ def test_evaluate_setup_replay_reports_forward_returns_and_limits_scope() -> Non
 
     assert isinstance(report, SetupReplayReport)
     assert report.setup_label == "breakout_watch"
+    assert report.candle_count == 5
+    assert report.data_start == candles[0].timestamp
+    assert report.data_end == candles[-1].timestamp
     assert report.sample_size == 2
     assert report.evaluable_signals == 2
     assert report.metrics.hit_rate == Decimal("1.00")
@@ -309,6 +312,9 @@ def test_setup_replay_json_schema_documents_cli_payload_contract() -> None:
     metrics_schema = schema["$defs"][metrics_schema_ref.rsplit("/", 1)[-1]]
 
     assert payload["schema_version"] == schema["properties"]["schema_version"]["const"]
+    assert payload["candle_count"] == len(candles)
+    assert payload["data_start"] == candles[0].timestamp.isoformat()
+    assert payload["data_end"] == candles[-1].timestamp.isoformat()
     assert set(schema["required"]) == set(payload)
     assert set(metrics_schema["required"]) == set(payload["metrics"])
     assert set(schema["properties"]["provenance"]["required"]) == set(payload["provenance"])
