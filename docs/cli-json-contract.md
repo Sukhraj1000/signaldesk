@@ -26,6 +26,8 @@ When configured providers return enhanced context, `facts.fundamentals` contains
 
 `signaldesk providers check --output json` includes a top-level `run` object so provider diagnostics can be tied to a specific execution without exposing credentials. The run metadata includes a generated `run_id`, `generated_at` timestamp, elapsed `duration_ms`, `provider_count`, `failed_count`, and whether `--live-check-only` limited the checked providers. Provider rows continue to report sanitized `provider`, `status`, `result`, and `warnings` values.
 
+API error responses include a credential-safe request id in both `error.request_id` and the `X-SignalDesk-Request-Id` response header. The id is operational correlation context only; it does not expose provider payloads or secrets, and it makes validation, provider, and planned-endpoint failures easier to trace in logs or client reports.
+
 ## Provider mode behavior
 
 Default mode remains useful without paid keys. Enhanced provider or LLM fields must be optional, fixture-backed in tests, or reported as unavailable context rather than silently omitted.

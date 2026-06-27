@@ -6,6 +6,7 @@ from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import parse_qs, unquote
+from uuid import uuid4
 
 from signaldesk_backend import Settings, default_provider_registry, redact_provider_diagnostic
 from signaldesk_backend.providers import MarketDataProvider
@@ -38,6 +39,17 @@ def _json_response(
     headers.extend(extra_headers or [])
     start_response(status, headers)
     return [body]
+
+
+def _api_request_id() -> str:
+    return f"api-request-{uuid4()}"
+
+
+def _error_payload_with_request_id(payload: JsonPayload, request_id: str) -> JsonPayload:
+    error = payload.get("error")
+    if not isinstance(error, dict):
+        return payload
+    return {**payload, "error": {**error, "request_id": request_id}}
 
 
 def _not_found(path: str) -> JsonPayload:
@@ -386,20 +398,39 @@ class SignalDeskApiApp:
     def __call__(self, environ: dict[str, Any], start_response: StartResponse) -> Iterable[bytes]:
         method = str(environ.get("REQUEST_METHOD", "GET")).upper()
         path = str(environ.get("PATH_INFO", "/"))
+        request_id = _api_request_id()
+
+        def respond(
+            status: str,
+            payload: JsonPayload,
+            *,
+            extra_headers: list[tuple[str, str]] | None = None,
+        ) -> list[bytes]:
+            response_payload = payload
+            if not status.startswith(("200", "201", "204")):
+                response_payload = _error_payload_with_request_id(payload, request_id)
+            headers = [("X-SignalDesk-Request-Id", request_id)]
+            headers.extend(extra_headers or [])
+            return _json_response(
+                start_response,
+                status,
+                response_payload,
+                extra_headers=headers,
+            )
+
         is_known_path = path in {"/health", "/providers", "/scan", "/reports", "/openapi.json"}
         ta_symbol = _symbol_ta_path_symbol(path)
         if not is_known_path and ta_symbol is None:
-            return _json_response(start_response, "404 Not Found", _not_found(path))
+            return respond("404 Not Found", _not_found(path))
         if method != "GET":
-            return _json_response(
-                start_response,
+            return respond(
                 "405 Method Not Allowed",
                 _method_not_allowed(method),
                 extra_headers=[("Allow", "GET")],
             )
         query = parse_qs(str(environ.get("QUERY_STRING", "")))
         if path == "/health":
-            return _json_response(start_response, "200 OK", health_payload())
+            return respond("200 OK", health_payload())
         if path == "/providers":
             payload = providers_payload()
             if "role" in query:
@@ -407,19 +438,15 @@ class SignalDeskApiApp:
                 payload["providers"] = [
                     item for item in payload["providers"] if item.get("data_role") in roles
                 ]
-            return _json_response(start_response, "200 OK", payload)
+            return respond("200 OK", payload)
         if path in {"/scan", "/reports"}:
-            return _json_response(
-                start_response, "501 Not Implemented", _planned_endpoint_unavailable(path)
-            )
+            return respond("501 Not Implemented", _planned_endpoint_unavailable(path))
         if ta_symbol is not None:
             try:
-                return _json_response(
-                    start_response, "200 OK", _symbol_ta_payload(ta_symbol, query)
-                )
+                return respond("200 OK", _symbol_ta_payload(ta_symbol, query))
             except ApiHttpError as exc:
-                return _json_response(start_response, exc.status, exc.payload)
-        return _json_response(start_response, "200 OK", openapi_schema())
+                return respond(exc.status, exc.payload)
+        return respond("200 OK", openapi_schema())
 
 
 def create_app() -> SignalDeskApiApp:
