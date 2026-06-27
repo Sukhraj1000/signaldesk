@@ -555,6 +555,67 @@ def _setup_replay_table_lines(payload: dict[str, Any]) -> tuple[str, ...]:
     return tuple(lines)
 
 
+def _setup_replay_markdown(payload: dict[str, Any]) -> str:
+    """Render a user-facing historical setup replay report from canonical payload data."""
+
+    metrics = payload["metrics"]
+    provenance = payload["provenance"]
+    average_returns = metrics["average_forward_return_by_horizon"]
+    lines = [
+        f"# SignalDesk setup replay: {payload['symbol']} {payload['setup_label']}",
+        "",
+        "## Report boundaries",
+        "- Historical setup replay is deterministic research only.",
+        (
+            "- It does not include broker, order, fill, position sizing, slippage, "
+            "or live trading behavior."
+        ),
+        "- Missing forward windows are unavailable context, not a silent all-clear.",
+        "",
+        "## Setup sample",
+        f"- Schema version: `{payload['schema_version']}`",
+        f"- Symbol: `{payload['symbol']}`",
+        f"- Setup label: `{payload['setup_label']}`",
+        f"- Timeframe: `{payload['timeframe']}`",
+        (
+            f"- Candles: `{payload['candle_count']}` from `{payload['data_start']}` "
+            f"to `{payload['data_end']}`"
+        ),
+        f"- Signals evaluated: `{payload['evaluable_signals']}` of `{payload['sample_size']}`",
+        f"- Horizons: `{', '.join(str(item) for item in payload['horizons'])}`",
+        "",
+        "## Metrics",
+        f"- Hit rate: `{metrics['hit_rate'] or 'unavailable'}`",
+        f"- Data availability rate: `{metrics['data_availability_rate']}`",
+        f"- False breakout rate: `{metrics['false_breakout_rate'] or 'unavailable'}`",
+        f"- Max adverse excursion proxy: `{metrics['max_adverse_excursion'] or 'unavailable'}`",
+        f"- Event usefulness: `{metrics['event_usefulness'] or 'unavailable'}`",
+        "- Average forward return by horizon:",
+    ]
+    for horizon, value in average_returns.items():
+        lines.append(f"  - `{horizon}`: `{value or 'unavailable'}`")
+    lines.extend(["", "## Unavailable context"])
+    if payload["unavailable_context"]:
+        lines.extend(f"- {item}" for item in payload["unavailable_context"])
+    else:
+        lines.append("- none")
+    lines.extend(["", "## Limitations"])
+    lines.extend(f"- {item}" for item in payload["limitations"])
+    lines.extend(
+        [
+            "",
+            "## Provenance",
+            f"- Provider: `{provenance['provider']}`",
+            f"- Source: `{provenance['source']}`",
+            f"- Generated at: `{provenance['generated_at']}`",
+            f"- Inputs: `{', '.join(provenance['inputs']) or 'none'}`",
+        ]
+    )
+    if provenance["warnings"]:
+        lines.append(f"- Warnings: `{'; '.join(provenance['warnings'])}`")
+    return "\n".join(lines) + "\n"
+
+
 @backtest_app.command("setup-labels")
 def backtest_setup_labels(
     output: str = typer.Option("table", help="Output format: table or json."),
@@ -622,11 +683,11 @@ def backtest_setup(
         min=1,
         help="Optional signal count per chronological walk-forward validation window.",
     ),
-    output: str = typer.Option("table", help="Output format: table or json."),
+    output: str = typer.Option("table", help="Output format: table, json, or markdown."),
 ) -> None:
     output_format = output.strip().lower()
-    if output_format not in {"table", "json"}:
-        typer.echo("--output must be 'table' or 'json'.", err=True)
+    if output_format not in {"table", "json", "markdown", "md"}:
+        typer.echo("--output must be 'table', 'json', 'markdown', or 'md'.", err=True)
         raise typer.Exit(2)
     backtest_provider = provider
     if backtest_provider is None and mode.strip().lower() == "default":
@@ -680,6 +741,9 @@ def backtest_setup(
     payload = _setup_replay_report_payload(report)
     if output_format == "json":
         typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+        return
+    if output_format in {"markdown", "md"}:
+        typer.echo(_setup_replay_markdown(payload), nl=False)
         return
     for line in _setup_replay_table_lines(payload):
         typer.echo(line)

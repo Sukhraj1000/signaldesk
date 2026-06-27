@@ -3953,6 +3953,35 @@ def test_backtest_setup_table_includes_provenance() -> None:
     assert "generated_at\t" in result.stdout
 
 
+def test_backtest_setup_markdown_renders_boundaries_and_provenance() -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "backtest",
+            "setup",
+            "AMD",
+            "--provider",
+            "local-fixture",
+            "--setup-label",
+            "breakout watch",
+            "--signal-index",
+            "0",
+            "--horizon",
+            "1",
+            "--output",
+            "markdown",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert result.stdout.startswith("# SignalDesk setup replay: AMD breakout_watch")
+    assert "## Report boundaries" in result.stdout
+    assert "does not include broker, order, fill, position sizing, slippage" in result.stdout
+    assert "## Limitations" in result.stdout
+    assert "Historical setup replay is deterministic research only" in result.stdout
+    assert "- Provider: `local-fixture`" in result.stdout
+    assert "- Source: `cli_backtest_setup`" in result.stdout
+
+
 def test_backtest_setup_rejects_non_finite_decimal_level() -> None:
     result = CliRunner().invoke(
         app,
