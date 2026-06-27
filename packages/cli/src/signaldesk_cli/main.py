@@ -639,7 +639,9 @@ def _setup_batch_payload(
     """Evaluate every requested deterministic setup label over one candle history."""
 
     labels: list[dict[str, Any]] = []
+    resolved_horizons = horizons or [1, 5, 20]
     details_by_label = {item["setup_label"]: dict(item) for item in supported_setup_label_details()}
+    generated_at = datetime.now(UTC)
     for setup_label in setup_labels:
         setup_label_detail = details_by_label[setup_label]
         if len(candles) <= SETUP_DERIVATION_LOOKBACK:
@@ -676,11 +678,11 @@ def _setup_batch_payload(
             setup_label=setup_label,
             candles=candles,
             signal_indices=signal_indices,
-            horizons=horizons or [1, 5, 20],
+            horizons=resolved_horizons,
             symbol=symbol,
             provider=provider_name,
             source="cli_backtest_setup_batch",
-            generated_at=datetime.now(UTC),
+            generated_at=generated_at,
             timeframe=interval,
             walk_forward_window_size=walk_forward_window_size,
         )
@@ -701,6 +703,23 @@ def _setup_batch_payload(
         "data_end": candles[-1].timestamp.isoformat(),
         "provider": provider_name,
         "source": "cli_backtest_setup_batch",
+        "provenance": {
+            "provider": provider_name,
+            "source": "cli_backtest_setup_batch",
+            "generated_at": generated_at.isoformat(),
+            "timeframe": interval,
+            "inputs": {
+                "symbol": symbol.ticker,
+                "setup_labels": list(setup_labels),
+                "horizons": list(resolved_horizons),
+                "walk_forward_window_size": walk_forward_window_size,
+            },
+            "warnings": [
+                context
+                for item in labels
+                for context in item["unavailable_context"]
+            ],
+        },
         "summary": _setup_batch_summary(labels),
         "labels": labels,
         "limitations": [
@@ -826,6 +845,7 @@ def _setup_batch_markdown(payload: dict[str, Any]) -> str:
         f"- Timeframe: `{payload["timeframe"]}`",
         f"- Provider: `{payload["provider"]}`",
         f"- Source: `{payload["source"]}`",
+        f"- Generated at: `{payload["provenance"]["generated_at"]}`",
         (
             f"- Candles: `{payload["candle_count"]}` "
             f"from `{payload["data_start"]}` to `{payload["data_end"]}`"
