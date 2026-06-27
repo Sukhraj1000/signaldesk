@@ -19,6 +19,15 @@ SECRET_VALUE_RE = re.compile(
     r"-----BEGIN [A-Z ]*PRIVATE KEY-----)"
 )
 
+SENSITIVE_DOTENV_SAMPLE_SUFFIXES = (".example", ".sample", ".template")
+SENSITIVE_KEY_FILE_NAMES = {
+    "id_dsa",
+    "id_ecdsa",
+    "id_ed25519",
+    "id_rsa",
+}
+SENSITIVE_KEY_FILE_SUFFIXES = (".pem", ".p12", ".pfx")
+
 
 def run(args: list[str]) -> str:
     completed = subprocess.run(args, cwd=ROOT, text=True, capture_output=True, check=True)
@@ -81,6 +90,32 @@ def check_env() -> None:
         ok("no secret-like environment variable names detected")
 
 
+def is_sensitive_secret_path(rel: str) -> bool:
+    """Return true when a repo path looks like a credential file.
+
+    This intentionally checks filenames in addition to value patterns because ignored
+    or newly added dotenv/key files can leak before a scanner sees a known token
+    shape. Template files such as .env.example remain allowed.
+    """
+
+    name = Path(rel).name.lower()
+    if name == ".env":
+        return True
+    if name.startswith(".env.") and not name.endswith(SENSITIVE_DOTENV_SAMPLE_SUFFIXES):
+        return True
+    if name in SENSITIVE_KEY_FILE_NAMES:
+        return True
+    return name.endswith(SENSITIVE_KEY_FILE_SUFFIXES)
+
+
+def check_sensitive_secret_filenames() -> None:
+    files = run(["git", "ls-files", "--cached", "--others", "--exclude-standard"]).splitlines()
+    offenders = sorted(rel for rel in files if is_sensitive_secret_path(rel))
+    if offenders:
+        fail("secret-looking filenames found in git-visible files: " + ", ".join(offenders))
+    ok("no secret-looking filenames found in git-visible files")
+
+
 def check_tracked_secret_patterns() -> None:
     files = run(["git", "ls-files", "--cached", "--others", "--exclude-standard"]).splitlines()
     offenders: list[str] = []
@@ -103,6 +138,7 @@ def main() -> None:
     check_repo()
     check_branch()
     check_env()
+    check_sensitive_secret_filenames()
     check_tracked_secret_patterns()
     print("Preflight complete.")
 
