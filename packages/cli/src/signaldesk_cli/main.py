@@ -639,6 +639,7 @@ def _setup_batch_payload(
     """Evaluate every requested deterministic setup label over one candle history."""
 
     labels: list[dict[str, Any]] = []
+    resolved_horizons = horizons or [1, 5, 20]
     details_by_label = {item["setup_label"]: dict(item) for item in supported_setup_label_details()}
     generated_at = datetime.now(UTC)
     for setup_label in setup_labels:
@@ -677,7 +678,7 @@ def _setup_batch_payload(
             setup_label=setup_label,
             candles=candles,
             signal_indices=signal_indices,
-            horizons=horizons or [1, 5, 20],
+            horizons=resolved_horizons,
             symbol=symbol,
             provider=provider_name,
             source="cli_backtest_setup_batch",
@@ -707,7 +708,12 @@ def _setup_batch_payload(
             "source": "cli_backtest_setup_batch",
             "generated_at": generated_at.isoformat(),
             "timeframe": interval,
-            "inputs": [symbol.ticker, *setup_labels],
+            "inputs": {
+                "symbol": symbol.ticker,
+                "setup_labels": list(setup_labels),
+                "horizons": list(resolved_horizons),
+                "walk_forward_window_size": walk_forward_window_size,
+            },
             "warnings": [
                 context
                 for item in labels

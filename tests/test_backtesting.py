@@ -531,7 +531,12 @@ def test_setup_batch_markdown_renders_summary_limitations_and_unavailable_contex
             "source": "cli_backtest_setup_batch",
             "generated_at": BASE_TIME.isoformat(),
             "timeframe": "1d",
-            "inputs": ["AMD", "breakdown_watch", "breakout_watch"],
+            "inputs": {
+                "symbol": "AMD",
+                "setup_labels": ["breakdown_watch", "breakout_watch"],
+                "horizons": [1],
+                "walk_forward_window_size": None,
+            },
             "warnings": ["No historical candles matched this deterministic setup label."],
         },
         "summary": {
@@ -638,14 +643,18 @@ def test_setup_batch_json_schema_documents_batch_payload_contract() -> None:
             "source": "cli_backtest_setup_batch",
             "generated_at": BASE_TIME.isoformat(),
             "timeframe": "1d",
-            "inputs": [
-                "AMD",
-                "breakdown_watch",
-                "breakout_watch",
-                "moving_average_loss",
-                "moving_average_reclaim",
-                "relative_volume_spike",
-            ],
+            "inputs": {
+                "symbol": "AMD",
+                "setup_labels": [
+                    "breakdown_watch",
+                    "breakout_watch",
+                    "moving_average_loss",
+                    "moving_average_reclaim",
+                    "relative_volume_spike",
+                ],
+                "horizons": [1],
+                "walk_forward_window_size": None,
+            },
             "warnings": [
                 *no_signal_context,
                 *no_signal_context,

@@ -246,11 +246,42 @@
           "minLength": 1
         },
         "inputs": {
-          "type": "array",
-          "minItems": 2,
-          "items": {
-            "type": "string",
-            "minLength": 1
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "symbol",
+            "setup_labels",
+            "horizons",
+            "walk_forward_window_size"
+          ],
+          "properties": {
+            "symbol": {
+              "type": "string",
+              "minLength": 1
+            },
+            "setup_labels": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "horizons": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "walk_forward_window_size": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1
+            }
           }
         },
         "warnings": {
