@@ -164,6 +164,34 @@ def test_supported_setup_labels_are_canonical_and_discoverable() -> None:
     )
 
 
+def test_setup_labels_json_schema_documents_discovery_contract() -> None:
+    schema_dir = Path(__file__).resolve().parents[1] / "docs" / "schemas"
+    schema_path = schema_dir / "signaldesk.backtest.setup_labels.v1.schema.json"
+    schema: dict[str, Any] = json.loads(schema_path.read_text(encoding="utf-8"))
+    payload: dict[str, Any] = {
+        "schema_version": "signaldesk.backtest.setup_labels.v1",
+        "setup_labels": list(supported_setup_labels()),
+        "default_provider": "local-fixture",
+        "source": "deterministic_candle_rules",
+        "limitations": [
+            "Labels are deterministic research setup rules derived from historical candles; "
+            "they are not recommendations, orders, broker instructions, or live trading behavior."
+        ],
+    }
+
+    _validate_json_schema_subset(schema, payload, schema_dir=schema_dir)
+    forbidden_execution_fields = {
+        "broker",
+        "order",
+        "fill",
+        "position_size",
+        "slippage",
+        "recommendation",
+    }
+    assert forbidden_execution_fields.isdisjoint(schema["properties"])
+    assert schema["additionalProperties"] is False
+
+
 def test_derive_setup_signal_indices_finds_deterministic_builtin_labels() -> None:
     candles = (
         _candle(0, "10", high="11", low="9"),

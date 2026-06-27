@@ -39,4 +39,4 @@ The batch payload keeps every supported setup label in the response. A label can
 
 ## Contract files
 
-Machine-readable contracts live in [`schemas/signaldesk.backtest.setup_replay.v1.schema.json`](schemas/signaldesk.backtest.setup_replay.v1.schema.json) and [`schemas/signaldesk.backtest.setup_batch.v1.schema.json`](schemas/signaldesk.backtest.setup_batch.v1.schema.json). The CLI JSON contract summary is in [`cli-json-contract.md`](cli-json-contract.md).
+Machine-readable contracts live in [`schemas/signaldesk.backtest.setup_labels.v1.schema.json`](schemas/signaldesk.backtest.setup_labels.v1.schema.json), [`schemas/signaldesk.backtest.setup_replay.v1.schema.json`](schemas/signaldesk.backtest.setup_replay.v1.schema.json), and [`schemas/signaldesk.backtest.setup_batch.v1.schema.json`](schemas/signaldesk.backtest.setup_batch.v1.schema.json). The CLI JSON contract summary is in [`cli-json-contract.md`](cli-json-contract.md).
