@@ -512,6 +512,21 @@ def test_setup_batch_json_schema_documents_batch_payload_contract() -> None:
         "data_end": (BASE_TIME + timedelta(days=2)).isoformat(),
         "provider": "local-fixture",
         "source": "cli_backtest_setup_batch",
+        "summary": {
+            "evaluated_label_count": 1,
+            "unavailable_label_count": 4,
+            "total_signal_count": 1,
+            "evaluation_coverage_rate": "0.20",
+            "average_data_availability_rate": "1.00",
+            "best_setup_label_by_event_usefulness": "breakdown_watch",
+            "best_event_usefulness": "-0.0050",
+            "limitations": [
+                "Summary rankings are deterministic historical research only; they are not "
+                "recommendations or live trading instructions.",
+                "Labels with no signals or insufficient history remain counted as unavailable "
+                "context rather than negative setup evidence.",
+            ],
+        },
         "labels": [
             {
                 "setup_label": "breakdown_watch",
@@ -568,6 +583,23 @@ def test_setup_batch_json_schema_documents_batch_payload_contract() -> None:
     assert payload["schema_version"] == schema["properties"]["schema_version"]["const"]
     assert set(schema["required"]) == set(payload)
     assert set(label_schema["required"]) == set(payload["labels"][0])
+    summary_schema = schema["properties"]["summary"]
+    assert set(summary_schema["required"]) == set(payload["summary"])
+    assert payload["summary"]["limitations"]
+    decimal_string_pattern = r"^-?\d+(?:\.\d+)?$"
+    summary_properties = summary_schema["properties"]
+    assert (
+        summary_properties["evaluation_coverage_rate"]["pattern"]
+        == decimal_string_pattern
+    )
+    assert (
+        summary_properties["average_data_availability_rate"]["pattern"]
+        == decimal_string_pattern
+    )
+    assert (
+        summary_properties["best_event_usefulness"]["pattern"]
+        == decimal_string_pattern
+    )
     assert [item["setup_label"] for item in payload["labels"]] == list(supported_setup_labels())
     assert schema["properties"]["labels"]["minItems"] == len(supported_setup_labels())
     assert schema["properties"]["labels"]["maxItems"] == len(supported_setup_labels())

@@ -695,6 +695,7 @@ def _setup_batch_payload(
         "data_end": candles[-1].timestamp.isoformat(),
         "provider": provider_name,
         "source": "cli_backtest_setup_batch",
+        "summary": _setup_batch_summary(labels),
         "labels": labels,
         "limitations": [
             "Historical setup replay is deterministic research only; "
@@ -703,10 +704,81 @@ def _setup_batch_payload(
     }
 
 
+def _setup_batch_summary(labels: list[dict[str, Any]]) -> dict[str, Any]:
+    """Summarize setup usefulness without hiding unavailable label context."""
+
+    evaluated_labels = [item for item in labels if item["status"] == "evaluated"]
+    total_labels = len(labels)
+    total_signal_count = sum(len(item["signal_indices"]) for item in labels)
+    data_availability_values = [
+        Decimal(item["report"]["metrics"]["data_availability_rate"])
+        for item in evaluated_labels
+        if item["report"] is not None
+    ]
+    ranked_labels = [
+        item
+        for item in evaluated_labels
+        if item["report"] is not None
+        and item["report"]["metrics"]["event_usefulness"] is not None
+    ]
+    ranked_labels.sort(
+        key=lambda item: (
+            Decimal(item["report"]["metrics"]["event_usefulness"]),
+            item["setup_label"],
+        ),
+        reverse=True,
+    )
+    best_label = ranked_labels[0] if ranked_labels else None
+    best_event_usefulness = (
+        best_label["report"]["metrics"]["event_usefulness"] if best_label is not None else None
+    )
+    average_data_availability = None
+    if data_availability_values:
+        average_data_availability = str(
+            (sum(data_availability_values) / Decimal(len(data_availability_values))).quantize(
+                Decimal("0.01")
+            )
+        )
+    return {
+        "evaluated_label_count": len(evaluated_labels),
+        "unavailable_label_count": total_labels - len(evaluated_labels),
+        "total_signal_count": total_signal_count,
+        "evaluation_coverage_rate": str(
+            (Decimal(len(evaluated_labels)) / Decimal(total_labels)).quantize(Decimal("0.01"))
+            if total_labels
+            else Decimal("0.00")
+        ),
+        "average_data_availability_rate": average_data_availability,
+        "best_setup_label_by_event_usefulness": (
+            best_label["setup_label"] if best_label is not None else None
+        ),
+        "best_event_usefulness": best_event_usefulness,
+        "limitations": [
+            "Summary rankings are deterministic historical research only; they are not "
+            "recommendations or live trading instructions.",
+            "Labels with no signals or insufficient history remain counted as unavailable "
+            "context rather than negative setup evidence.",
+        ],
+    }
+
+
 def _setup_batch_table_lines(payload: dict[str, Any]) -> tuple[str, ...]:
+    summary = payload["summary"]
     lines = [
+        "summary\tvalue",
+        "evaluated_label_count\t{}".format(summary["evaluated_label_count"]),
+        "unavailable_label_count\t{}".format(summary["unavailable_label_count"]),
+        "total_signal_count\t{}".format(summary["total_signal_count"]),
+        "evaluation_coverage_rate\t{}".format(summary["evaluation_coverage_rate"]),
+        "average_data_availability_rate\t{}".format(
+            summary["average_data_availability_rate"] or "unavailable"
+        ),
+        "best_setup_label_by_event_usefulness\t{}".format(
+            summary["best_setup_label_by_event_usefulness"] or "unavailable"
+        ),
+        "",
         "setup_label\tstatus\tsignal_count\tevaluable_signals\t"
-        "data_availability_rate\tunavailable_context"
+        "data_availability_rate\tunavailable_context",
     ]
     for item in payload["labels"]:
         report = item["report"]

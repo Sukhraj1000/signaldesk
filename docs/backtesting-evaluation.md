@@ -12,7 +12,7 @@ signaldesk backtest setup AMD --setup-label breakout_watch --horizon 1 --horizon
 signaldesk backtest setup-batch AMD --horizon 1 --horizon 5 --provider local-fixture --output json
 ```
 
-`setup-labels` lists the built-in deterministic labels that can be derived from candles. `setup` evaluates one label, either from explicit `--signal-index` values or by deriving built-in labels from historical candles when no signal index is passed. `setup-batch` evaluates every built-in label over one shared candle history so users can compare rule availability and usefulness without mixing provider runs.
+`setup-labels` lists the built-in deterministic labels that can be derived from candles. `setup` evaluates one label, either from explicit `--signal-index` values or by deriving built-in labels from historical candles when no signal index is passed. `setup-batch` evaluates every built-in label over one shared candle history so users can compare rule availability and usefulness without mixing provider runs. Its top-level `summary` ranks only evaluated labels by deterministic `event_usefulness` and keeps labels with no signals or insufficient history counted as unavailable context, not as negative evidence or recommendations.
 
 ## Metrics
 
@@ -24,6 +24,7 @@ Backtest reports include the roadmap metrics for historical setup usefulness:
 - `max_adverse_excursion`: worst forward low versus the setup close across evaluated observations.
 - `event_usefulness`: deterministic composite of available average returns, hit rate, and inverse false-breakout rate.
 - `data_availability_rate`: share of requested signal/horizon windows that had enough future candle history.
+- Batch `summary`: evaluated/unavailable label counts, total derived signals, average data availability across evaluated labels, and the best evaluated setup label by `event_usefulness`. Summary rankings are historical research only and are not recommendations.
 
 When `--walk-forward-window-size` is provided, reports also include chronological walk-forward windows with the same metric shape. This keeps validation explicitly historical and avoids tuning a rule only on one aggregate sample.
 
