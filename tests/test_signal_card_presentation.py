@@ -103,6 +103,24 @@ def test_fixture_signal_card_builds_dashboard_presentation_model() -> None:
         "no_dashboard_analysis": True,
         "emphasized_level_groups": ["confirmation", "invalidation"],
         "unavailable_context_visible": True,
+        "report_boundaries_visible": True,
+    }
+    assert presentation["report_boundaries"] == {
+        "source_categories_rendered_separately": [
+            "facts",
+            "deterministic_signals",
+            "risks",
+            "unavailable_context",
+            "optional_narrative",
+        ],
+        "missing_context_policy": (
+            "Missing enhanced provider or LLM context is unavailable context, "
+            "not a silent all-clear."
+        ),
+        "disclaimer": (
+            "This report is not investment advice and does not include trade "
+            "execution instructions."
+        ),
     }
 
 
@@ -359,6 +377,11 @@ def test_watchlist_scan_presentation_groups_canonical_report_rows() -> None:
     assert presentation["failed_rows"][0]["reason"] == "provider unavailable"
     assert presentation["provider_unavailable_context"][0]["context_type"] == "fundamentals"
     assert presentation["rendering_contract"]["no_dashboard_analysis"] is True
+    assert presentation["rendering_contract"]["report_boundaries_visible"] is True
+    assert presentation["report_boundaries"]["disclaimer"] == (
+        "This report is not investment advice and does not include trade "
+        "execution instructions."
+    )
 
 
 def test_watchlist_scan_presentation_rejects_non_mapping_ranked_rows() -> None:
