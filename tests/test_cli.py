@@ -1145,18 +1145,22 @@ def test_providers_check_json_live_check_only_reports_safe_subset() -> None:
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    assert payload == {
-        "providers": [
-            {
-                "provider": "local-fixture",
-                "status": "ok",
-                "result": (
-                    "ready (deterministic historical candles; no external credentials required)"
-                ),
-                "warnings": [],
-            }
-        ]
-    }
+    assert payload["providers"] == [
+        {
+            "provider": "local-fixture",
+            "status": "ok",
+            "result": (
+                "ready (deterministic historical candles; no external credentials required)"
+            ),
+            "warnings": [],
+        }
+    ]
+    assert payload["run"]["provider_count"] == 1
+    assert payload["run"]["failed_count"] == 0
+    assert payload["run"]["duration_ms"] >= 0
+    assert payload["run"]["live_check_only"] is True
+    assert payload["run"]["run_id"].startswith("provider-check-")
+    assert datetime.fromisoformat(payload["run"]["generated_at"]).tzinfo is not None
 
 
 def test_ta_command_runs_against_default_local_fixture_without_network(
@@ -2457,22 +2461,26 @@ def test_providers_check_json_reports_sanitized_machine_readable_status(
 
     assert result.exit_code == 1
     payload = json.loads(result.stdout)
-    assert payload == {
-        "providers": [
-            {
-                "provider": "exploding",
-                "status": "failed",
-                "result": "health check raised an exception",
-                "warnings": [],
-            },
-            {
-                "provider": "working",
-                "status": "ok",
-                "result": "healthy",
-                "warnings": [],
-            },
-        ]
-    }
+    assert payload["providers"] == [
+        {
+            "provider": "exploding",
+            "status": "failed",
+            "result": "health check raised an exception",
+            "warnings": [],
+        },
+        {
+            "provider": "working",
+            "status": "ok",
+            "result": "healthy",
+            "warnings": [],
+        },
+    ]
+    assert payload["run"]["provider_count"] == 2
+    assert payload["run"]["failed_count"] == 1
+    assert payload["run"]["duration_ms"] >= 0
+    assert payload["run"]["live_check_only"] is False
+    assert payload["run"]["run_id"].startswith("provider-check-")
+    assert datetime.fromisoformat(payload["run"]["generated_at"]).tzinfo is not None
     assert "secret detail" not in result.stdout
 
 

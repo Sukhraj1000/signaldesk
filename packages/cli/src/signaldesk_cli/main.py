@@ -5,8 +5,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
+from uuid import uuid4
 
 import typer
 from signaldesk_backend import (
@@ -3594,6 +3596,24 @@ def _format_provider_health(provider_name: str, result: ProviderResult[str]) -> 
     return f"{payload['provider']}\t{payload['status']}\t{payload['result']}"
 
 
+def _provider_health_run_metadata(
+    *,
+    generated_at: datetime,
+    duration_ms: int,
+    provider_statuses: tuple[dict[str, Any], ...],
+    live_check_only: bool,
+) -> dict[str, Any]:
+    failed_count = sum(1 for item in provider_statuses if item["status"] != "ok")
+    return {
+        "run_id": f"provider-check-{uuid4()}",
+        "generated_at": generated_at.isoformat(),
+        "duration_ms": duration_ms,
+        "provider_count": len(provider_statuses),
+        "failed_count": failed_count,
+        "live_check_only": live_check_only,
+    }
+
+
 def _unknown_provider_capability(provider_name: str) -> dict[str, Any]:
     return {
         "provider": provider_name,
@@ -3920,11 +3940,27 @@ def providers_check(
         typer.echo("--output must be 'table' or 'json'.", err=True)
         raise typer.Exit(2)
 
+    started_monotonic = perf_counter()
     exit_code, provider_statuses = _run_provider_health_checks(
         default_provider_registry(), live_check_only=live_check_only
     )
+    duration_ms = max(0, round((perf_counter() - started_monotonic) * 1000))
+    generated_at = datetime.now(UTC)
     if output_format == "json":
-        typer.echo(json.dumps({"providers": provider_statuses}, indent=2))
+        typer.echo(
+            json.dumps(
+                {
+                    "run": _provider_health_run_metadata(
+                        generated_at=generated_at,
+                        duration_ms=duration_ms,
+                        provider_statuses=provider_statuses,
+                        live_check_only=live_check_only,
+                    ),
+                    "providers": provider_statuses,
+                },
+                indent=2,
+            )
+        )
     else:
         typer.echo("provider\tstatus\tresult")
         for provider_status in provider_statuses:
