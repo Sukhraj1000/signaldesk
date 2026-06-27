@@ -1834,8 +1834,8 @@ def _fetch_ta_report(
         result = market_data_provider.get_historical_candles(
             requested_symbol, start=start, end=as_of, interval=interval
         )
-    except OSError as exc:
-        raise RuntimeError(f"provider cache unavailable: {exc}") from exc
+    except OSError:
+        raise RuntimeError("provider cache unavailable") from None
     provider_fetch_duration_ms = int((perf_counter() - provider_fetch_started) * 1000)
     if not result.ok or not result.data:
         diagnostic = redact_provider_diagnostic(result.error or "provider returned no candles")

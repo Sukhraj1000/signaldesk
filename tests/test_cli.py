@@ -3921,7 +3921,9 @@ def test_fetch_ta_report_normalizes_cache_io_failure(
             cache_dir=tmp_path,
         )
     except RuntimeError as exc:
-        assert "provider cache unavailable: permission denied" in str(exc)
+        assert str(exc) == "provider cache unavailable"
+        assert exc.__cause__ is None
+        assert "permission denied" not in str(exc)
     else:
         raise AssertionError("expected cache OSError to be normalized to RuntimeError")
 
