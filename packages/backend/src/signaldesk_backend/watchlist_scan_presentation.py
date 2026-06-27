@@ -3,6 +3,8 @@
 from collections.abc import Iterable, Mapping
 from typing import Any
 
+from signaldesk_backend.signal_card_presentation import report_boundaries
+
 WATCHLIST_SCAN_PRESENTATION_SCHEMA_VERSION = "signaldesk.web.watchlist_scan_presentation.v1"
 
 
@@ -49,7 +51,9 @@ def build_watchlist_scan_presentation(watchlist_report: Mapping[str, Any]) -> di
             "source": "canonical watchlist report JSON",
             "no_dashboard_analysis": True,
             "empty_sections_mean_unavailable_or_not_emitted_by_backend": True,
+            "report_boundaries_visible": True,
         },
+        "report_boundaries": report_boundaries(),
     }
 
 

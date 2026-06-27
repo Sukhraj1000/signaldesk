@@ -27,6 +27,8 @@ Provider failures and missing enhanced/LLM context must remain explicit in the s
 
 Human-readable reports should include an explicit **Report boundaries** note that says facts, deterministic signals, risks, unavailable context, and optional narrative are rendered separately; missing enhanced provider or LLM context is unavailable context, not a silent all-clear; and reports are not investment advice or trade execution instructions.
 
+Dashboard-facing presentation JSON should expose the same boundaries in a renderer-safe `report_boundaries` object and mark `rendering_contract.report_boundaries_visible` so UI surfaces can display the disclaimer without inventing copy or recalculating report categories.
+
 Human-readable reports should keep these sections separate:
 
 1. **Facts**: symbol, timeframe, provider, timestamps, latest close, candle count, and schema version.

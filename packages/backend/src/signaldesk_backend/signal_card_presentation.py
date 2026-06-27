@@ -6,6 +6,33 @@ from typing import Any
 
 PRESENTATION_SCHEMA_VERSION = "signaldesk.web.signal_card_presentation.v1"
 
+REPORT_BOUNDARIES = {
+    "source_categories_rendered_separately": [
+        "facts",
+        "deterministic_signals",
+        "risks",
+        "unavailable_context",
+        "optional_narrative",
+    ],
+    "missing_context_policy": (
+        "Missing enhanced provider or LLM context is unavailable context, "
+        "not a silent all-clear."
+    ),
+    "disclaimer": (
+        "This report is not investment advice and does not include trade "
+        "execution instructions."
+    ),
+}
+
+
+def report_boundaries() -> dict[str, Any]:
+    """Return dashboard-safe report boundaries and disclaimer copy."""
+
+    return {
+        key: list(value) if isinstance(value, list) else value
+        for key, value in REPORT_BOUNDARIES.items()
+    }
+
 
 def build_signal_card_presentation(signal_card: Mapping[str, Any]) -> dict[str, Any]:
     if "signal_card" in signal_card:
@@ -52,7 +79,9 @@ def build_signal_card_presentation(signal_card: Mapping[str, Any]) -> dict[str, 
             "no_dashboard_analysis": True,
             "emphasized_level_groups": ["confirmation", "invalidation"],
             "unavailable_context_visible": True,
+            "report_boundaries_visible": True,
         },
+        "report_boundaries": report_boundaries(),
         "narrative": signal_card.get("narrative"),
     }
 
