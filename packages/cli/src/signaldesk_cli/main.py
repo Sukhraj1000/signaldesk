@@ -555,6 +555,10 @@ def _setup_replay_table_lines(payload: dict[str, Any]) -> tuple[str, ...]:
     return tuple(lines)
 
 
+def _markdown_metric_value(value: object) -> str:
+    return "unavailable" if value is None else str(value)
+
+
 def _setup_replay_markdown(payload: dict[str, Any]) -> str:
     """Render a user-facing historical setup replay report from canonical payload data."""
 
@@ -585,15 +589,18 @@ def _setup_replay_markdown(payload: dict[str, Any]) -> str:
         f"- Horizons: `{', '.join(str(item) for item in payload['horizons'])}`",
         "",
         "## Metrics",
-        f"- Hit rate: `{metrics['hit_rate'] or 'unavailable'}`",
+        f"- Hit rate: `{_markdown_metric_value(metrics['hit_rate'])}`",
         f"- Data availability rate: `{metrics['data_availability_rate']}`",
-        f"- False breakout rate: `{metrics['false_breakout_rate'] or 'unavailable'}`",
-        f"- Max adverse excursion proxy: `{metrics['max_adverse_excursion'] or 'unavailable'}`",
-        f"- Event usefulness: `{metrics['event_usefulness'] or 'unavailable'}`",
+        f"- False breakout rate: `{_markdown_metric_value(metrics['false_breakout_rate'])}`",
+        (
+            "- Max adverse excursion proxy: "
+            f"`{_markdown_metric_value(metrics["max_adverse_excursion"])}`"
+        ),
+        f"- Event usefulness: `{_markdown_metric_value(metrics['event_usefulness'])}`",
         "- Average forward return by horizon:",
     ]
     for horizon, value in average_returns.items():
-        lines.append(f"  - `{horizon}`: `{value or 'unavailable'}`")
+        lines.append(f"  - `{horizon}`: `{_markdown_metric_value(value)}`")
     lines.extend(["", "## Unavailable context"])
     if payload["unavailable_context"]:
         lines.extend(f"- {item}" for item in payload["unavailable_context"])
