@@ -271,6 +271,16 @@ def test_watchlist_scan_presentation_groups_canonical_report_rows() -> None:
         "schema_version": "signaldesk.watchlist_report.v1",
         "report_type": "watchlist",
         "generated_at": "2024-01-01T00:00:00+00:00",
+        "run_id": "watchlist-scan-test",
+        "run": {
+            "run_id": "watchlist-scan-test",
+            "generated_at": "2024-01-01T00:00:00+00:00",
+            "duration_ms": 123,
+            "symbol_count": 2,
+            "failed_count": 1,
+            "skipped_count": 0,
+            "max_workers": 4,
+        },
         "watchlist": "watchlists/default.yaml",
         "watchlist_model": {
             "name": "Default TA Watchlist",
@@ -331,6 +341,15 @@ def test_watchlist_scan_presentation_groups_canonical_report_rows() -> None:
         "failed": 1,
         "skipped": 0,
     }
+    assert presentation["run_summary"] == {
+        "run_id": "watchlist-scan-test",
+        "generated_at": "2024-01-01T00:00:00+00:00",
+        "duration_ms": 123,
+        "symbol_count": 2,
+        "failed_count": 1,
+        "skipped_count": 0,
+        "max_workers": 4,
+    }
     assert presentation["ranked_setup_rows"][0]["symbol"] == "AMD"
     assert presentation["ranked_setup_rows"][0]["confirmation"][0]["kind"] == "breakout"
     assert (
@@ -362,6 +381,29 @@ def test_watchlist_scan_presentation_rejects_non_mapping_ranked_rows() -> None:
         assert "entries must be JSON objects" in str(exc)
     else:
         raise AssertionError("non-object ranked rows should fail")
+
+
+def test_watchlist_scan_presentation_rejects_non_mapping_run_section() -> None:
+    payload = {
+        "watchlist": "watchlists/default.yaml",
+        "watchlist_model": {"name": "Default TA Watchlist"},
+        "generated_at": "2024-01-01T00:00:00+00:00",
+        "run": "watchlist-scan-test",
+        "provider_mode": {"mode": "explicit", "price_provider": "local-fixture"},
+        "symbols": ["AMD"],
+        "ranked_setups": [],
+        "failed_symbols": [],
+        "skipped_symbols": [],
+        "summary": {"total": 1, "ok": 0, "failed": 0, "skipped": 0},
+        "provenance": [],
+    }
+
+    try:
+        build_watchlist_scan_presentation(payload)
+    except ValueError as exc:
+        assert "run section must be a JSON object" in str(exc)
+    else:
+        raise AssertionError("non-object run metadata should fail")
 
 
 def test_watchlist_scan_presentation_rejects_string_symbols() -> None:
