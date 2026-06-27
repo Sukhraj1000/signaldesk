@@ -70,6 +70,16 @@ def test_tox_smoke_covers_backtest_setup_entrypoint() -> None:
     )
 
 
+def test_tox_smoke_covers_backtest_setup_batch_entrypoint() -> None:
+    tox_ini = Path("tox.ini").read_text(encoding="utf-8")
+
+    assert (
+        "signaldesk backtest setup-batch AMD --horizon 1 --horizon 5 "
+        "--provider local-fixture --output json"
+        in tox_ini
+    )
+
+
 def test_persistence_caching_scheduling_docs_define_cache_invalidation_policy() -> None:
     docs = Path("docs/persistence-caching-scheduling.md").read_text(encoding="utf-8")
     readme = Path("README.md").read_text(encoding="utf-8")
