@@ -78,6 +78,11 @@ def test_tox_smoke_covers_backtest_setup_batch_entrypoint() -> None:
         "--output json"
         in tox_ini
     )
+    assert (
+        "signaldesk backtest setup-batch AMD --horizon 1 --horizon 5 "
+        "--provider local-fixture --output json"
+        in tox_ini
+    )
 
 
 def test_persistence_caching_scheduling_docs_define_cache_invalidation_policy() -> None:
