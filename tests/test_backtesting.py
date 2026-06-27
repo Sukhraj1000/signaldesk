@@ -18,6 +18,12 @@ from signaldesk_cli.main import _setup_batch_markdown, _setup_replay_report_payl
 BASE_TIME = datetime(2026, 1, 1, tzinfo=UTC)
 
 
+def _setup_label_detail(setup_label: str) -> dict[str, str | int]:
+    return next(
+        item for item in supported_setup_label_details() if item["setup_label"] == setup_label
+    )
+
+
 def _candle(day: int, close: str, high: str | None = None, low: str | None = None) -> Candle:
     price = Decimal(close)
     return Candle(
@@ -539,6 +545,7 @@ def test_setup_batch_markdown_renders_summary_limitations_and_unavailable_contex
             {
                 "setup_label": "breakdown_watch",
                 "status": "evaluated",
+                "setup_label_detail": _setup_label_detail("breakdown_watch"),
                 "signal_indices": [0],
                 "report": _setup_replay_report_payload(report),
                 "unavailable_context": [],
@@ -546,6 +553,7 @@ def test_setup_batch_markdown_renders_summary_limitations_and_unavailable_contex
             {
                 "setup_label": "breakout_watch",
                 "status": "no_signals",
+                "setup_label_detail": _setup_label_detail("breakout_watch"),
                 "signal_indices": [],
                 "report": None,
                 "unavailable_context": [
@@ -566,9 +574,14 @@ def test_setup_batch_markdown_renders_summary_limitations_and_unavailable_contex
     assert "- Provider: `local-fixture`" in markdown
     assert "- Evaluation coverage rate: `0.50`" in markdown
     assert "- Best setup label by event usefulness: `breakdown_watch` (`-0.0050`)" in markdown
-    assert "| breakdown_watch | evaluated | 1 | 1 | 1.00 | none |" in markdown
     assert (
-        "| breakout_watch | no_signals | 0 | 0 | unavailable | "
+        "| breakdown_watch | prior_lookback_low_break | 20 | evaluated | "
+        "1 | 1 | 1.00 | none |"
+        in markdown
+    )
+    assert (
+        "| breakout_watch | prior_lookback_high_break | 20 | no_signals | "
+        "0 | 0 | unavailable | "
         "No historical candles matched this deterministic setup label. |"
     ) in markdown
     assert "## Limitations" in markdown
@@ -630,6 +643,7 @@ def test_setup_batch_json_schema_documents_batch_payload_contract() -> None:
             {
                 "setup_label": "breakdown_watch",
                 "status": "evaluated",
+                "setup_label_detail": _setup_label_detail("breakdown_watch"),
                 "signal_indices": [0],
                 "report": _setup_replay_report_payload(report),
                 "unavailable_context": [],
@@ -637,6 +651,7 @@ def test_setup_batch_json_schema_documents_batch_payload_contract() -> None:
             {
                 "setup_label": "breakout_watch",
                 "status": "no_signals",
+                "setup_label_detail": _setup_label_detail("breakout_watch"),
                 "signal_indices": [],
                 "report": None,
                 "unavailable_context": no_signal_context,
@@ -644,6 +659,7 @@ def test_setup_batch_json_schema_documents_batch_payload_contract() -> None:
             {
                 "setup_label": "moving_average_loss",
                 "status": "no_signals",
+                "setup_label_detail": _setup_label_detail("moving_average_loss"),
                 "signal_indices": [],
                 "report": None,
                 "unavailable_context": no_signal_context,
@@ -651,6 +667,7 @@ def test_setup_batch_json_schema_documents_batch_payload_contract() -> None:
             {
                 "setup_label": "moving_average_reclaim",
                 "status": "no_signals",
+                "setup_label_detail": _setup_label_detail("moving_average_reclaim"),
                 "signal_indices": [],
                 "report": None,
                 "unavailable_context": no_signal_context,
@@ -658,6 +675,7 @@ def test_setup_batch_json_schema_documents_batch_payload_contract() -> None:
             {
                 "setup_label": "relative_volume_spike",
                 "status": "insufficient_history",
+                "setup_label_detail": _setup_label_detail("relative_volume_spike"),
                 "signal_indices": [],
                 "report": None,
                 "unavailable_context": insufficient_history_context,
@@ -682,6 +700,12 @@ def test_setup_batch_json_schema_documents_batch_payload_contract() -> None:
     assert payload["schema_version"] == schema["properties"]["schema_version"]["const"]
     assert set(schema["required"]) == set(payload)
     assert set(label_schema["required"]) == set(payload["labels"][0])
+    setup_label_detail_schema = label_schema["properties"]["setup_label_detail"]
+    assert set(setup_label_detail_schema["required"]) == set(
+        payload["labels"][0]["setup_label_detail"]
+    )
+    assert payload["labels"][0]["setup_label_detail"]["derivation"] == "prior_lookback_low_break"
+    assert payload["labels"][0]["setup_label_detail"]["minimum_candles"] == 21
     summary_schema = schema["properties"]["summary"]
     assert set(summary_schema["required"]) == set(payload["summary"])
     assert payload["summary"]["limitations"]
@@ -700,11 +724,15 @@ def test_setup_batch_json_schema_documents_batch_payload_contract() -> None:
         == decimal_string_pattern
     )
     assert [item["setup_label"] for item in payload["labels"]] == list(supported_setup_labels())
+    assert [item["setup_label_detail"]["setup_label"] for item in payload["labels"]] == list(
+        supported_setup_labels()
+    )
     assert schema["properties"]["labels"]["minItems"] == len(supported_setup_labels())
     assert schema["properties"]["labels"]["maxItems"] == len(supported_setup_labels())
     assert payload["labels"][-1] == {
         "setup_label": "relative_volume_spike",
         "status": "insufficient_history",
+        "setup_label_detail": _setup_label_detail("relative_volume_spike"),
         "signal_indices": [],
         "report": None,
         "unavailable_context": insufficient_history_context,

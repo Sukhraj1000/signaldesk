@@ -639,11 +639,14 @@ def _setup_batch_payload(
     """Evaluate every requested deterministic setup label over one candle history."""
 
     labels: list[dict[str, Any]] = []
+    details_by_label = {item["setup_label"]: dict(item) for item in supported_setup_label_details()}
     for setup_label in setup_labels:
+        setup_label_detail = details_by_label[setup_label]
         if len(candles) <= SETUP_DERIVATION_LOOKBACK:
             labels.append({
                 "setup_label": setup_label,
                 "status": "insufficient_history",
+                "setup_label_detail": setup_label_detail,
                 "signal_indices": [],
                 "report": None,
                 "unavailable_context": [
@@ -661,6 +664,7 @@ def _setup_batch_payload(
             labels.append({
                 "setup_label": setup_label,
                 "status": "no_signals",
+                "setup_label_detail": setup_label_detail,
                 "signal_indices": [],
                 "report": None,
                 "unavailable_context": [
@@ -683,6 +687,7 @@ def _setup_batch_payload(
         labels.append({
             "setup_label": setup_label,
             "status": "evaluated",
+            "setup_label_detail": setup_label_detail,
             "signal_indices": list(signal_indices),
             "report": _setup_replay_report_payload(report),
             "unavailable_context": list(report.unavailable_context),
@@ -778,7 +783,7 @@ def _setup_batch_table_lines(payload: dict[str, Any]) -> tuple[str, ...]:
             summary["best_setup_label_by_event_usefulness"] or "unavailable"
         ),
         "",
-        "setup_label\tstatus\tsignal_count\tevaluable_signals\t"
+        "setup_label\tstatus\tsignal_count\tderivation\tlookback_candles\tevaluable_signals\t"
         "data_availability_rate\tunavailable_context",
     ]
     for item in payload["labels"]:
@@ -788,9 +793,11 @@ def _setup_batch_table_lines(payload: dict[str, Any]) -> tuple[str, ...]:
             "unavailable" if report is None else report["metrics"]["data_availability_rate"]
         )
         unavailable_context = "; ".join(item["unavailable_context"]) or "none"
+        detail = item["setup_label_detail"]
         lines.append(
-            f"{item['setup_label']}	{item['status']}	{len(item['signal_indices'])}	"
-            f"{evaluable_signals}	{data_availability_rate}	{unavailable_context}"
+            f"{item['setup_label']}\t{item['status']}\t{len(item['signal_indices'])}\t"
+            f"{detail['derivation']}\t{detail['lookback_candles']}\t{evaluable_signals}\t"
+            f"{data_availability_rate}	{unavailable_context}"
         )
     return tuple(lines)
 
@@ -837,10 +844,10 @@ def _setup_batch_markdown(payload: dict[str, Any]) -> str:
         "",
         "## Label results",
         (
-            "| setup_label | status | signals | evaluable_signals | "
+            "| setup_label | derivation | lookback | status | signals | evaluable_signals | "
             "data_availability_rate | unavailable_context |"
         ),
-        "| --- | --- | ---: | ---: | --- | --- |",
+        "| --- | --- | ---: | --- | ---: | ---: | --- | --- |",
     ]
     for item in payload["labels"]:
         report = item["report"]
@@ -849,8 +856,10 @@ def _setup_batch_markdown(payload: dict[str, Any]) -> str:
             "unavailable" if report is None else report["metrics"]["data_availability_rate"]
         )
         unavailable_context = "; ".join(item["unavailable_context"]) or "none"
+        detail = item["setup_label_detail"]
         lines.append(
-            f"| {item["setup_label"]} | {item["status"]} | "
+            f"| {item["setup_label"]} | {detail["derivation"]} | "
+            f"{detail["lookback_candles"]} | {item["status"]} | "
             f"{len(item["signal_indices"])} | {evaluable_signals} | "
             f"{data_availability_rate} | {unavailable_context} |"
         )
