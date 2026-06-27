@@ -60,7 +60,7 @@ Rules:
 - CLI/API/dashboard/reporting render the same canonical signal-card output.
 - LLMs consume structured facts only and are optional.
 
-See `docs/product-contract.md` for the durable product contract: supported default and enhanced provider modes, output category boundaries, unavailable-context handling, and non-goals. See `docs/enhanced-context.md` for the FMP-backed catalyst/fundamental context boundary, `docs/reporting.md` for the renderer contract used by JSON, table, and Markdown reports, and `docs/persistence-caching-scheduling.md` for the report artifact, provider-cache invalidation, and local scheduling policy.
+See `docs/product-contract.md` for the durable product contract: supported default and enhanced provider modes, output category boundaries, unavailable-context handling, and non-goals. See `docs/enhanced-context.md` for the FMP-backed catalyst/fundamental context boundary, `docs/reporting.md` for the renderer contract used by JSON, table, and Markdown reports, `docs/backtesting-evaluation.md` for deterministic setup-rule replay limits and metrics, and `docs/persistence-caching-scheduling.md` for the report artifact, provider-cache invalidation, and local scheduling policy.
 
 ## Non-goals
 
@@ -150,6 +150,7 @@ signaldesk providers list
 signaldesk providers check
 signaldesk fixtures generate --symbol AMD --output-dir fixtures/local --output json
 signaldesk backtest setup AMD --setup-label breakout_watch --signal-index 10 --signal-index 20 --horizon 1 --horizon 5 --provider local-fixture --output json
+signaldesk backtest setup-batch AMD --horizon 1 --horizon 5 --provider local-fixture --output json
 ```
 
 Live default-mode TA check (`yfinance` is the default price provider when `--provider` is omitted):
