@@ -10,6 +10,9 @@
     "setup_label",
     "symbol",
     "timeframe",
+    "candle_count",
+    "data_start",
+    "data_end",
     "sample_size",
     "evaluable_signals",
     "horizons",
@@ -35,6 +38,18 @@
     "timeframe": {
       "type": "string",
       "minLength": 1
+    },
+    "candle_count": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "data_start": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "data_end": {
+      "type": "string",
+      "format": "date-time"
     },
     "sample_size": {
       "type": "integer",
