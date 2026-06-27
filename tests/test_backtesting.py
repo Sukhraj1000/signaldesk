@@ -30,6 +30,125 @@ def _candle(day: int, close: str, high: str | None = None, low: str | None = Non
     )
 
 
+def _validate_json_schema_subset(
+    schema: dict[str, Any],
+    instance: Any,
+    *,
+    schema_dir: Path,
+    root_schema: dict[str, Any] | None = None,
+    path: str = "$",
+) -> None:
+    """Validate the JSON Schema keywords used by SignalDesk contract tests."""
+
+    root = schema if root_schema is None else root_schema
+    if "$ref" in schema:
+        ref = str(schema["$ref"])
+        if ref.startswith("#/$defs/"):
+            schema = root["$defs"][ref.rsplit("/", 1)[-1]]
+        else:
+            schema = json.loads((schema_dir / ref).read_text(encoding="utf-8"))
+        _validate_json_schema_subset(
+            schema, instance, schema_dir=schema_dir, root_schema=schema, path=path
+        )
+        return
+
+    if "allOf" in schema:
+        for child in schema["allOf"]:
+            _validate_json_schema_subset(
+                child,
+                instance,
+                schema_dir=schema_dir,
+                root_schema=root,
+                path=path,
+            )
+
+    if "anyOf" in schema:
+        failures: list[AssertionError] = []
+        for child in schema["anyOf"]:
+            try:
+                _validate_json_schema_subset(
+                    child, instance, schema_dir=schema_dir, root_schema=root, path=path
+                )
+                break
+            except AssertionError as exc:
+                failures.append(exc)
+        else:
+            reasons = "; ".join(str(failure) for failure in failures)
+            raise AssertionError(f"{path}: did not match anyOf branches: {reasons}")
+
+    if "const" in schema:
+        assert instance == schema["const"], f"{path}: expected const {schema['const']!r}"
+    if "enum" in schema:
+        assert instance in schema["enum"], f"{path}: {instance!r} not in enum"
+
+    expected_type = schema.get("type")
+    if expected_type is not None:
+        type_options = expected_type if isinstance(expected_type, list) else [expected_type]
+        type_matches = {
+            "null": instance is None,
+            "object": isinstance(instance, dict),
+            "array": isinstance(instance, list),
+            "string": isinstance(instance, str),
+            "integer": isinstance(instance, int) and not isinstance(instance, bool),
+            "boolean": isinstance(instance, bool),
+        }
+        assert any(type_matches[type_name] for type_name in type_options), (
+            f"{path}: expected type {expected_type!r}"
+        )
+
+    if isinstance(instance, str):
+        if "minLength" in schema:
+            assert len(instance) >= schema["minLength"], f"{path}: string is too short"
+        if schema.get("format") == "date-time":
+            datetime.fromisoformat(instance.replace("Z", "+00:00"))
+
+    if isinstance(instance, int) and "minimum" in schema:
+        assert instance >= schema["minimum"], f"{path}: below minimum"
+
+    if isinstance(instance, list):
+        if "minItems" in schema:
+            assert len(instance) >= schema["minItems"], f"{path}: too few items"
+        if "maxItems" in schema:
+            assert len(instance) <= schema["maxItems"], f"{path}: too many items"
+        for index, child in enumerate(schema.get("prefixItems", [])):
+            _validate_json_schema_subset(
+                child,
+                instance[index],
+                schema_dir=schema_dir,
+                root_schema=root,
+                path=f"{path}[{index}]",
+            )
+        if schema.get("items") is False and len(instance) > len(schema.get("prefixItems", [])):
+            raise AssertionError(f"{path}: unexpected additional array item")
+        if isinstance(schema.get("items"), dict):
+            for index, item in enumerate(instance):
+                _validate_json_schema_subset(
+                    schema["items"],
+                    item,
+                    schema_dir=schema_dir,
+                    root_schema=root,
+                    path=f"{path}[{index}]",
+                )
+
+    if isinstance(instance, dict):
+        required = schema.get("required", [])
+        missing = set(required) - set(instance)
+        assert not missing, f"{path}: missing required keys {sorted(missing)!r}"
+        properties = schema.get("properties", {})
+        if schema.get("additionalProperties") is False:
+            extra = set(instance) - set(properties)
+            assert not extra, f"{path}: unexpected keys {sorted(extra)!r}"
+        for key, child in properties.items():
+            if key in instance:
+                _validate_json_schema_subset(
+                    child,
+                    instance[key],
+                    schema_dir=schema_dir,
+                    root_schema=root,
+                    path=f"{path}.{key}",
+                )
+
+
 def test_supported_setup_labels_are_canonical_and_discoverable() -> None:
     assert supported_setup_labels() == (
         "breakdown_watch",
@@ -326,14 +445,27 @@ def test_setup_replay_json_schema_documents_cli_payload_contract() -> None:
 
 
 def test_setup_batch_json_schema_documents_batch_payload_contract() -> None:
-    schema_path = (
-        Path(__file__).resolve().parents[1]
-        / "docs"
-        / "schemas"
-        / "signaldesk.backtest.setup_batch.v1.schema.json"
-    )
+    schema_dir = Path(__file__).resolve().parents[1] / "docs" / "schemas"
+    schema_path = schema_dir / "signaldesk.backtest.setup_batch.v1.schema.json"
+    replay_schema_path = schema_dir / "signaldesk.backtest.setup_replay.v1.schema.json"
     schema: dict[str, Any] = json.loads(schema_path.read_text(encoding="utf-8"))
+    replay_schema: dict[str, Any] = json.loads(replay_schema_path.read_text(encoding="utf-8"))
 
+    report = evaluate_setup_replay(
+        setup_label="breakdown_watch",
+        candles=(
+            _candle(0, "100"),
+            _candle(1, "99"),
+            _candle(2, "98"),
+        ),
+        signal_indices=(0,),
+        horizons=(1,),
+        provider="local-fixture",
+        source="cli_backtest_setup_batch",
+        generated_at=BASE_TIME,
+        timeframe="1d",
+    )
+    no_signal_context = ["No historical candles matched this deterministic setup label."]
     payload: dict[str, Any] = {
         "schema_version": "signaldesk.backtest.setup_batch.v1",
         "symbol": "AMD",
@@ -345,14 +477,40 @@ def test_setup_batch_json_schema_documents_batch_payload_contract() -> None:
         "source": "cli_backtest_setup_batch",
         "labels": [
             {
+                "setup_label": "breakdown_watch",
+                "status": "evaluated",
+                "signal_indices": [0],
+                "report": _setup_replay_report_payload(report),
+                "unavailable_context": [],
+            },
+            {
                 "setup_label": "breakout_watch",
                 "status": "no_signals",
                 "signal_indices": [],
                 "report": None,
-                "unavailable_context": [
-                    "No historical candles matched this deterministic setup label."
-                ],
-            }
+                "unavailable_context": no_signal_context,
+            },
+            {
+                "setup_label": "moving_average_loss",
+                "status": "no_signals",
+                "signal_indices": [],
+                "report": None,
+                "unavailable_context": no_signal_context,
+            },
+            {
+                "setup_label": "moving_average_reclaim",
+                "status": "no_signals",
+                "signal_indices": [],
+                "report": None,
+                "unavailable_context": no_signal_context,
+            },
+            {
+                "setup_label": "relative_volume_spike",
+                "status": "no_signals",
+                "signal_indices": [],
+                "report": None,
+                "unavailable_context": no_signal_context,
+            },
         ],
         "limitations": [
             "Historical setup replay is deterministic research only; "
@@ -360,12 +518,22 @@ def test_setup_batch_json_schema_documents_batch_payload_contract() -> None:
         ],
     }
 
-    label_schema_ref = schema["properties"]["labels"]["items"]["$ref"]
-    label_schema = schema["$defs"][label_schema_ref.rsplit("/", 1)[-1]]
+    _validate_json_schema_subset(schema, payload, schema_dir=schema_dir)
 
+    label_schema = schema["$defs"]["setup_label_result"]
+    report_branches = label_schema["properties"]["report"]["anyOf"]
+    assert {branch.get("type") for branch in report_branches} == {"null", None}
+    assert {branch.get("$ref") for branch in report_branches} == {
+        None,
+        replay_schema_path.name,
+    }
+    assert replay_schema["additionalProperties"] is False
     assert payload["schema_version"] == schema["properties"]["schema_version"]["const"]
     assert set(schema["required"]) == set(payload)
     assert set(label_schema["required"]) == set(payload["labels"][0])
+    assert [item["setup_label"] for item in payload["labels"]] == list(supported_setup_labels())
+    assert schema["properties"]["labels"]["minItems"] == len(supported_setup_labels())
+    assert schema["properties"]["labels"]["maxItems"] == len(supported_setup_labels())
     assert set(label_schema["properties"]["status"]["enum"]) == {
         "evaluated",
         "no_signals",
@@ -380,4 +548,5 @@ def test_setup_batch_json_schema_documents_batch_payload_contract() -> None:
         "recommendation",
     }
     assert forbidden_execution_fields.isdisjoint(schema["properties"])
+    assert forbidden_execution_fields.isdisjoint(replay_schema["properties"])
     assert schema["additionalProperties"] is False

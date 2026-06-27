@@ -49,10 +49,96 @@
     },
     "labels": {
       "type": "array",
-      "minItems": 1,
-      "items": {
-        "$ref": "#/$defs/setup_label_result"
-      }
+      "minItems": 5,
+      "maxItems": 5,
+      "prefixItems": [
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/setup_label_result"
+            },
+            {
+              "properties": {
+                "setup_label": {
+                  "const": "breakdown_watch"
+                }
+              },
+              "required": [
+                "setup_label"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/setup_label_result"
+            },
+            {
+              "properties": {
+                "setup_label": {
+                  "const": "breakout_watch"
+                }
+              },
+              "required": [
+                "setup_label"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/setup_label_result"
+            },
+            {
+              "properties": {
+                "setup_label": {
+                  "const": "moving_average_loss"
+                }
+              },
+              "required": [
+                "setup_label"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/setup_label_result"
+            },
+            {
+              "properties": {
+                "setup_label": {
+                  "const": "moving_average_reclaim"
+                }
+              },
+              "required": [
+                "setup_label"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/setup_label_result"
+            },
+            {
+              "properties": {
+                "setup_label": {
+                  "const": "relative_volume_spike"
+                }
+              },
+              "required": [
+                "setup_label"
+              ]
+            }
+          ]
+        }
+      ],
+      "items": false
     },
     "limitations": {
       "type": "array",
@@ -107,21 +193,7 @@
               "type": "null"
             },
             {
-              "type": "object",
-              "required": [
-                "schema_version",
-                "setup_label",
-                "metrics",
-                "provenance",
-                "limitations",
-                "unavailable_context"
-              ],
-              "properties": {
-                "schema_version": {
-                  "const": "signaldesk.backtest.setup_replay.v1"
-                }
-              },
-              "additionalProperties": true
+              "$ref": "signaldesk.backtest.setup_replay.v1.schema.json"
             }
           ]
         },
