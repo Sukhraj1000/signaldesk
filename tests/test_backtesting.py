@@ -526,6 +526,14 @@ def test_setup_batch_markdown_renders_summary_limitations_and_unavailable_contex
         "data_end": (BASE_TIME + timedelta(days=2)).isoformat(),
         "provider": "local-fixture",
         "source": "cli_backtest_setup_batch",
+        "provenance": {
+            "provider": "local-fixture",
+            "source": "cli_backtest_setup_batch",
+            "generated_at": BASE_TIME.isoformat(),
+            "timeframe": "1d",
+            "inputs": ["AMD", "breakdown_watch", "breakout_watch"],
+            "warnings": ["No historical candles matched this deterministic setup label."],
+        },
         "summary": {
             "evaluated_label_count": 1,
             "unavailable_label_count": 1,
@@ -572,6 +580,7 @@ def test_setup_batch_markdown_renders_summary_limitations_and_unavailable_contex
     assert markdown.startswith("# SignalDesk setup batch replay: AMD\n")
     assert "- Schema version: `signaldesk.backtest.setup_batch.v1`" in markdown
     assert "- Provider: `local-fixture`" in markdown
+    assert f"- Generated at: `{BASE_TIME.isoformat()}`" in markdown
     assert "- Evaluation coverage rate: `0.50`" in markdown
     assert "- Best setup label by event usefulness: `breakdown_watch` (`-0.0050`)" in markdown
     assert (
@@ -624,6 +633,26 @@ def test_setup_batch_json_schema_documents_batch_payload_contract() -> None:
         "data_end": (BASE_TIME + timedelta(days=2)).isoformat(),
         "provider": "local-fixture",
         "source": "cli_backtest_setup_batch",
+        "provenance": {
+            "provider": "local-fixture",
+            "source": "cli_backtest_setup_batch",
+            "generated_at": BASE_TIME.isoformat(),
+            "timeframe": "1d",
+            "inputs": [
+                "AMD",
+                "breakdown_watch",
+                "breakout_watch",
+                "moving_average_loss",
+                "moving_average_reclaim",
+                "relative_volume_spike",
+            ],
+            "warnings": [
+                *no_signal_context,
+                *no_signal_context,
+                *no_signal_context,
+                *insufficient_history_context,
+            ],
+        },
         "summary": {
             "evaluated_label_count": 1,
             "unavailable_label_count": 4,
