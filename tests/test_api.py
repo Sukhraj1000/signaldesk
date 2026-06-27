@@ -66,18 +66,24 @@ def test_providers_payload_uses_backend_registry() -> None:
 
 
 def test_wsgi_app_routes_json_errors() -> None:
-    status, payload, _headers = _wsgi_response("/missing")
+    status, payload, headers = _wsgi_response("/missing")
     assert status == "404 Not Found"
     assert payload["error"]["type"] == "not_found"
+    assert payload["error"]["request_id"].startswith("api-request-")
+    assert ("X-SignalDesk-Request-Id", payload["error"]["request_id"]) in headers
 
     status, payload, headers = _wsgi_response("/health", method="POST")
     assert status == "405 Method Not Allowed"
     assert payload["error"]["type"] == "method_not_allowed"
+    assert payload["error"]["request_id"].startswith("api-request-")
+    assert ("X-SignalDesk-Request-Id", payload["error"]["request_id"]) in headers
     assert ("Allow", "GET") in headers
 
-    status, payload, _headers = _wsgi_response("/missing", method="POST")
+    status, payload, headers = _wsgi_response("/missing", method="POST")
     assert status == "404 Not Found"
     assert payload["error"]["type"] == "not_found"
+    assert payload["error"]["request_id"].startswith("api-request-")
+    assert ("X-SignalDesk-Request-Id", payload["error"]["request_id"]) in headers
 
 
 
@@ -91,10 +97,12 @@ def test_wsgi_app_smoke_serves_health() -> None:
 
 def test_planned_workflow_routes_return_typed_unavailable_context() -> None:
     for route in ("/scan", "/reports"):
-        status, payload, _headers = _wsgi_response(route)
+        status, payload, headers = _wsgi_response(route)
 
         assert status == "501 Not Implemented"
         assert payload["error"]["type"] == "not_implemented"
+        assert payload["error"]["request_id"].startswith("api-request-")
+        assert ("X-SignalDesk-Request-Id", payload["error"]["request_id"]) in headers
         assert payload["unavailable_context"] == [
             {
                 "context_type": "api_route",
@@ -123,17 +131,21 @@ def test_wsgi_app_serves_symbol_ta_with_canonical_cli_schema() -> None:
 
 
 def test_symbol_ta_route_returns_typed_validation_errors() -> None:
-    status, payload, _headers = _wsgi_response("/symbols/amd/ta?days=not-a-number")
+    status, payload, headers = _wsgi_response("/symbols/amd/ta?days=not-a-number")
 
     assert status == "400 Bad Request"
     assert payload["error"]["type"] == "validation_error"
     assert payload["error"]["field"] == "days"
+    assert payload["error"]["request_id"].startswith("api-request-")
+    assert ("X-SignalDesk-Request-Id", payload["error"]["request_id"]) in headers
 
-    status, payload, _headers = _wsgi_response("/symbols/amd/ta?days=366")
+    status, payload, headers = _wsgi_response("/symbols/amd/ta?days=366")
 
     assert status == "400 Bad Request"
     assert payload["error"]["type"] == "validation_error"
     assert payload["error"]["field"] == "days"
+    assert payload["error"]["request_id"].startswith("api-request-")
+    assert ("X-SignalDesk-Request-Id", payload["error"]["request_id"]) in headers
     assert "less than or equal to 365" in payload["error"]["message"]
 
 
