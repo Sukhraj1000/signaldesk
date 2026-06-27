@@ -795,8 +795,8 @@ def _setup_batch_table_lines(payload: dict[str, Any]) -> tuple[str, ...]:
         unavailable_context = "; ".join(item["unavailable_context"]) or "none"
         detail = item["setup_label_detail"]
         lines.append(
-            f"{item['setup_label']}	{detail['derivation']}	{detail['lookback_candles']}	"
-            f"{item['status']}	{len(item['signal_indices'])}	{evaluable_signals}	"
+            f"{item['setup_label']}\t{item['status']}\t{len(item['signal_indices'])}\t"
+            f"{detail['derivation']}\t{detail['lookback_candles']}\t{evaluable_signals}\t"
             f"{data_availability_rate}	{unavailable_context}"
         )
     return tuple(lines)
