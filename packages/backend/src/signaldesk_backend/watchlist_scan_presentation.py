@@ -90,9 +90,9 @@ def _optional_mapping_section(
 ) -> Mapping[str, Any]:
     """Return an optional report section after validating its JSON object shape."""
 
-    value = watchlist_report.get(section)
-    if value is None:
+    if section not in watchlist_report:
         return {}
+    value = watchlist_report[section]
     if not isinstance(value, Mapping):
         raise ValueError(f"watchlist report {section} section must be a JSON object")
     return value

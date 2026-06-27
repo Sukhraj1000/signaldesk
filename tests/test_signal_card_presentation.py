@@ -406,6 +406,29 @@ def test_watchlist_scan_presentation_rejects_non_mapping_run_section() -> None:
         raise AssertionError("non-object run metadata should fail")
 
 
+
+def test_watchlist_scan_presentation_rejects_null_run_section() -> None:
+    payload = {
+        "watchlist": "watchlists/default.yaml",
+        "watchlist_model": {"name": "Default TA Watchlist"},
+        "generated_at": "2024-01-01T00:00:00+00:00",
+        "run": None,
+        "provider_mode": {"mode": "explicit", "price_provider": "local-fixture"},
+        "symbols": ["AMD"],
+        "ranked_setups": [],
+        "failed_symbols": [],
+        "skipped_symbols": [],
+        "summary": {"total": 1, "ok": 0, "failed": 0, "skipped": 0},
+        "provenance": [],
+    }
+
+    try:
+        build_watchlist_scan_presentation(payload)
+    except ValueError as exc:
+        assert "run section must be a JSON object" in str(exc)
+    else:
+        raise AssertionError("null run metadata should fail")
+
 def test_watchlist_scan_presentation_rejects_string_symbols() -> None:
     payload = {
         "watchlist": "watchlists/default.yaml",
