@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:signaldesk:schema:backtest-setup-labels-v1",
+  "title": "SignalDesk backtest setup labels",
+  "description": "Machine-readable discovery output from signaldesk backtest setup-labels. Lists deterministic research setup labels only; no recommendations, broker instructions, or live-trading behavior are permitted.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "setup_labels",
+    "default_provider",
+    "source",
+    "limitations"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "signaldesk.backtest.setup_labels.v1"
+    },
+    "setup_labels": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "prefixItems": [
+        {
+          "const": "breakdown_watch"
+        },
+        {
+          "const": "breakout_watch"
+        },
+        {
+          "const": "moving_average_loss"
+        },
+        {
+          "const": "moving_average_reclaim"
+        },
+        {
+          "const": "relative_volume_spike"
+        }
+      ],
+      "items": false
+    },
+    "default_provider": {
+      "const": "local-fixture"
+    },
+    "source": {
+      "const": "deterministic_candle_rules"
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

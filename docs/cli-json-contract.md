@@ -73,7 +73,7 @@ Each nested evaluated `report` contains:
 - `provenance`: provider, source, generated timestamp, timeframe, inputs, and warnings.
 - `limitations` and `unavailable_context`: required explicit report sections so missing forward windows or scope limits are visible instead of silently omitted.
 
-Backtest setup replay is research-only. The JSON schemas deliberately have no broker, order, fill, position-sizing, slippage, recommendation, or live-trading fields. The single-label replay schema lives at [`docs/schemas/signaldesk.backtest.setup_replay.v1.schema.json`](schemas/signaldesk.backtest.setup_replay.v1.schema.json), and the batch envelope schema lives at [`docs/schemas/signaldesk.backtest.setup_batch.v1.schema.json`](schemas/signaldesk.backtest.setup_batch.v1.schema.json).
+Backtest setup replay is research-only. The JSON schemas deliberately have no broker, order, fill, position-sizing, slippage, recommendation, or live-trading fields. The setup-label discovery schema lives at [`docs/schemas/signaldesk.backtest.setup_labels.v1.schema.json`](schemas/signaldesk.backtest.setup_labels.v1.schema.json), the single-label replay schema lives at [`docs/schemas/signaldesk.backtest.setup_replay.v1.schema.json`](schemas/signaldesk.backtest.setup_replay.v1.schema.json), and the batch envelope schema lives at [`docs/schemas/signaldesk.backtest.setup_batch.v1.schema.json`](schemas/signaldesk.backtest.setup_batch.v1.schema.json).
 
 ## TA and watchlist Markdown reports
 
