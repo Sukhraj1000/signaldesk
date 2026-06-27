@@ -7,6 +7,7 @@ from signaldesk_backend.backtesting import (
     SetupReplayWalkForwardWindow,
     derive_setup_signal_indices,
     evaluate_setup_replay,
+    supported_setup_label_details,
     supported_setup_labels,
 )
 from signaldesk_backend.chart_overlay_presentation import (
@@ -228,6 +229,7 @@ __all__ = [
     "detect_swing_points",
     "detect_trend_regime_shift_events",
     "evaluate_setup_replay",
+    "supported_setup_label_details",
     "supported_setup_labels",
     "exponential_moving_average",
     "extract_ta_signal_card",

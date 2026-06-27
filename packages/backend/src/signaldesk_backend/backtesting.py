@@ -25,6 +25,32 @@ _SETUP_LABEL_ALIASES = {
     "volume_spike": "relative_volume_spike",
 }
 _SUPPORTED_SETUP_LABELS = frozenset(_SETUP_LABEL_ALIASES.values())
+_SETUP_LABEL_DETAILS = {
+    "breakdown_watch": {
+        "description": "Close breaks below the prior lookback low after holding at or above it.",
+        "derivation": "prior_lookback_low_break",
+    },
+    "breakout_watch": {
+        "description": "Close breaks above the prior lookback high after holding at or below it.",
+        "derivation": "prior_lookback_high_break",
+    },
+    "moving_average_loss": {
+        "description": "Close loses the lookback simple moving average after holding above it.",
+        "derivation": "lookback_simple_moving_average_cross_down",
+    },
+    "moving_average_reclaim": {
+        "description": "Close reclaims the lookback simple moving average after holding below it.",
+        "derivation": "lookback_simple_moving_average_cross_up",
+    },
+    "relative_volume_spike": {
+        "description": (
+            "Volume reaches at least the configured multiple of average lookback volume."
+        ),
+        "derivation": "lookback_relative_volume_threshold",
+    },
+}
+_DEFAULT_SETUP_DERIVATION_LOOKBACK = 20
+_DEFAULT_VOLUME_SPIKE_THRESHOLD = Decimal("1.5")
 
 
 _RESEARCH_ONLY_LIMITATION = (
@@ -98,12 +124,27 @@ def supported_setup_labels() -> tuple[str, ...]:
     return tuple(sorted(_SUPPORTED_SETUP_LABELS))
 
 
+def supported_setup_label_details() -> tuple[dict[str, str | int], ...]:
+    """Return deterministic setup-label catalog metadata for discovery surfaces."""
+
+    return tuple(
+        {
+            "setup_label": label,
+            "description": _SETUP_LABEL_DETAILS[label]["description"],
+            "derivation": _SETUP_LABEL_DETAILS[label]["derivation"],
+            "lookback_candles": _DEFAULT_SETUP_DERIVATION_LOOKBACK,
+            "minimum_candles": _DEFAULT_SETUP_DERIVATION_LOOKBACK + 1,
+        }
+        for label in supported_setup_labels()
+    )
+
+
 def derive_setup_signal_indices(
     *,
     setup_label: str,
     candles: Sequence[Candle],
-    lookback: int = 20,
-    volume_spike_threshold: Decimal = Decimal("1.5"),
+    lookback: int = _DEFAULT_SETUP_DERIVATION_LOOKBACK,
+    volume_spike_threshold: Decimal = _DEFAULT_VOLUME_SPIKE_THRESHOLD,
 ) -> tuple[int, ...]:
     """Derive historical signal indices for built-in deterministic setup labels."""
 

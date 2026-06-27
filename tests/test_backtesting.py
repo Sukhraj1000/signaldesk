@@ -10,6 +10,7 @@ from signaldesk_backend.backtesting import (
     SetupReplayReport,
     derive_setup_signal_indices,
     evaluate_setup_replay,
+    supported_setup_label_details,
     supported_setup_labels,
 )
 from signaldesk_cli.main import _setup_batch_markdown, _setup_replay_report_payload
@@ -164,6 +165,22 @@ def test_supported_setup_labels_are_canonical_and_discoverable() -> None:
     )
 
 
+
+def test_supported_setup_label_details_document_derivation_requirements() -> None:
+    details = supported_setup_label_details()
+
+    assert [item["setup_label"] for item in details] == list(supported_setup_labels())
+    assert all(item["lookback_candles"] == 20 for item in details)
+    assert all(item["minimum_candles"] == 21 for item in details)
+    assert {item["derivation"] for item in details} == {
+        "prior_lookback_low_break",
+        "prior_lookback_high_break",
+        "lookback_simple_moving_average_cross_down",
+        "lookback_simple_moving_average_cross_up",
+        "lookback_relative_volume_threshold",
+    }
+    assert all(item["description"] for item in details)
+
 def test_setup_labels_json_schema_documents_discovery_contract() -> None:
     schema_dir = Path(__file__).resolve().parents[1] / "docs" / "schemas"
     schema_path = schema_dir / "signaldesk.backtest.setup_labels.v1.schema.json"
@@ -171,6 +188,7 @@ def test_setup_labels_json_schema_documents_discovery_contract() -> None:
     payload: dict[str, Any] = {
         "schema_version": "signaldesk.backtest.setup_labels.v1",
         "setup_labels": list(supported_setup_labels()),
+        "setup_label_details": list(supported_setup_label_details()),
         "default_provider": "local-fixture",
         "source": "deterministic_candle_rules",
         "limitations": [

@@ -12,7 +12,7 @@ signaldesk backtest setup AMD --setup-label breakout_watch --horizon 1 --horizon
 signaldesk backtest setup-batch AMD --horizon 1 --horizon 5 --provider local-fixture --output json
 ```
 
-`setup-labels` lists the built-in deterministic labels that can be derived from candles. `setup` evaluates one label, either from explicit `--signal-index` values or by deriving built-in labels from historical candles when no signal index is passed. `setup-batch` evaluates every built-in label over one shared candle history so users can compare rule availability and usefulness without mixing provider runs. Its top-level `summary` ranks only evaluated labels by deterministic `event_usefulness` and keeps labels with no signals or insufficient history counted as unavailable context, not as negative evidence or recommendations.
+`setup-labels` lists the built-in deterministic labels that can be derived from candles and reports the rule metadata needed to evaluate them historically, including derivation name, lookback candles, and minimum candle count. `setup` evaluates one label, either from explicit `--signal-index` values or by deriving built-in labels from historical candles when no signal index is passed. `setup-batch` evaluates every built-in label over one shared candle history so users can compare rule availability and usefulness without mixing provider runs. Its top-level `summary` ranks only evaluated labels by deterministic `event_usefulness` and keeps labels with no signals or insufficient history counted as unavailable context, not as negative evidence or recommendations.
 
 ## Metrics
 

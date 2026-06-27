@@ -67,6 +67,7 @@ from signaldesk_backend import (
     resolve_provider_mode,
     score_technical_analysis,
     simple_moving_average,
+    supported_setup_label_details,
     supported_setup_labels,
     validate_ta_signal_card_report,
     volume_moving_average,
@@ -938,10 +939,12 @@ def backtest_setup_labels(
     if output_format not in {"table", "json"}:
         typer.echo("--output must be 'table' or 'json'.", err=True)
         raise typer.Exit(2)
-    labels = supported_setup_labels()
+    label_details = supported_setup_label_details()
+    labels = tuple(item["setup_label"] for item in label_details)
     payload = {
         "schema_version": "signaldesk.backtest.setup_labels.v1",
         "setup_labels": list(labels),
+        "setup_label_details": list(label_details),
         "default_provider": "local-fixture",
         "source": "deterministic_candle_rules",
         "limitations": [
@@ -952,9 +955,12 @@ def backtest_setup_labels(
     if output_format == "json":
         typer.echo(json.dumps(payload, indent=2, sort_keys=True))
         return
-    typer.echo("setup_label")
-    for label in labels:
-        typer.echo(label)
+    typer.echo("setup_label	lookback_candles	minimum_candles	derivation")
+    for item in label_details:
+        typer.echo(
+            f"{item["setup_label"]}	{item["lookback_candles"]}	"
+            f"{item["minimum_candles"]}	{item["derivation"]}"
+        )
 
 
 @backtest_app.command("setup")

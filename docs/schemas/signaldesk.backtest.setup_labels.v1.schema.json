@@ -8,6 +8,7 @@
   "required": [
     "schema_version",
     "setup_labels",
+    "setup_label_details",
     "default_provider",
     "source",
     "limitations"
@@ -51,6 +52,50 @@
       "items": {
         "type": "string",
         "minLength": 1
+      }
+    },
+    "setup_label_details": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "setup_label",
+          "description",
+          "derivation",
+          "lookback_candles",
+          "minimum_candles"
+        ],
+        "properties": {
+          "setup_label": {
+            "type": "string",
+            "enum": [
+              "breakdown_watch",
+              "breakout_watch",
+              "moving_average_loss",
+              "moving_average_reclaim",
+              "relative_volume_spike"
+            ]
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "derivation": {
+            "type": "string",
+            "minLength": 1
+          },
+          "lookback_candles": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "minimum_candles": {
+            "type": "integer",
+            "minimum": 2
+          }
+        }
       }
     }
   }
