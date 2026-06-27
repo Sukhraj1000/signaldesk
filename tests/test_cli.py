@@ -1111,7 +1111,7 @@ def test_providers_check_reports_default_local_provider_without_secrets() -> Non
     result = CliRunner().invoke(app, ["providers", "check"])
 
     assert result.exit_code == 0
-    assert "provider\tstatus\tresult" in result.stdout
+    assert "provider\tstatus\tresult\tduration_ms" in result.stdout
     assert (
         "local-fixture\tok\tready (deterministic historical candles; "
         "no external credentials required)" in result.stdout
@@ -1163,8 +1163,10 @@ def test_providers_check_json_live_check_only_reports_safe_subset() -> None:
                 "ready (deterministic historical candles; no external credentials required)"
             ),
             "warnings": [],
+            "duration_ms": payload["providers"][0]["duration_ms"],
         }
     ]
+    assert payload["providers"][0]["duration_ms"] >= 0
     assert payload["run"]["provider_count"] == 1
     assert payload["run"]["failed_count"] == 0
     assert payload["run"]["duration_ms"] >= 0
@@ -2453,8 +2455,10 @@ def test_provider_health_checks_convert_exceptions_to_sanitized_failures() -> No
             "status": "failed",
             "result": "health check raised an exception",
             "warnings": (),
+            "duration_ms": provider_statuses[0]["duration_ms"],
         },
     )
+    assert provider_statuses[0]["duration_ms"] >= 0
     assert "secret detail" not in json.dumps(provider_statuses)
 
 
@@ -2477,14 +2481,17 @@ def test_providers_check_json_reports_sanitized_machine_readable_status(
             "status": "failed",
             "result": "health check raised an exception",
             "warnings": [],
+            "duration_ms": payload["providers"][0]["duration_ms"],
         },
         {
             "provider": "working",
             "status": "ok",
             "result": "healthy",
             "warnings": [],
+            "duration_ms": payload["providers"][1]["duration_ms"],
         },
     ]
+    assert all(provider["duration_ms"] >= 0 for provider in payload["providers"])
     assert payload["run"]["provider_count"] == 2
     assert payload["run"]["failed_count"] == 1
     assert payload["run"]["duration_ms"] >= 0

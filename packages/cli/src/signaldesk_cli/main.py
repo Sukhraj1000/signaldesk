@@ -3603,7 +3603,9 @@ def _decimal_text(value: Decimal | None) -> str | None:
     return str(value)
 
 
-def _provider_health_payload(provider_name: str, result: ProviderResult[str]) -> dict[str, Any]:
+def _provider_health_payload(
+    provider_name: str, result: ProviderResult[str], *, duration_ms: int = 0
+) -> dict[str, Any]:
     status = "ok" if result.ok else "failed"
     detail = result.data if result.ok else result.error
     return {
@@ -3611,6 +3613,7 @@ def _provider_health_payload(provider_name: str, result: ProviderResult[str]) ->
         "status": status,
         "result": redact_provider_diagnostic(detail or ""),
         "warnings": tuple(redact_provider_diagnostic(warning) for warning in result.warnings),
+        "duration_ms": max(0, duration_ms),
     }
 
 
@@ -3794,6 +3797,7 @@ def _run_provider_health_checks(
     for provider in registry.list():
         if safe_provider_names is not None and provider.name not in safe_provider_names:
             continue
+        provider_started = perf_counter()
         try:
             result = provider.health_check()
         except Exception:
@@ -3801,7 +3805,12 @@ def _run_provider_health_checks(
                 provider=provider.name,
                 error="health check raised an exception",
             )
-        payload.append(_provider_health_payload(provider.name, result))
+        provider_duration_ms = max(0, round((perf_counter() - provider_started) * 1000))
+        payload.append(
+            _provider_health_payload(
+                provider.name, result, duration_ms=provider_duration_ms
+            )
+        )
         if not result.ok:
             exit_code = 1
     return exit_code, tuple(payload)
@@ -3985,12 +3994,13 @@ def providers_check(
             )
         )
     else:
-        typer.echo("provider\tstatus\tresult")
+        typer.echo("provider\tstatus\tresult\tduration_ms")
         for provider_status in provider_statuses:
             typer.echo(
                 f"{provider_status['provider']}\t"
                 f"{provider_status['status']}\t"
-                f"{provider_status['result']}"
+                f"{provider_status['result']}\t"
+                f"{provider_status['duration_ms']}"
             )
     if exit_code:
         raise typer.Exit(exit_code)
