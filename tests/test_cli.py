@@ -4115,6 +4115,15 @@ def test_backtest_setup_batch_command_reports_every_builtin_label() -> None:
     assert payload["schema_version"] == "signaldesk.backtest.setup_batch.v1"
     assert payload["symbol"] == "AMD"
     assert payload["provider"] == "local-fixture"
+    assert payload["summary"]["evaluated_label_count"] >= 0
+    assert payload["summary"]["unavailable_label_count"] >= 0
+    assert payload["summary"]["total_signal_count"] >= 0
+    assert payload["summary"]["limitations"] == [
+        "Summary rankings are deterministic historical research only; they are not "
+        "recommendations or live trading instructions.",
+        "Labels with no signals or insufficient history remain counted as unavailable "
+        "context rather than negative setup evidence.",
+    ]
     assert [item["setup_label"] for item in payload["labels"]] == [
         "breakdown_watch",
         "breakout_watch",
@@ -4188,6 +4197,8 @@ def test_backtest_setup_batch_table_keeps_no_signal_labels_visible() -> None:
         ["backtest", "setup-batch", "AMD", "--provider", "local-fixture"],
     )
     assert result.exit_code == 0, result.output
+    assert "summary\tvalue" in result.stdout
+    assert "evaluated_label_count\t" in result.stdout
     assert "setup_label\tstatus\tsignal_count" in result.stdout
     assert "breakout_watch" in result.stdout
     assert "No historical candles matched this deterministic setup label." in result.stdout

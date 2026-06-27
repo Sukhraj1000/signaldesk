@@ -13,6 +13,7 @@
     "data_end",
     "provider",
     "source",
+    "summary",
     "labels",
     "limitations"
   ],
@@ -146,6 +147,71 @@
       "items": {
         "type": "string",
         "minLength": 1
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evaluated_label_count",
+        "unavailable_label_count",
+        "total_signal_count",
+        "evaluation_coverage_rate",
+        "average_data_availability_rate",
+        "best_setup_label_by_event_usefulness",
+        "best_event_usefulness",
+        "limitations"
+      ],
+      "properties": {
+        "evaluated_label_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unavailable_label_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total_signal_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "evaluation_coverage_rate": {
+          "type": "string"
+        },
+        "average_data_availability_rate": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "best_setup_label_by_event_usefulness": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "breakdown_watch",
+            "breakout_watch",
+            "moving_average_loss",
+            "moving_average_reclaim",
+            "relative_volume_spike",
+            null
+          ]
+        },
+        "best_event_usefulness": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "limitations": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
       }
     }
   },
