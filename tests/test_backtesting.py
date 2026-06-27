@@ -761,6 +761,10 @@ def test_setup_batch_json_schema_documents_batch_payload_contract() -> None:
         summary_properties["best_event_usefulness"]["pattern"]
         == decimal_string_pattern
     )
+    provenance_label_schema = schema["properties"]["provenance"]["properties"]["inputs"][
+        "properties"
+    ]["setup_labels"]
+    assert provenance_label_schema["items"]["enum"] == list(supported_setup_labels())
     assert [item["setup_label"] for item in payload["labels"]] == list(supported_setup_labels())
     assert [item["setup_label_detail"]["setup_label"] for item in payload["labels"]] == list(
         supported_setup_labels()

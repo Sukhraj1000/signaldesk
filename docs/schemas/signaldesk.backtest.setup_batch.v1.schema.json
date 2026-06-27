@@ -264,7 +264,13 @@
               "minItems": 1,
               "items": {
                 "type": "string",
-                "minLength": 1
+                "enum": [
+                  "breakdown_watch",
+                  "breakout_watch",
+                  "moving_average_loss",
+                  "moving_average_reclaim",
+                  "relative_volume_spike"
+                ]
               }
             },
             "horizons": {
