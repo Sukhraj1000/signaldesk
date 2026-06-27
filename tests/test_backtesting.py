@@ -586,6 +586,20 @@ def test_setup_batch_json_schema_documents_batch_payload_contract() -> None:
     summary_schema = schema["properties"]["summary"]
     assert set(summary_schema["required"]) == set(payload["summary"])
     assert payload["summary"]["limitations"]
+    decimal_string_pattern = r"^-?\d+(?:\.\d+)?$"
+    summary_properties = summary_schema["properties"]
+    assert (
+        summary_properties["evaluation_coverage_rate"]["pattern"]
+        == decimal_string_pattern
+    )
+    assert (
+        summary_properties["average_data_availability_rate"]["pattern"]
+        == decimal_string_pattern
+    )
+    assert (
+        summary_properties["best_event_usefulness"]["pattern"]
+        == decimal_string_pattern
+    )
     assert [item["setup_label"] for item in payload["labels"]] == list(supported_setup_labels())
     assert schema["properties"]["labels"]["minItems"] == len(supported_setup_labels())
     assert schema["properties"]["labels"]["maxItems"] == len(supported_setup_labels())

@@ -176,13 +176,15 @@
           "minimum": 0
         },
         "evaluation_coverage_rate": {
-          "type": "string"
+          "type": "string",
+          "pattern": "^-?\\d+(?:\\.\\d+)?$"
         },
         "average_data_availability_rate": {
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "pattern": "^-?\\d+(?:\\.\\d+)?$"
         },
         "best_setup_label_by_event_usefulness": {
           "type": [
@@ -202,7 +204,8 @@
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "pattern": "^-?\\d+(?:\\.\\d+)?$"
         },
         "limitations": {
           "type": "array",
