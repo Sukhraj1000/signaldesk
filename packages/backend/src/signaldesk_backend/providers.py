@@ -107,7 +107,32 @@ def provider_rate_limit_failure(
         safe_diagnostic = redact_provider_diagnostic(diagnostic).strip()
         if safe_diagnostic:
             error = f"{error}: {safe_diagnostic}"
-    return ProviderResult.failure(provider=provider, error=error)
+    return ProviderResult.failure(
+        provider=provider,
+        error=error,
+        error_code="rate_limited",
+        error_category="rate_limit",
+        retryable=True,
+    )
+
+
+def provider_transport_failure(
+    provider: str, diagnostic: object | None = None
+) -> ProviderResult[Any]:
+    """Return a stable, credential-safe failure for provider transport errors."""
+
+    error = f"{provider} transport error"
+    if diagnostic is not None:
+        safe_diagnostic = redact_provider_diagnostic(diagnostic).strip()
+        if safe_diagnostic:
+            error = f"{error}: {safe_diagnostic}"
+    return ProviderResult.failure(
+        provider=provider,
+        error=error,
+        error_code="transport_error",
+        error_category="transport",
+        retryable=True,
+    )
 
 
 def _http_error_rate_limit_diagnostic(exc: HTTPError) -> str:
@@ -1059,7 +1084,7 @@ class StooqProvider:
                 )
             return ProviderResult.failure(provider=self.name, error="stooq historical fetch failed")
         except (OSError, URLError, TimeoutError):
-            return ProviderResult.failure(provider=self.name, error="stooq historical fetch failed")
+            return provider_transport_failure(self.name, "stooq historical fetch failed")
 
         try:
             text = body.decode("utf-8-sig") if isinstance(body, bytes) else str(body)
@@ -1288,7 +1313,11 @@ class FmpProvider:
         )
         if not response.ok:
             return ProviderResult.failure(
-                provider=self.name, error=response.error or "fmp request failed"
+                provider=self.name,
+                error=response.error or "fmp request failed",
+                error_code=response.error_code,
+                error_category=response.error_category,
+                retryable=response.retryable,
             )
         return self._parse_candles(symbol, response.data)
 
@@ -1301,7 +1330,11 @@ class FmpProvider:
         response = self._fetch_json(f"quote/{symbol.ticker}", {"apikey": api_key})
         if not response.ok:
             return ProviderResult.failure(
-                provider=self.name, error=response.error or "fmp request failed"
+                provider=self.name,
+                error=response.error or "fmp request failed",
+                error_code=response.error_code,
+                error_category=response.error_category,
+                retryable=response.retryable,
             )
         return self._parse_quote(symbol, response.data)
 
@@ -1316,7 +1349,11 @@ class FmpProvider:
         response = self._fetch_json(f"profile/{symbol.ticker}", {"apikey": api_key})
         if not response.ok:
             return ProviderResult.failure(
-                provider=self.name, error=response.error or "fmp request failed"
+                provider=self.name,
+                error=response.error or "fmp request failed",
+                error_code=response.error_code,
+                error_category=response.error_category,
+                retryable=response.retryable,
             )
         return self._parse_fundamental_context(symbol, response.data)
 
@@ -1341,7 +1378,11 @@ class FmpProvider:
         )
         if not news_response.ok:
             return ProviderResult.failure(
-                provider=self.name, error=news_response.error or "fmp request failed"
+                provider=self.name,
+                error=news_response.error or "fmp request failed",
+                error_code=news_response.error_code,
+                error_category=news_response.error_category,
+                retryable=news_response.retryable,
             )
         earnings_response = self._fetch_json(
             f"historical/earning_calendar/{symbol.ticker}",
@@ -1391,7 +1432,7 @@ class FmpProvider:
                 )
             return ProviderResult.failure(provider=self.name, error="fmp request failed")
         except (OSError, URLError, TimeoutError):
-            return ProviderResult.failure(provider=self.name, error="fmp request failed")
+            return provider_transport_failure(self.name, "fmp request failed")
 
         try:
             text = body.decode("utf-8") if isinstance(body, bytes) else str(body)
