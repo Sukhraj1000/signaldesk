@@ -2,6 +2,7 @@ import json
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 import pytest
 from signaldesk_backend import Candle, Symbol
@@ -322,3 +323,61 @@ def test_setup_replay_json_schema_documents_cli_payload_contract() -> None:
     assert forbidden_execution_fields.isdisjoint(schema["properties"])
     assert schema["additionalProperties"] is False
     assert payload["limitations"]
+
+
+def test_setup_batch_json_schema_documents_batch_payload_contract() -> None:
+    schema_path = (
+        Path(__file__).resolve().parents[1]
+        / "docs"
+        / "schemas"
+        / "signaldesk.backtest.setup_batch.v1.schema.json"
+    )
+    schema: dict[str, Any] = json.loads(schema_path.read_text(encoding="utf-8"))
+
+    payload: dict[str, Any] = {
+        "schema_version": "signaldesk.backtest.setup_batch.v1",
+        "symbol": "AMD",
+        "timeframe": "1d",
+        "candle_count": 3,
+        "data_start": BASE_TIME.isoformat(),
+        "data_end": (BASE_TIME + timedelta(days=2)).isoformat(),
+        "provider": "local-fixture",
+        "source": "cli_backtest_setup_batch",
+        "labels": [
+            {
+                "setup_label": "breakout_watch",
+                "status": "no_signals",
+                "signal_indices": [],
+                "report": None,
+                "unavailable_context": [
+                    "No historical candles matched this deterministic setup label."
+                ],
+            }
+        ],
+        "limitations": [
+            "Historical setup replay is deterministic research only; "
+            "it is not live trading or broker execution."
+        ],
+    }
+
+    label_schema_ref = schema["properties"]["labels"]["items"]["$ref"]
+    label_schema = schema["$defs"][label_schema_ref.rsplit("/", 1)[-1]]
+
+    assert payload["schema_version"] == schema["properties"]["schema_version"]["const"]
+    assert set(schema["required"]) == set(payload)
+    assert set(label_schema["required"]) == set(payload["labels"][0])
+    assert set(label_schema["properties"]["status"]["enum"]) == {
+        "evaluated",
+        "no_signals",
+        "insufficient_history",
+    }
+    forbidden_execution_fields = {
+        "broker",
+        "order",
+        "fill",
+        "position_size",
+        "slippage",
+        "recommendation",
+    }
+    assert forbidden_execution_fields.isdisjoint(schema["properties"])
+    assert schema["additionalProperties"] is False
