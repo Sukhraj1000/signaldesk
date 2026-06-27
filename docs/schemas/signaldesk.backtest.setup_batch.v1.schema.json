@@ -1,0 +1,210 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://signaldesk.local/schemas/signaldesk.backtest.setup_batch.v1.schema.json",
+  "title": "SignalDesk backtest setup batch v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "symbol",
+    "timeframe",
+    "candle_count",
+    "data_start",
+    "data_end",
+    "provider",
+    "source",
+    "labels",
+    "limitations"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "signaldesk.backtest.setup_batch.v1"
+    },
+    "symbol": {
+      "type": "string",
+      "minLength": 1
+    },
+    "timeframe": {
+      "type": "string",
+      "minLength": 1
+    },
+    "candle_count": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "data_start": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "data_end": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "provider": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source": {
+      "const": "cli_backtest_setup_batch"
+    },
+    "labels": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "prefixItems": [
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/setup_label_result"
+            },
+            {
+              "properties": {
+                "setup_label": {
+                  "const": "breakdown_watch"
+                }
+              },
+              "required": [
+                "setup_label"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/setup_label_result"
+            },
+            {
+              "properties": {
+                "setup_label": {
+                  "const": "breakout_watch"
+                }
+              },
+              "required": [
+                "setup_label"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/setup_label_result"
+            },
+            {
+              "properties": {
+                "setup_label": {
+                  "const": "moving_average_loss"
+                }
+              },
+              "required": [
+                "setup_label"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/setup_label_result"
+            },
+            {
+              "properties": {
+                "setup_label": {
+                  "const": "moving_average_reclaim"
+                }
+              },
+              "required": [
+                "setup_label"
+              ]
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/setup_label_result"
+            },
+            {
+              "properties": {
+                "setup_label": {
+                  "const": "relative_volume_spike"
+                }
+              },
+              "required": [
+                "setup_label"
+              ]
+            }
+          ]
+        }
+      ],
+      "items": false
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "$defs": {
+    "setup_label_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "setup_label",
+        "status",
+        "signal_indices",
+        "report",
+        "unavailable_context"
+      ],
+      "properties": {
+        "setup_label": {
+          "type": "string",
+          "enum": [
+            "breakdown_watch",
+            "breakout_watch",
+            "moving_average_loss",
+            "moving_average_reclaim",
+            "relative_volume_spike"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "evaluated",
+            "no_signals",
+            "insufficient_history"
+          ]
+        },
+        "signal_indices": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "report": {
+          "description": "Nested signaldesk.backtest.setup_replay.v1 report when status is evaluated; otherwise null.",
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "signaldesk.backtest.setup_replay.v1.schema.json"
+            }
+          ]
+        },
+        "unavailable_context": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}
