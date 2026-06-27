@@ -62,9 +62,9 @@ Future OpenAI-compatible or local LLM adapters should call these same backend co
 
 `signaldesk backtest setup <SYMBOL> --setup-label <LABEL> --signal-index <N> --output json` emits `signaldesk.backtest.setup_replay.v1`, a deterministic research report for one historical setup label. In default mode the command uses `local-fixture` when no provider is passed, keeping the smoke path no-network and useful without paid keys.
 
-`signaldesk backtest setup-batch <SYMBOL> --output json` emits `signaldesk.backtest.setup_batch.v1`, evaluating every built-in deterministic setup label over the same candle history. Labels with no matching historical candles remain present with `status: "no_signals"` and explicit unavailable context instead of disappearing from the report.
+`signaldesk backtest setup-batch <SYMBOL> --output json` emits `signaldesk.backtest.setup_batch.v1`, a batch envelope evaluating every built-in deterministic setup label over the same candle history. The top-level envelope includes `symbol`, `timeframe`, `candle_count`, `data_start`, `data_end`, `provider`, `source`, `labels`, and `limitations`. Each entry in `labels` contains its `setup_label`, `status`, `signal_indices`, nested single-label `report` when evaluated, and explicit `unavailable_context`. Labels with no matching historical candles remain present with `status: "no_signals"`; candle sets shorter than the setup derivation lookback use `status: "insufficient_history"` instead of being reported as a true no-match.
 
-The payload contains:
+Each nested evaluated `report` contains:
 
 - `setup_label`, `symbol`, `timeframe`, `sample_size`, `evaluable_signals`, and evaluated `horizons`.
 - `metrics`: hit rate, average forward return by horizon, false breakout rate, max adverse excursion proxy, event usefulness, and data availability rate. Decimal values are serialized as strings, and unavailable metric values are `null`.

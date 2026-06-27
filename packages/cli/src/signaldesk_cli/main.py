@@ -76,6 +76,7 @@ app = typer.Typer(help="SignalDesk command-line interface.")
 
 ENHANCED_CONTEXT_STALE_AFTER = timedelta(days=7)
 MAX_TA_HISTORY_DAYS = 365
+SETUP_DERIVATION_LOOKBACK = 20
 providers_app = typer.Typer(help="Inspect configured market-data providers.")
 config_app = typer.Typer(help="Inspect local SignalDesk configuration without exposing secrets.")
 fixtures_app = typer.Typer(help="Generate deterministic local fixture data.")
@@ -638,7 +639,23 @@ def _setup_batch_payload(
 
     labels: list[dict[str, Any]] = []
     for setup_label in setup_labels:
-        signal_indices = derive_setup_signal_indices(setup_label=setup_label, candles=candles)
+        if len(candles) <= SETUP_DERIVATION_LOOKBACK:
+            labels.append({
+                "setup_label": setup_label,
+                "status": "insufficient_history",
+                "signal_indices": [],
+                "report": None,
+                "unavailable_context": [
+                    "Insufficient candle history to evaluate this deterministic setup label; "
+                    f"requires more than {SETUP_DERIVATION_LOOKBACK} candles."
+                ],
+            })
+            continue
+        signal_indices = derive_setup_signal_indices(
+            setup_label=setup_label,
+            candles=candles,
+            lookback=SETUP_DERIVATION_LOOKBACK,
+        )
         if not signal_indices:
             labels.append({
                 "setup_label": setup_label,

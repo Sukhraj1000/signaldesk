@@ -4122,7 +4122,11 @@ def test_backtest_setup_batch_command_reports_every_builtin_label() -> None:
         "moving_average_reclaim",
         "relative_volume_spike",
     ]
-    assert {item["status"] for item in payload["labels"]} <= {"evaluated", "no_signals"}
+    assert {item["status"] for item in payload["labels"]} <= {
+        "evaluated",
+        "no_signals",
+        "insufficient_history",
+    }
     assert payload["limitations"] == [
         "Historical setup replay is deterministic research only; "
         "it is not live trading or broker execution."
@@ -4135,6 +4139,47 @@ def test_backtest_setup_batch_command_reports_every_builtin_label() -> None:
             assert item["unavailable_context"] == [
                 "No historical candles matched this deterministic setup label."
             ]
+
+
+def test_backtest_setup_batch_command_uses_default_provider_when_omitted() -> None:
+    result = CliRunner().invoke(
+        app,
+        ["backtest", "setup-batch", "AMD", "--horizon", "1", "--output", "json"],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["schema_version"] == "signaldesk.backtest.setup_batch.v1"
+    assert payload["provider"] == "local-fixture"
+    assert payload["labels"]
+
+
+def test_backtest_setup_batch_command_distinguishes_insufficient_history() -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "backtest",
+            "setup-batch",
+            "AMD",
+            "--provider",
+            "local-fixture",
+            "--days",
+            "1",
+            "--output",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert {item["status"] for item in payload["labels"]} == {"insufficient_history"}
+    for item in payload["labels"]:
+        assert item["signal_indices"] == []
+        assert item["report"] is None
+        assert item["unavailable_context"] == [
+            "Insufficient candle history to evaluate this deterministic setup label; "
+            "requires more than 20 candles."
+        ]
 
 
 def test_backtest_setup_batch_table_keeps_no_signal_labels_visible() -> None:
