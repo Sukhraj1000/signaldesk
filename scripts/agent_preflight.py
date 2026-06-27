@@ -103,6 +103,8 @@ def is_sensitive_secret_path(rel: str) -> bool:
         return True
     if name.startswith(".env.") and not name.endswith(SENSITIVE_DOTENV_SAMPLE_SUFFIXES):
         return True
+    if name.endswith(".env"):
+        return True
     if name in SENSITIVE_KEY_FILE_NAMES:
         return True
     return name.endswith(SENSITIVE_KEY_FILE_SUFFIXES)
