@@ -75,7 +75,7 @@ def test_tox_smoke_covers_backtest_setup_batch_entrypoint() -> None:
 
     assert (
         "signaldesk backtest setup-batch AMD --horizon 1 --horizon 5 "
-        "--provider local-fixture --output json"
+        "--output json"
         in tox_ini
     )
 
