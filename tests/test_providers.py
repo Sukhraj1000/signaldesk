@@ -32,6 +32,7 @@ from signaldesk_backend import (
     fallback_provider_call,
     normalize_provider_name,
     provider_rate_limit_failure,
+    provider_transport_failure,
     redact_provider_diagnostic,
     resolve_provider_mode,
 )
@@ -356,6 +357,32 @@ def test_redact_provider_diagnostic_redacts_common_http_credential_forms() -> No
     assert "https://<redacted>@example.test/path?symbol=AMD" in redacted
     assert "X-API-Key: <redacted>" in redacted
 
+
+
+def test_provider_rate_limit_failure_sets_retryable_taxonomy() -> None:
+    result = provider_rate_limit_failure(
+        "fmp",
+        "https://example.test/profile?apikey=credential-value&symbol=AMD",
+    )
+
+    assert result.ok is False
+    assert result.error_code == "rate_limited"
+    assert result.error_category == "rate_limit"
+    assert result.retryable is True
+    assert "credential-value" not in (result.error or "")
+
+
+def test_provider_transport_failure_sets_retryable_taxonomy_and_redacts() -> None:
+    result = provider_transport_failure(
+        "yfinance",
+        "timeout token=credential-value while fetching AMD",
+    )
+
+    assert result.ok is False
+    assert result.error_code == "transport_error"
+    assert result.error_category == "transport"
+    assert result.retryable is True
+    assert "credential-value" not in (result.error or "")
 
 def test_provider_rate_limit_failure_uses_stable_redacted_diagnostic() -> None:
     result = provider_rate_limit_failure(
@@ -1046,11 +1073,18 @@ def test_fmp_provider_returns_safe_failures_for_errors() -> None:
     assert malformed.get_quote(Symbol("amd")) == ProviderResult.failure(
         provider="fmp", error="fmp quote data was invalid"
     )
-    assert limited.get_quote(Symbol("amd")) == ProviderResult.failure(
-        provider="fmp", error="fmp request was rate limited"
-    )
+    limited_result = limited.get_quote(Symbol("amd"))
+    assert limited_result.ok is False
+    assert limited_result.error == "fmp request was rate limited"
+    assert limited_result.error_code == "rate_limited"
+    assert limited_result.error_category == "rate_limit"
+    assert limited_result.retryable is True
     result = exploding.get_quote(Symbol("amd"))
-    assert result == ProviderResult.failure(provider="fmp", error="fmp request failed")
+    assert result.ok is False
+    assert result.error_code == "transport_error"
+    assert result.error_category == "transport"
+    assert result.retryable is True
+    assert "fmp request failed" in (result.error or "")
     assert "secret transport" not in (result.error or "")
 
 
@@ -1242,9 +1276,11 @@ def test_stooq_provider_handles_unavailable_and_malformed_responses() -> None:
     assert malformed_result == ProviderResult.failure(
         provider="stooq", error="stooq historical data was invalid"
     )
-    assert exploding_result == ProviderResult.failure(
-        provider="stooq", error="stooq historical fetch failed"
-    )
+    assert exploding_result.ok is False
+    assert exploding_result.error_code == "transport_error"
+    assert exploding_result.error_category == "transport"
+    assert exploding_result.retryable is True
+    assert "stooq historical fetch failed" in (exploding_result.error or "")
     assert "network timeout" not in (exploding_result.error or "")
 
 

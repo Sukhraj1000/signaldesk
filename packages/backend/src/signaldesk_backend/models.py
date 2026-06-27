@@ -152,6 +152,37 @@ class ProviderCapability:
             raise ValueError("rate_limit_per_minute must be positive")
 
 
+def _normalize_error_taxonomy_value(value: str, field_name: str) -> str:
+    normalized = value.strip().lower().replace(" ", "_").replace("-", "_")
+    if not normalized:
+        raise ValueError(f"{field_name} is required")
+    return normalized
+
+
+@dataclass(frozen=True, kw_only=True)
+class ProviderError:
+    """Actionable, credential-safe provider error taxonomy metadata."""
+
+    code: str
+    message: str
+    category: str = "provider"
+    retryable: bool = False
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self, "code", _normalize_error_taxonomy_value(self.code, "error code")
+        )
+        object.__setattr__(
+            self,
+            "category",
+            _normalize_error_taxonomy_value(self.category, "error category"),
+        )
+        message = self.message.strip()
+        if not message:
+            raise ValueError("error message is required")
+        object.__setattr__(self, "message", message)
+
+
 @dataclass(frozen=True, kw_only=True)
 class ProviderResult[T]:
     """A deterministic wrapper for provider success, warnings, or failure."""
@@ -160,6 +191,9 @@ class ProviderResult[T]:
     data: T | None = None
     error: str | None = None
     warnings: tuple[str, ...] = ()
+    error_code: str | None = None
+    error_category: str | None = None
+    retryable: bool = False
 
     def __post_init__(self) -> None:
         provider = self.provider.strip()
@@ -172,19 +206,62 @@ class ProviderResult[T]:
             raise ValueError("provider result must include either data or error")
         if self.error is not None and not self.error.strip():
             raise ValueError("error must not be blank")
+        if self.error is None:
+            if self.error_code is not None or self.error_category is not None or self.retryable:
+                raise ValueError("successful provider result must not include error metadata")
+        else:
+            if self.error_code is not None:
+                object.__setattr__(
+                    self,
+                    "error_code",
+                    _normalize_error_taxonomy_value(self.error_code, "error_code"),
+                )
+            if self.error_category is not None:
+                object.__setattr__(
+                    self,
+                    "error_category",
+                    _normalize_error_taxonomy_value(self.error_category, "error_category"),
+                )
         object.__setattr__(self, "warnings", tuple(self.warnings))
 
     @property
     def ok(self) -> bool:
         return self.error is None
 
+    @property
+    def provider_error(self) -> ProviderError | None:
+        if self.error is None:
+            return None
+        return ProviderError(
+            code=self.error_code or "provider_error",
+            category=self.error_category or "provider",
+            message=self.error,
+            retryable=self.retryable,
+        )
+
     @classmethod
     def success(cls, *, provider: str, data: T, warnings: tuple[str, ...] = ()) -> Self:
         return cls(provider=provider, data=data, warnings=warnings)
 
     @classmethod
-    def failure(cls, *, provider: str, error: str, warnings: tuple[str, ...] = ()) -> Self:
-        return cls(provider=provider, error=error, warnings=warnings)
+    def failure(
+        cls,
+        *,
+        provider: str,
+        error: str,
+        warnings: tuple[str, ...] = (),
+        error_code: str | None = None,
+        error_category: str | None = None,
+        retryable: bool = False,
+    ) -> Self:
+        return cls(
+            provider=provider,
+            error=error,
+            warnings=warnings,
+            error_code=error_code,
+            error_category=error_category,
+            retryable=retryable,
+        )
 
 
 @dataclass(frozen=True, kw_only=True)

@@ -12,6 +12,7 @@ from signaldesk_backend import (
     KeyLevels,
     Provenance,
     ProviderCapability,
+    ProviderError,
     ProviderMode,
     ProviderResult,
     Quote,
@@ -181,6 +182,42 @@ def test_provider_result_success_and_failure_shapes() -> None:
     assert failure.ok is False
     assert failure.error == "not available"
 
+
+
+def test_provider_error_normalizes_actionable_taxonomy() -> None:
+    error = ProviderError(
+        code=" Rate Limited ",
+        category=" Rate Limit ",
+        message=" yfinance request was rate limited ",
+        retryable=True,
+    )
+
+    assert error.code == "rate_limited"
+    assert error.category == "rate_limit"
+    assert error.message == "yfinance request was rate limited"
+    assert error.retryable is True
+
+
+def test_provider_result_failure_carries_structured_error_metadata() -> None:
+    failure: ProviderResult[str] = ProviderResult.failure(
+        provider="yfinance",
+        error="request was rate limited",
+        error_code="rate_limited",
+        error_category="rate_limit",
+        retryable=True,
+    )
+
+    assert failure.ok is False
+    assert failure.error == "request was rate limited"
+    assert failure.error_code == "rate_limited"
+    assert failure.error_category == "rate_limit"
+    assert failure.retryable is True
+    assert failure.provider_error == ProviderError(
+        code="rate_limited",
+        category="rate_limit",
+        message="request was rate limited",
+        retryable=True,
+    )
 
 def test_provider_result_rejects_ambiguous_data_and_error() -> None:
     with pytest.raises(ValueError, match="either data or error"):
