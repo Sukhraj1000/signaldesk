@@ -1027,6 +1027,7 @@ def test_fmp_provider_reports_missing_or_invalid_fundamental_context_safely() ->
     empty = FmpProvider(api_key="test-key", _urlopen=FakeFmpUrlopen(b"[]"))
     invalid = FmpProvider(api_key="test-key", _urlopen=FakeFmpUrlopen(b'[{"mktCap":-1}]'))
     fractional = FmpProvider(api_key="test-key", _urlopen=FakeFmpUrlopen(b'[{"mktCap":1.9}]'))
+    limited = FmpProvider(api_key="test-key", _urlopen=FakeFmpUrlopen(b"{}", status=429))
 
     assert missing_key.get_fundamental_context(Symbol("amd")) == ProviderResult.failure(
         provider="fmp", error="FMP credentials are not configured"
@@ -1040,6 +1041,12 @@ def test_fmp_provider_reports_missing_or_invalid_fundamental_context_safely() ->
     assert fractional.get_fundamental_context(Symbol("amd")) == ProviderResult.failure(
         provider="fmp", error="fmp fundamental data was invalid"
     )
+    limited_result = limited.get_fundamental_context(Symbol("amd"))
+    assert limited_result.ok is False
+    assert limited_result.error == "fmp request was rate limited"
+    assert limited_result.error_code == "rate_limited"
+    assert limited_result.error_category == "rate_limit"
+    assert limited_result.retryable is True
 
 
 def test_fmp_provider_reports_missing_or_invalid_catalyst_context_safely() -> None:
@@ -1050,6 +1057,7 @@ def test_fmp_provider_reports_missing_or_invalid_catalyst_context_safely() -> No
         api_key="test-key",
         _urlopen=FakeFmpUrlopen(b'[{"title":"Headline","publishedDate":123}]'),
     )
+    limited = FmpProvider(api_key="test-key", _urlopen=FakeFmpUrlopen(b"{}", status=429))
 
     assert missing_key.get_catalyst_context(Symbol("amd")) == ProviderResult.failure(
         provider="fmp", error="FMP credentials are not configured"
@@ -1063,6 +1071,12 @@ def test_fmp_provider_reports_missing_or_invalid_catalyst_context_safely() -> No
     assert invalid_event.get_catalyst_context(Symbol("amd")) == ProviderResult.failure(
         provider="fmp", error="fmp catalyst data was invalid"
     )
+    limited_result = limited.get_catalyst_context(Symbol("amd"))
+    assert limited_result.ok is False
+    assert limited_result.error == "fmp request was rate limited"
+    assert limited_result.error_code == "rate_limited"
+    assert limited_result.error_category == "rate_limit"
+    assert limited_result.retryable is True
 
 
 def test_fmp_provider_returns_safe_failures_for_errors() -> None:

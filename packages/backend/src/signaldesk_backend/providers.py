@@ -1349,7 +1349,11 @@ class FmpProvider:
         response = self._fetch_json(f"profile/{symbol.ticker}", {"apikey": api_key})
         if not response.ok:
             return ProviderResult.failure(
-                provider=self.name, error=response.error or "fmp request failed"
+                provider=self.name,
+                error=response.error or "fmp request failed",
+                error_code=response.error_code,
+                error_category=response.error_category,
+                retryable=response.retryable,
             )
         return self._parse_fundamental_context(symbol, response.data)
 
@@ -1374,7 +1378,11 @@ class FmpProvider:
         )
         if not news_response.ok:
             return ProviderResult.failure(
-                provider=self.name, error=news_response.error or "fmp request failed"
+                provider=self.name,
+                error=news_response.error or "fmp request failed",
+                error_code=news_response.error_code,
+                error_category=news_response.error_category,
+                retryable=news_response.retryable,
             )
         earnings_response = self._fetch_json(
             f"historical/earning_calendar/{symbol.ticker}",
