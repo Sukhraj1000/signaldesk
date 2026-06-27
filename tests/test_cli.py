@@ -4070,29 +4070,41 @@ def test_backtest_setup_labels_command_lists_discoverable_research_labels() -> N
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.stdout)
-    assert payload == {
-        "schema_version": "signaldesk.backtest.setup_labels.v1",
-        "setup_labels": [
-            "breakdown_watch",
-            "breakout_watch",
-            "moving_average_loss",
-            "moving_average_reclaim",
-            "relative_volume_spike",
-        ],
-        "default_provider": "local-fixture",
-        "source": "deterministic_candle_rules",
-        "limitations": [
-            "Labels are deterministic research setup rules derived from historical candles; "
-            "they are not recommendations, orders, broker instructions, or live trading behavior."
-        ],
+    assert payload["schema_version"] == "signaldesk.backtest.setup_labels.v1"
+    assert payload["setup_labels"] == [
+        "breakdown_watch",
+        "breakout_watch",
+        "moving_average_loss",
+        "moving_average_reclaim",
+        "relative_volume_spike",
+    ]
+    assert [item["setup_label"] for item in payload["setup_label_details"]] == payload[
+        "setup_labels"
+    ]
+    assert payload["setup_label_details"][0] == {
+        "setup_label": "breakdown_watch",
+        "description": "Close breaks below the prior lookback low after holding at or above it.",
+        "derivation": "prior_lookback_low_break",
+        "lookback_candles": 20,
+        "minimum_candles": 21,
     }
+    assert payload["default_provider"] == "local-fixture"
+    assert payload["source"] == "deterministic_candle_rules"
+    assert payload["limitations"] == [
+        "Labels are deterministic research setup rules derived from historical candles; "
+        "they are not recommendations, orders, broker instructions, or live trading behavior."
+    ]
 
     table_result = CliRunner().invoke(app, ["backtest", "setup-labels"])
     assert table_result.exit_code == 0, table_result.output
-    assert "setup_label" in table_result.stdout
-    assert "relative_volume_spike" in table_result.stdout
-
-
+    assert (
+        "setup_label\tlookback_candles\tminimum_candles\tderivation"
+        in table_result.stdout
+    )
+    assert (
+        "relative_volume_spike\t20\t21\tlookback_relative_volume_threshold"
+        in table_result.stdout
+    )
 
 
 def test_backtest_setup_batch_command_reports_every_builtin_label() -> None:
