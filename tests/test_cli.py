@@ -601,6 +601,10 @@ def test_scan_payload_uses_bounded_concurrency_and_keeps_input_order(
     )
 
     assert exit_code == 0
+    assert payload["run_id"].startswith("watchlist-scan-")
+    assert payload["run"]["run_id"] == payload["run_id"]
+    assert payload["run"]["symbol_count"] == 3
+    assert payload["run"]["max_workers"] == 2
     assert [result["symbol"] for result in payload["results"]] == ["AMD", "MSFT", "NVDA"]
     assert provider.max_active == 2
 
@@ -672,6 +676,10 @@ def test_scan_command_includes_watchlist_metadata_and_skips_disabled_watchlists(
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
+    assert payload["run_id"].startswith("watchlist-scan-")
+    assert payload["run"]["run_id"] == payload["run_id"]
+    assert payload["run"]["symbol_count"] == 2
+    assert payload["run"]["skipped_count"] == 2
     assert payload["watchlist_model"] == {
         "name": "Growth Watch",
         "tags": ["momentum", "default-mode"],
@@ -738,6 +746,8 @@ def test_scan_uses_watchlist_provider_preference_when_provider_is_omitted(
         "llm_provider": None,
         "unavailable_context": [],
     }
+    assert payload["run_id"].startswith("watchlist-scan-")
+    assert payload["run"]["max_workers"] == 1
     assert payload["watchlist_model"]["provider_preference"] == "working"
     assert payload["results"][0]["summary"]["provider"] == "working"
 
@@ -2781,6 +2791,14 @@ def test_report_watchlist_json_uses_fixture_provider(
         "unavailable_context": [],
     }
     assert payload["symbols"] == ["AMD", "MSFT"]
+    assert payload["run_id"].startswith("watchlist-scan-")
+    assert payload["run"]["run_id"] == payload["run_id"]
+    assert payload["run"]["generated_at"] == payload["scanned_at"]
+    assert payload["run"]["symbol_count"] == 2
+    assert payload["run"]["failed_count"] == 0
+    assert payload["run"]["skipped_count"] == 0
+    assert payload["run"]["max_workers"] == 2
+    assert isinstance(payload["run"]["duration_ms"], int)
     assert [result["status"] for result in payload["results"]] == ["ok", "ok"]
     assert [result["rank"] for result in payload["ranked_setups"]] == [1, 2]
     assert payload["provenance"] == [

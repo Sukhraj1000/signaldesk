@@ -1974,7 +1974,7 @@ def _format_scan_table(payload: dict[str, Any]) -> tuple[str, ...]:
         "rank	symbol	status	provider	latest_close	trend_regime	"
         "setup_quality_score	risk_score	unavailable_context"
     )
-    lines = [header]
+    lines = [f"run_id\t{payload.get('run_id', 'unavailable')}", header]
     for result in payload["ranked_setups"]:
         summary = result["summary"]
         lines.append(
@@ -2440,6 +2440,9 @@ def _watchlist_report_payload(
     watchlist: Path,
     watchlist_model: dict[str, Any],
     scanned_at: datetime,
+    run_id: str,
+    duration_ms: int,
+    max_workers: int,
     provider_mode: dict[str, Any],
     symbols: tuple[str, ...],
     results: list[dict[str, Any]],
@@ -2449,10 +2452,21 @@ def _watchlist_report_payload(
 ) -> dict[str, Any]:
     """Return the stable JSON/Markdown payload for watchlist reports."""
 
+    summary = _watchlist_scan_summary(results, ranked_setups, failed_symbols, skipped_symbols)
     return {
         "schema_version": WATCHLIST_REPORT_SCHEMA_VERSION,
         "report_type": "watchlist",
         "generated_at": scanned_at.isoformat(),
+        "run_id": run_id,
+        "run": {
+            "run_id": run_id,
+            "generated_at": scanned_at.isoformat(),
+            "duration_ms": duration_ms,
+            "symbol_count": len(symbols),
+            "failed_count": len(failed_symbols),
+            "skipped_count": len(skipped_symbols),
+            "max_workers": max_workers,
+        },
         "watchlist": str(watchlist),
         "watchlist_model": watchlist_model,
         "scanned_at": scanned_at.isoformat(),
@@ -2462,7 +2476,7 @@ def _watchlist_report_payload(
         "ranked_setups": ranked_setups,
         "failed_symbols": failed_symbols,
         "skipped_symbols": skipped_symbols,
-        "summary": _watchlist_scan_summary(results, ranked_setups, failed_symbols, skipped_symbols),
+        "summary": summary,
         "provenance": _watchlist_report_provenance(results),
     }
 
@@ -2480,7 +2494,9 @@ def _scan_watchlist_payload(
     refresh_cache: bool = False,
 ) -> tuple[int, dict[str, Any]]:
     registry = default_provider_registry()
+    started = perf_counter()
     scanned_at = datetime.now(UTC)
+    run_id = f"watchlist-scan-{uuid4()}"
     symbols = tuple(watchlist_model["symbols"])
     price_provider = _watchlist_price_provider_preference(watchlist_model, provider)
     provider_mode = (
@@ -2504,6 +2520,9 @@ def _scan_watchlist_payload(
             watchlist=watchlist,
             watchlist_model=watchlist_model,
             scanned_at=scanned_at,
+            run_id=run_id,
+            duration_ms=int((perf_counter() - started) * 1000),
+            max_workers=0,
             provider_mode=provider_mode,
             symbols=symbols,
             results=skipped_symbols,
@@ -2556,6 +2575,9 @@ def _scan_watchlist_payload(
         watchlist=watchlist,
         watchlist_model=watchlist_model,
         scanned_at=scanned_at,
+        run_id=run_id,
+        duration_ms=int((perf_counter() - started) * 1000),
+        max_workers=bounded_workers,
         provider_mode=provider_mode,
         symbols=symbols,
         results=results,
@@ -2655,6 +2677,7 @@ def _format_report_markdown(payload: dict[str, Any]) -> str:
             + chr(96)
         ),
         f"- Watchlist: `{payload['watchlist']}`",
+        f"- Run ID: `{payload.get('run_id', 'unavailable')}`",
         f"- Watchlist name: `{payload['watchlist_model']['name']}`",
         f"- Watchlist tags: `{', '.join(payload['watchlist_model']['tags']) or 'none'}`",
         f"- Asset class: `{payload['watchlist_model']['asset_class']}`",
