@@ -58,6 +58,8 @@ Future OpenAI-compatible or local LLM adapters should call these same backend co
 
 ## Backtest setup replay JSON
 
+`signaldesk backtest setup-labels --output json` emits `signaldesk.backtest.setup_labels.v1`, a no-network discovery payload listing deterministic built-in setup labels that SignalDesk can derive from historical candles. The list is intentionally research-only metadata and includes a limitation that labels are not recommendations, orders, broker instructions, or live trading behavior.
+
 `signaldesk backtest setup <SYMBOL> --setup-label <LABEL> --signal-index <N> --output json` emits `signaldesk.backtest.setup_replay.v1`, a deterministic research report for historical setup labels. In default mode the command uses `local-fixture` when no provider is passed, keeping the smoke path no-network and useful without paid keys.
 
 The payload contains:

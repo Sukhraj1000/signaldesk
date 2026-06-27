@@ -48,6 +48,12 @@ def test_tox_smoke_covers_web_watchlist_scan_entrypoint() -> None:
     )
 
 
+def test_tox_smoke_covers_backtest_setup_label_discovery_entrypoint() -> None:
+    tox_ini = Path("tox.ini").read_text(encoding="utf-8")
+
+    assert "signaldesk backtest setup-labels --output json" in tox_ini
+
+
 def test_tox_smoke_covers_backtest_setup_entrypoint() -> None:
     tox_ini = Path("tox.ini").read_text(encoding="utf-8")
 
