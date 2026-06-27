@@ -31,6 +31,7 @@ from signaldesk_cli.main import (
     _format_provider_health,
     _run_provider_health_checks,
     _scan_watchlist_payload,
+    _setup_replay_markdown,
     app,
 )
 from typer.testing import CliRunner
@@ -3951,6 +3952,75 @@ def test_backtest_setup_table_includes_provenance() -> None:
     assert "provider\tlocal-fixture" in result.stdout
     assert "source\tcli_backtest_setup" in result.stdout
     assert "generated_at\t" in result.stdout
+
+
+def test_backtest_setup_markdown_renders_boundaries_and_provenance() -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "backtest",
+            "setup",
+            "AMD",
+            "--provider",
+            "local-fixture",
+            "--setup-label",
+            "breakout watch",
+            "--signal-index",
+            "0",
+            "--horizon",
+            "1",
+            "--output",
+            "markdown",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert result.stdout.startswith("# SignalDesk setup replay: AMD breakout_watch")
+    assert "## Report boundaries" in result.stdout
+    assert "does not include broker, order, fill, position sizing, slippage" in result.stdout
+    assert "## Limitations" in result.stdout
+    assert "Historical setup replay is deterministic research only" in result.stdout
+    assert "- Provider: `local-fixture`" in result.stdout
+    assert "- Source: `cli_backtest_setup`" in result.stdout
+
+
+def test_backtest_setup_markdown_preserves_zero_metrics() -> None:
+    markdown = _setup_replay_markdown(
+        {
+            "schema_version": "signaldesk.backtest.setup_replay.v1",
+            "setup_label": "breakout_watch",
+            "symbol": "AMD",
+            "timeframe": "1d",
+            "candle_count": 2,
+            "data_start": "2026-01-01T00:00:00+00:00",
+            "data_end": "2026-01-02T00:00:00+00:00",
+            "sample_size": 1,
+            "evaluable_signals": 1,
+            "horizons": [1],
+            "metrics": {
+                "hit_rate": 0,
+                "average_forward_return_by_horizon": {"1": 0},
+                "false_breakout_rate": 0,
+                "max_adverse_excursion": 0,
+                "event_usefulness": 0,
+                "data_availability_rate": "1.00",
+            },
+            "provenance": {
+                "provider": "local-fixture",
+                "source": "unit-test",
+                "generated_at": "2026-01-02T00:00:00+00:00",
+                "inputs": ["AMD", "breakout_watch"],
+                "warnings": [],
+            },
+            "limitations": ["research only"],
+            "unavailable_context": [],
+        }
+    )
+
+    assert "- Hit rate: `0`" in markdown
+    assert "- False breakout rate: `0`" in markdown
+    assert "- Max adverse excursion proxy: `0`" in markdown
+    assert "- Event usefulness: `0`" in markdown
+    assert "  - `1`: `0`" in markdown
 
 
 def test_backtest_setup_rejects_non_finite_decimal_level() -> None:

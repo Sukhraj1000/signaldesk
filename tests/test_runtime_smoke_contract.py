@@ -63,6 +63,11 @@ def test_tox_smoke_covers_backtest_setup_entrypoint() -> None:
         "--provider local-fixture --output json"
         in tox_ini
     )
+    assert (
+        "signaldesk backtest setup AMD --setup-label breakout_watch "
+        "--signal-index 10 --horizon 5 --provider local-fixture --output markdown"
+        in tox_ini
+    )
 
 
 def test_persistence_caching_scheduling_docs_define_cache_invalidation_policy() -> None:
