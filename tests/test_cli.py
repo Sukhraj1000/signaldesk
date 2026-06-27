@@ -1727,14 +1727,29 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
     generated_at = payload["identity"]["generated_at"]
     assert isinstance(generated_at, str)
     datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
+    run_id = payload["identity"]["run_id"]
+    assert run_id.startswith("ta-")
+    assert payload["run_id"] == run_id
+    assert payload["run"]["run_id"] == run_id
+    assert payload["run"]["price_provider"] == "working"
+    assert payload["run"]["generated_at"] == generated_at
+    assert payload["run"]["provider_fetch_duration_ms"] >= 0
     expected["facts"]["data_start"] = "2024-01-01T00:00:00+00:00"
     expected["facts"]["data_end"] = "2024-02-09T00:00:00+00:00"
     expected["facts"]["latest_volume"] = 1039
+    expected["run_id"] = run_id
+    expected["run"] = {
+        "run_id": run_id,
+        "generated_at": generated_at,
+        "provider_fetch_duration_ms": payload["run"]["provider_fetch_duration_ms"],
+        "price_provider": "working",
+    }
     expected["identity"] = {
         "symbol": "AMD",
         "timeframe": "1d",
         "generated_at": generated_at,
         "schema_version": "signaldesk.ta.v1",
+        "run_id": run_id,
     }
     expected["trend"] = {
         "moving_averages": {
@@ -1810,6 +1825,8 @@ def test_ta_command_outputs_markdown_from_signal_card(monkeypatch: MonkeyPatch) 
         "instructions." in result.stdout
     )
     assert "- Generated at: `" in result.stdout
+    assert "- Run ID: `ta-" in result.stdout
+    assert "- Provider fetch duration: `" in result.stdout
     assert "- Schema version: `signaldesk.ta.v1`" in result.stdout
     assert "- Price provider: `working`" in result.stdout
     assert "- Latest close: `49`" in result.stdout
