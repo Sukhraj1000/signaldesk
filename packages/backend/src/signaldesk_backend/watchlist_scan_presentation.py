@@ -13,6 +13,7 @@ def build_watchlist_scan_presentation(watchlist_report: Mapping[str, Any]) -> di
     watchlist_model = _mapping_section(watchlist_report, "watchlist_model")
     provider_mode = _mapping_section(watchlist_report, "provider_mode")
     summary = _mapping_section(watchlist_report, "summary")
+    run = _optional_mapping_section(watchlist_report, "run")
 
     return {
         "schema_version": WATCHLIST_SCAN_PRESENTATION_SCHEMA_VERSION,
@@ -33,6 +34,7 @@ def build_watchlist_scan_presentation(watchlist_report: Mapping[str, Any]) -> di
             "failed": summary.get("failed", 0),
             "skipped": summary.get("skipped", 0),
         },
+        "run_summary": _run_summary(watchlist_report, run),
         "ranked_setup_rows": [
             _ranked_setup_row(result)
             for result in _mapping_items(watchlist_report.get("ranked_setups"))
@@ -81,6 +83,37 @@ def _mapping_section(watchlist_report: Mapping[str, Any], section: str) -> Mappi
         raise ValueError(f"watchlist report {section} section must be a JSON object")
     return value
 
+
+
+def _optional_mapping_section(
+    watchlist_report: Mapping[str, Any], section: str
+) -> Mapping[str, Any]:
+    """Return an optional report section after validating its JSON object shape."""
+
+    if section not in watchlist_report:
+        return {}
+    value = watchlist_report[section]
+    if not isinstance(value, Mapping):
+        raise ValueError(f"watchlist report {section} section must be a JSON object")
+    return value
+
+
+def _run_summary(
+    watchlist_report: Mapping[str, Any], run: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Expose backend run identifiers and timing without dashboard recalculation."""
+
+    return {
+        "run_id": run.get("run_id") or watchlist_report.get("run_id"),
+        "generated_at": run.get("generated_at")
+        or watchlist_report.get("generated_at")
+        or watchlist_report.get("scanned_at"),
+        "duration_ms": run.get("duration_ms"),
+        "symbol_count": run.get("symbol_count"),
+        "failed_count": run.get("failed_count"),
+        "skipped_count": run.get("skipped_count"),
+        "max_workers": run.get("max_workers"),
+    }
 
 def _symbol_items(value: object) -> list[str]:
     """Validate and normalize the report symbol list for the presentation headline."""

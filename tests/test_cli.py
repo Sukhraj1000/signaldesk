@@ -3677,6 +3677,9 @@ def test_web_watchlist_scan_command_renders_dashboard_presentation() -> None:
         "price_provider": "local-fixture",
     }
     assert payload["summary_tiles"]["total"] == 2
+    assert payload["run_summary"]["run_id"].startswith("watchlist-scan-")
+    assert payload["run_summary"]["symbol_count"] == 2
+    assert payload["run_summary"]["failed_count"] == 0
     assert {row["symbol"] for row in payload["ranked_setup_rows"]} == {"AMD", "MSFT"}
     assert payload["rendering_contract"]["no_dashboard_analysis"] is True
 
