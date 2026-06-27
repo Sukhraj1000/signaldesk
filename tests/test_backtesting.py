@@ -90,6 +90,7 @@ def _validate_json_schema_subset(
             "array": isinstance(instance, list),
             "string": isinstance(instance, str),
             "integer": isinstance(instance, int) and not isinstance(instance, bool),
+            "number": isinstance(instance, int | float) and not isinstance(instance, bool),
             "boolean": isinstance(instance, bool),
         }
         assert any(type_matches[type_name] for type_name in type_options), (
@@ -102,7 +103,11 @@ def _validate_json_schema_subset(
         if schema.get("format") == "date-time":
             datetime.fromisoformat(instance.replace("Z", "+00:00"))
 
-    if isinstance(instance, int) and "minimum" in schema:
+    if (
+        isinstance(instance, int | float)
+        and not isinstance(instance, bool)
+        and "minimum" in schema
+    ):
         assert instance >= schema["minimum"], f"{path}: below minimum"
 
     if isinstance(instance, list):
@@ -466,6 +471,10 @@ def test_setup_batch_json_schema_documents_batch_payload_contract() -> None:
         timeframe="1d",
     )
     no_signal_context = ["No historical candles matched this deterministic setup label."]
+    insufficient_history_context = [
+        "Insufficient candle history to evaluate this deterministic setup label; "
+        "requires more than 3 candles."
+    ]
     payload: dict[str, Any] = {
         "schema_version": "signaldesk.backtest.setup_batch.v1",
         "symbol": "AMD",
@@ -506,10 +515,10 @@ def test_setup_batch_json_schema_documents_batch_payload_contract() -> None:
             },
             {
                 "setup_label": "relative_volume_spike",
-                "status": "no_signals",
+                "status": "insufficient_history",
                 "signal_indices": [],
                 "report": None,
-                "unavailable_context": no_signal_context,
+                "unavailable_context": insufficient_history_context,
             },
         ],
         "limitations": [
@@ -534,6 +543,13 @@ def test_setup_batch_json_schema_documents_batch_payload_contract() -> None:
     assert [item["setup_label"] for item in payload["labels"]] == list(supported_setup_labels())
     assert schema["properties"]["labels"]["minItems"] == len(supported_setup_labels())
     assert schema["properties"]["labels"]["maxItems"] == len(supported_setup_labels())
+    assert payload["labels"][-1] == {
+        "setup_label": "relative_volume_spike",
+        "status": "insufficient_history",
+        "signal_indices": [],
+        "report": None,
+        "unavailable_context": insufficient_history_context,
+    }
     assert set(label_schema["properties"]["status"]["enum"]) == {
         "evaluated",
         "no_signals",
