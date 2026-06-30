@@ -18,6 +18,11 @@ def test_sensitive_secret_path_detection_blocks_dotenv_and_private_keys() -> Non
     assert preflight.is_sensitive_secret_path(".env") is True
     assert preflight.is_sensitive_secret_path(".env.local") is True
     assert preflight.is_sensitive_secret_path("config/prod.env") is True
+    assert preflight.is_sensitive_secret_path(".envrc") is True
+    assert preflight.is_sensitive_secret_path(".netrc") is True
+    assert preflight.is_sensitive_secret_path(".npmrc") is True
+    assert preflight.is_sensitive_secret_path(".pypirc") is True
+    assert preflight.is_sensitive_secret_path("pip.conf") is True
     assert preflight.is_sensitive_secret_path("config/prod.env.pem") is True
     assert preflight.is_sensitive_secret_path("keys/id_ed25519") is True
     assert preflight.is_sensitive_secret_path("certs/provider.p12") is True

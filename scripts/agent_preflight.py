@@ -20,6 +20,13 @@ SECRET_VALUE_RE = re.compile(
 )
 
 SENSITIVE_DOTENV_SAMPLE_SUFFIXES = (".example", ".sample", ".template")
+SENSITIVE_AUTH_FILE_NAMES = {
+    ".netrc",
+    ".npmrc",
+    ".pypirc",
+    "pip.conf",
+}
+
 SENSITIVE_KEY_FILE_NAMES = {
     "id_dsa",
     "id_ecdsa",
@@ -100,6 +107,10 @@ def is_sensitive_secret_path(rel: str) -> bool:
 
     name = Path(rel).name.lower()
     if name == ".env":
+        return True
+    if name == ".envrc":
+        return True
+    if name in SENSITIVE_AUTH_FILE_NAMES:
         return True
     if name.startswith(".env.") and not name.endswith(SENSITIVE_DOTENV_SAMPLE_SUFFIXES):
         return True
