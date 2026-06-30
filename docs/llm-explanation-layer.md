@@ -62,11 +62,13 @@ Candidate model output must be raw JSON matching `signaldesk.llm_explanation.v1`
 ```bash
 signaldesk llm validate-output fixtures/llm/valid-explanation.json
 signaldesk llm validate-chat-response fixtures/llm/valid-chat-response.json
+# Expected to fail closed without echoing hostile model text:
+signaldesk llm validate-chat-response fixtures/llm/malicious-chat-response.json
 signaldesk llm render-output fixtures/llm/valid-explanation.json
 signaldesk llm attach-output AMD fixtures/llm/valid-explanation.json --provider local-fixture --output markdown
 ```
 
-Invalid JSON, Markdown fences, extra fields, blank required fields, malformed OpenAI-compatible chat responses, tool-call style responses, and non-`stop` chat completion finish reasons fail closed at the raw-JSON/schema boundary. Recommendation-language terms covered by `signaldesk_backend.llm._reject_recommendation_language` also fail closed during field validation. Each `deterministic_facts_used` entry must resolve to an existing scalar path in the exact prompt/report signal card; when a reviewer-friendly `path=value` suffix is supplied, the value must match the resolved signal-card value, using numeric comparison for numerically equivalent values and string comparison otherwise, instead of merely pointing at a real path. `signaldesk llm attach-output` reuses the same parser before it can add narrative to a deterministic TA report; failed validation emits a generic schema failure and does not leak hostile model text. Unavailable provider or LLM context must remain visible to users instead of being silently omitted.
+Invalid JSON, Markdown fences, extra fields, blank required fields, malformed OpenAI-compatible chat responses, tool-call style responses, malicious recommendation/trade-instruction language, invented cited values, and non-`stop` chat completion finish reasons fail closed at the raw-JSON/schema boundary. Recommendation-language terms covered by `signaldesk_backend.llm._reject_recommendation_language` also fail closed during field validation. Each `deterministic_facts_used` entry must resolve to an existing scalar path in the exact prompt/report signal card; when a reviewer-friendly `path=value` suffix is supplied, the value must match the resolved signal-card value, using numeric comparison for numerically equivalent values and string comparison otherwise, instead of merely pointing at a real path. `signaldesk llm attach-output` reuses the same parser before it can add narrative to a deterministic TA report; failed validation emits a generic schema failure and does not leak hostile model text. Unavailable provider or LLM context must remain visible to users instead of being silently omitted.
 
 ## Reviewer checklist for issue #54
 

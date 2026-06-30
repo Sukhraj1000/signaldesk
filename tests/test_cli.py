@@ -3353,6 +3353,23 @@ def test_llm_validate_chat_response_rejects_malformed_json_without_leaking_text(
     assert "invalid LLM chat response: JSON parse failed" in result.stderr
 
 
+def test_llm_validate_chat_response_rejects_malicious_fixture_without_leaking_text() -> None:
+    response_path = Path("fixtures/llm/malicious-chat-response.json")
+
+    result = CliRunner().invoke(app, ["llm", "validate-chat-response", str(response_path)])
+
+    assert result.exit_code == 1
+    assert "invalid LLM chat response: schema validation failed" in result.stderr
+    hostile_text = response_path.read_text(encoding="utf-8")
+    assert "buy AMD now" in hostile_text
+    assert "stop loss" in hostile_text
+    assert "999.00" in hostile_text
+    assert "buy AMD now" not in result.stderr
+    assert "stop loss" not in result.stderr
+    assert "999.00" not in result.stderr
+    assert result.stdout == ""
+
+
 def test_llm_attach_output_attaches_validated_narrative_without_mutating_facts(
     monkeypatch: MonkeyPatch, tmp_path: Path
 ) -> None:
