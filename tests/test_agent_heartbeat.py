@@ -70,7 +70,7 @@ def test_active_ordered_target_is_lowest_open_roadmap_parent() -> None:
     assert target.issue_number == 44
 
 
-def test_propose_actions_decomposes_earliest_roadmap_issue_before_later_features() -> None:
+def test_propose_actions_selects_bounded_roadmap_slice_before_later_features() -> None:
     issues = [
         issue(67, "Restore ordered issue execution", ["agent-loop"], "Parent: #61"),
         issue(44, "Roadmap 1: Engineering Foundation", ["roadmap", "safety"]),
@@ -79,8 +79,10 @@ def test_propose_actions_decomposes_earliest_roadmap_issue_before_later_features
 
     actions = agent_heartbeat.propose_actions(issues, prs=[])
 
-    assert actions[0].lane == "issue-decomposition"
+    assert actions[0].lane == "bounded-roadmap-slice"
     assert actions[0].target == "Issue #44: Roadmap 1: Engineering Foundation"
+    assert "existing issue" in actions[0].suggested_agent
+    assert "do not create child issues" in actions[0].suggested_agent
 
 
 def test_propose_actions_services_active_target_pr_before_waiting(

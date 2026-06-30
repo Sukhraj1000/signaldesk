@@ -34,6 +34,7 @@ The old roadmap-to-issues step has been removed. If a capability is not represen
 - #59 Roadmap 16: Observability and Operations
 - #60 Roadmap 17: Security, Compliance, and Safety
 - #61 Roadmap 18: Developer and Agent Workflow
+- #253 Roadmap 19: Decision-support Trading Signal Engine
 
 ## Issue contract
 

@@ -360,13 +360,16 @@ def propose_actions(issues: list[dict[str, Any]], prs: list[dict[str, Any]]) -> 
         elif "roadmap" in labels:
             actions.append(
                 Action(
-                    lane="issue-decomposition",
+                    lane="bounded-roadmap-slice",
                     target=f"Issue #{issue['number']}: {issue['title']}",
                     reason=(
-                        "earliest open roadmap issue is too broad for a bounded "
-                        "branch unless child issues exist"
+                        "earliest open roadmap issue has no active PR; select one "
+                        "small implementation slice against this existing issue"
                     ),
-                    suggested_agent="create up to three small linked child implementation issues",
+                    suggested_agent=(
+                        "bounded implementation agent on a fresh branch referencing "
+                        "the existing issue; do not create child issues autonomously"
+                    ),
                 )
             )
         else:
