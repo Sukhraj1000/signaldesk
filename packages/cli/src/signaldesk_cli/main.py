@@ -27,6 +27,7 @@ from signaldesk_backend import (
     Settings,
     SetupReplayMetrics,
     SetupReplayReport,
+    SignalHistoryRecord,
     Symbol,
     assemble_ta_signal_card_report,
     assess_technical_analysis_risks,
@@ -412,6 +413,7 @@ def technical_analysis(
     if save_dir is not None:
         try:
             _save_report_artifact(report, save_dir)
+            _save_signal_history_artifacts(report, save_dir)
         except OSError as exc:
             typer.echo(f"could not save report artifact: {exc}", err=True)
             raise typer.Exit(1) from exc
@@ -1312,6 +1314,112 @@ def _save_report_artifact(payload: dict[str, Any], save_dir: Path) -> Path:
     return path
 
 
+
+def _parse_history_datetime(value: object, field_name: str) -> datetime:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"signal history {field_name} is required")
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError(f"signal history {field_name} must be timezone-aware")
+    return parsed
+
+
+def _optional_decimal(value: object) -> Decimal | None:
+    if value is None:
+        return None
+    return Decimal(str(value))
+
+
+def _signal_history_payload_from_card(
+    signal_card: dict[str, Any], *, requested_days: object, source_schema_version: str
+) -> dict[str, object]:
+    identity = signal_card["identity"]
+    facts = signal_card["facts"]
+    provider_mode = signal_card["provider_mode"]
+    decision_support = signal_card["decision_support"]
+    levels = signal_card["levels"]
+    days_source = requested_days if requested_days is not None else facts["candles"]
+    days = int(str(days_source))
+    record = SignalHistoryRecord(
+        run_id=str(identity["run_id"]),
+        generated_at=_parse_history_datetime(identity["generated_at"], "generated_at"),
+        symbol=str(identity["symbol"]),
+        provider=str(facts["provider"]),
+        provider_mode=str(
+            provider_mode.get("mode")
+            or provider_mode.get("price_provider")
+            or "default"
+        ),
+        interval=str(facts["interval"]),
+        requested_days=days,
+        candle_count=int(facts["candles"]),
+        latest_timestamp=_parse_history_datetime(facts["latest_timestamp"], "latest_timestamp"),
+        latest_close=Decimal(str(facts["latest_close"])),
+        signal_state=str(decision_support["signal_state"]),
+        momentum_state=str(decision_support["momentum_state"]),
+        strength_score=_optional_decimal(decision_support.get("strength_score")),
+        risk_score=_optional_decimal(decision_support.get("risk_score")),
+        confirmation_level=levels.get("confirmation"),
+        invalidation_level=levels.get("invalidation"),
+        classification_reasons=tuple(
+            str(reason)
+            for reason in decision_support.get("classification_reasons", ())
+        ),
+        unavailable_context=tuple(signal_card.get("unavailable_context", ())),
+        source_schema_version=source_schema_version,
+    )
+    return record.to_payload()
+
+
+def _signal_history_artifact_payloads(payload: dict[str, Any]) -> list[dict[str, object]]:
+    if payload.get("schema_version") == "signaldesk.ta.v1":
+        return [
+            _signal_history_payload_from_card(
+                extract_ta_signal_card(payload),
+                requested_days=payload.get("run", {}).get("requested_days"),
+                source_schema_version="signaldesk.ta.v1",
+            )
+        ]
+    if payload.get("schema_version") == WATCHLIST_REPORT_SCHEMA_VERSION:
+        records = []
+        requested_days = payload.get("run", {}).get("requested_days")
+        for result in payload.get("results", []):
+            if not isinstance(result, dict) or result.get("status") != "ok":
+                continue
+            summary = result.get("summary")
+            if not isinstance(summary, dict):
+                continue
+            signal_card = summary.get("signal_card")
+            if isinstance(signal_card, dict):
+                records.append(
+                    _signal_history_payload_from_card(
+                        signal_card,
+                        requested_days=summary.get("requested_days") or requested_days,
+                        source_schema_version=WATCHLIST_REPORT_SCHEMA_VERSION,
+                    )
+                )
+        return records
+    return []
+
+
+def _signal_history_artifact_path(record: dict[str, object], save_dir: Path) -> Path:
+    symbol = _safe_report_artifact_stem(record.get("symbol", "signal"))
+    run_id = _safe_report_artifact_stem(record.get("run_id", "run"))
+    generated_at = _safe_report_artifact_stem(
+        record.get("generated_at", datetime.now(UTC).isoformat())
+    )
+    return save_dir / f"signal-history-{symbol}-{run_id}-{generated_at}.json"
+
+
+def _save_signal_history_artifacts(payload: dict[str, Any], save_dir: Path) -> list[Path]:
+    save_dir.mkdir(parents=True, exist_ok=True)
+    paths = []
+    for record in _signal_history_artifact_payloads(payload):
+        path = _signal_history_artifact_path(record, save_dir)
+        path.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        paths.append(path)
+    return paths
+
 def _load_report_archive_reports(reports_dir: Path) -> list[dict[str, Any]]:
     if not reports_dir.exists() or not reports_dir.is_dir():
         raise ValueError(
@@ -1319,6 +1427,8 @@ def _load_report_archive_reports(reports_dir: Path) -> list[dict[str, Any]]:
         )
     reports: list[dict[str, Any]] = []
     for path in sorted(reports_dir.glob("*.json")):
+        if path.name.startswith("signal-history-"):
+            continue
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
@@ -1882,6 +1992,7 @@ def _fetch_ta_report(
         run_id=run_id,
         provider_fetch_duration_ms=provider_fetch_duration_ms,
     )
+    report["run"]["requested_days"] = days
     validate_ta_signal_card_report(report)
     return report
 
@@ -1991,6 +2102,7 @@ def _scan_result_summary(report: dict[str, Any]) -> dict[str, Any]:
         "setup_quality_score": setup_scores[0]["score"] if setup_scores else None,
         "risk_score": risk_scores[0]["score"] if risk_scores else None,
         "provenance": card["provenance"],
+        "requested_days": report.get("run", {}).get("requested_days"),
     }
 
 
@@ -2674,6 +2786,7 @@ def _watchlist_report_payload(
     run_id: str,
     duration_ms: int,
     max_workers: int,
+    requested_days: int,
     provider_mode: dict[str, Any],
     symbols: tuple[str, ...],
     results: list[dict[str, Any]],
@@ -2697,6 +2810,7 @@ def _watchlist_report_payload(
             "failed_count": len(failed_symbols),
             "skipped_count": len(skipped_symbols),
             "max_workers": max_workers,
+            "requested_days": requested_days,
         },
         "watchlist": _redact_sensitive_path_components(watchlist),
         "watchlist_model": watchlist_model,
@@ -2755,6 +2869,7 @@ def _scan_watchlist_payload(
             run_id=run_id,
             duration_ms=int((perf_counter() - started) * 1000),
             max_workers=0,
+            requested_days=days,
             provider_mode=provider_mode,
             symbols=symbols,
             results=skipped_symbols,
@@ -2810,6 +2925,7 @@ def _scan_watchlist_payload(
         run_id=run_id,
         duration_ms=int((perf_counter() - started) * 1000),
         max_workers=bounded_workers,
+        requested_days=days,
         provider_mode=provider_mode,
         symbols=symbols,
         results=results,
@@ -3149,6 +3265,7 @@ def report_watchlist(
     if save_dir is not None:
         try:
             _save_report_artifact(payload, save_dir)
+            _save_signal_history_artifacts(payload, save_dir)
         except OSError as exc:
             typer.echo(f"could not save report artifact: {exc}", err=True)
             raise typer.Exit(1) from exc

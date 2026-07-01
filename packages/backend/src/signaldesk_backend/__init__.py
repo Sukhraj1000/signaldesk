@@ -66,6 +66,7 @@ from signaldesk_backend.llm import (
     validate_llm_prompt_payload,
 )
 from signaldesk_backend.models import (
+    SIGNAL_HISTORY_SCHEMA_VERSION,
     Candle,
     CatalystContext,
     CatalystEvent,
@@ -82,6 +83,7 @@ from signaldesk_backend.models import (
     ScoreBreakdown,
     ScoreReason,
     SignalCard,
+    SignalHistoryRecord,
     Symbol,
     TechnicalEvent,
     TechnicalSnapshot,
@@ -185,6 +187,8 @@ __all__ = [
     "RiskFlag",
     "ScoreBreakdown",
     "ScoreReason",
+    "SIGNAL_HISTORY_SCHEMA_VERSION",
+    "SignalHistoryRecord",
     "SetupReplayMetrics",
     "SetupReplayObservation",
     "SetupReplayReport",
