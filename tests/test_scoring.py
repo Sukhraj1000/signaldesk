@@ -1,5 +1,6 @@
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from typing import Literal
 
 from signaldesk_backend import (
     ConfirmationInvalidationLevel,
@@ -443,3 +444,113 @@ def test_classify_decision_support_signal_state_prioritizes_stretched_warning() 
     classification_reasons = classification["classification_reasons"]
     assert isinstance(classification_reasons, list)
     assert any("Overextension" in str(reason) for reason in classification_reasons)
+
+
+
+def _classification_regime(regime: str) -> RegimeClassification:
+    return RegimeClassification(
+        regime=regime,
+        source_rule=f"test_{regime}_regime",
+        reason=f"Test fixture classifies the regime as {regime}.",
+    )
+
+
+def _classification_event(
+    event_type: str, severity: Literal["bullish", "bearish", "warning"]
+) -> DeterministicTechnicalEvent:
+    return DeterministicTechnicalEvent(
+        event_type=event_type,
+        timestamp=NOW,
+        candle_index=10,
+        severity=severity,
+        source_rule=f"test_{event_type}",
+        source_indicators=("close",),
+        reason=f"Test {severity} event without stretch wording.",
+        price=Decimal("100"),
+    )
+
+
+def _classification_confirmation() -> ConfirmationInvalidationLevel:
+    return ConfirmationInvalidationLevel(
+        kind="confirmation",
+        price=Decimal("110"),
+        source_rule="test_confirmation_level",
+        source_level="resistance_zone[110,110] touches=2",
+        reason="Move through resistance confirms the setup.",
+    )
+
+
+def test_classify_decision_support_signal_state_stretches_downside_overextension() -> None:
+    classification = classify_decision_support_signal_state(
+        trend_regime=_classification_regime("range_bound"),
+        volume_regime=_classification_regime("normal_volume"),
+        technical_events=(_classification_event("overextension_down", "warning"),),
+        setup_levels=ConfirmationInvalidationLevels(confirmation=None, invalidation=None),
+        scores=(),
+    )
+
+    assert classification["signal_state"] == "stretched_avoid_chasing"
+    assert classification["momentum_state"] == "stretched"
+
+
+def test_classify_decision_support_signal_state_covers_improving_confirmation_branch() -> None:
+    classification = classify_decision_support_signal_state(
+        trend_regime=_classification_regime("range_bound"),
+        volume_regime=_classification_regime("normal_volume"),
+        technical_events=(_classification_event("breakout", "bullish"),),
+        setup_levels=ConfirmationInvalidationLevels(
+            confirmation=_classification_confirmation(), invalidation=None
+        ),
+        scores=(),
+    )
+
+    assert classification["signal_state"] == "improving_needs_confirmation"
+    assert classification["momentum_state"] == "improving"
+    assert classification["bullish_event_count"] == 1
+    assert classification["bearish_event_count"] == 0
+
+
+def test_classify_decision_support_signal_state_keeps_bearish_confirmation_weak() -> None:
+    classification = classify_decision_support_signal_state(
+        trend_regime=_classification_regime("range_bound"),
+        volume_regime=_classification_regime("normal_volume"),
+        technical_events=(_classification_event("support_break", "bearish"),),
+        setup_levels=ConfirmationInvalidationLevels(
+            confirmation=_classification_confirmation(), invalidation=None
+        ),
+        scores=(),
+    )
+
+    assert classification["signal_state"] == "weak_deteriorating"
+    assert classification["momentum_state"] == "fading"
+
+
+def test_classify_decision_support_signal_state_covers_neutral_range_branch() -> None:
+    classification = classify_decision_support_signal_state(
+        trend_regime=_classification_regime("unknown"),
+        volume_regime=_classification_regime("normal_volume"),
+        technical_events=(),
+        setup_levels=ConfirmationInvalidationLevels(confirmation=None, invalidation=None),
+        scores=(),
+    )
+
+    assert classification["signal_state"] == "neutral_range"
+    assert classification["momentum_state"] == "neutral"
+
+
+def test_classify_decision_support_signal_state_downtrend_overrides_bullish_dominance() -> None:
+    classification = classify_decision_support_signal_state(
+        trend_regime=_classification_regime("downtrend"),
+        volume_regime=_classification_regime("normal_volume"),
+        technical_events=(
+            _classification_event("breakout", "bullish"),
+            _classification_event("volume_expansion", "bullish"),
+        ),
+        setup_levels=ConfirmationInvalidationLevels(
+            confirmation=_classification_confirmation(), invalidation=None
+        ),
+        scores=(),
+    )
+
+    assert classification["signal_state"] == "weak_deteriorating"
+    assert classification["momentum_state"] == "fading"

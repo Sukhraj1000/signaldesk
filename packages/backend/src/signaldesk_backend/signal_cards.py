@@ -202,5 +202,27 @@ def _require_signal_card_sections(**sections: dict[str, Any]) -> None:
         raise ValueError("signal-card risk section must include flags and unavailable_context")
     if "breakdowns" not in sections["score"]:
         raise ValueError("signal-card score section must include breakdowns")
-    if "signal_state" not in sections["decision_support"]:
-        raise ValueError("signal-card decision_support section must include signal_state")
+    decision_support_required = {
+        "signal_state",
+        "momentum_state",
+        "trend_state",
+        "strength_score",
+        "risk_score",
+        "setup_quality_score",
+        "classification_reasons",
+        "source_rule",
+        "decision_support_only",
+        "not_trading_advice",
+        "confirmation_level",
+        "invalidation_level",
+        "bullish_event_count",
+        "bearish_event_count",
+    }
+    missing_decision_support = sorted(
+        decision_support_required.difference(sections["decision_support"])
+    )
+    if missing_decision_support:
+        missing = ", ".join(missing_decision_support)
+        raise ValueError(
+            f"signal-card decision_support section missing required field(s): {missing}"
+        )

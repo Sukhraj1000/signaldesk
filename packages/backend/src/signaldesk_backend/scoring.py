@@ -368,7 +368,7 @@ def classify_decision_support_signal_state(
     bearish_events = tuple(event for event in technical_events if event.severity == "bearish")
     warning_events = tuple(event for event in technical_events if event.severity == "warning")
     stretched = any(
-        event.event_type in {"overextension", "overextension_up"}
+        event.event_type in {"overextension", "overextension_up", "overextension_down"}
         or "stretch" in event.reason.lower()
         or "extended" in event.reason.lower()
         for event in warning_events
@@ -386,16 +386,18 @@ def classify_decision_support_signal_state(
         )
         - (Decimal("10") if volume_regime.regime == "low_volume" else Decimal("0"))
     )
+    bullish_dominates = len(bullish_events) > len(bearish_events)
+    bearish_dominates = len(bearish_events) > len(bullish_events)
     momentum_state = "neutral"
     if stretched:
         momentum_state = "stretched"
-    elif len(bullish_events) > len(bearish_events) or (
+    elif bearish_dominates or trend_regime.regime == "downtrend":
+        momentum_state = "fading"
+    elif bullish_dominates or (
         trend_regime.regime == "uptrend"
         and volume_regime.regime in {"high_volume", "elevated_volume"}
     ):
         momentum_state = "improving"
-    elif len(bearish_events) > len(bullish_events) or trend_regime.regime == "downtrend":
-        momentum_state = "fading"
     trend_state_by_regime = {
         "uptrend": "technically_strong",
         "downtrend": "technically_weak",
@@ -411,13 +413,15 @@ def classify_decision_support_signal_state(
     if stretched:
         signal_state = "stretched_avoid_chasing"
         classification_reasons.append("Overextension warning indicates stretched momentum risk.")
+    elif bearish_dominates or trend_regime.regime == "downtrend" or strength_score <= Decimal("35"):
+        signal_state = "weak_deteriorating"
+        classification_reasons.append(
+            "Bearish evidence, downtrend, or weak strength score indicates deterioration."
+        )
     elif trend_regime.regime == "uptrend" and strength_score >= Decimal("70"):
         signal_state = "strong_momentum"
         classification_reasons.append("Strength score is at least 70 in an uptrend.")
-    elif trend_regime.regime == "downtrend" or strength_score <= Decimal("35"):
-        signal_state = "weak_deteriorating"
-        classification_reasons.append("Downtrend or weak strength score indicates deterioration.")
-    elif len(bullish_events) > len(bearish_events) or setup_levels.confirmation is not None:
+    elif bullish_dominates and setup_levels.confirmation is not None:
         signal_state = "improving_needs_confirmation"
         classification_reasons.append("Bullish evidence is present but still needs confirmation.")
     else:

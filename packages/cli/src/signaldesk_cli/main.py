@@ -3551,6 +3551,7 @@ def _technical_analysis_report(
         "trend_state": decision_support["trend_state"],
         "strength_score": decision_support["strength_score"],
         "classification_reasons": decision_support["classification_reasons"],
+        "canonical_source_rule": decision_support["source_rule"],
     }
 
     report_run_id = run_id or f"ta-{uuid4()}"
