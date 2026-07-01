@@ -23,7 +23,7 @@ def evaluate_signal_history_outcome(
     *,
     history_record: Mapping[str, Any],
     candles: Sequence[Candle],
-    horizons: Sequence[int] = (1, 5, 20),
+    horizons: Sequence[int] = (5, 10, 20),
     provider: str,
     generated_at: datetime,
 ) -> dict[str, Any]:
@@ -72,6 +72,13 @@ def evaluate_signal_history_outcome(
     invalidation_hit_at = _first_touch_timestamp(
         future_candles, invalidation_price, direction="below"
     )
+    max_adverse_excursion = _max_excursion(
+        latest_close, future_candles, favorable=False
+    )
+    max_favorable_excursion = _max_excursion(
+        latest_close, future_candles, favorable=True
+    )
+    level_sequence = _level_hit_sequence(confirmation_hit_at, invalidation_hit_at)
     if confirmation_price is None:
         unavailable_context.append(
             {
@@ -112,6 +119,16 @@ def evaluate_signal_history_outcome(
             "hit": invalidation_hit_at is not None,
             "hit_at": None if invalidation_hit_at is None else invalidation_hit_at.isoformat(),
         },
+        "level_hit_sequence": level_sequence,
+        "confirmation_before_invalidation": (
+            level_sequence == "confirmation_before_invalidation"
+        ),
+        "max_adverse_excursion": (
+            None if max_adverse_excursion is None else str(max_adverse_excursion)
+        ),
+        "max_favorable_excursion": (
+            None if max_favorable_excursion is None else str(max_favorable_excursion)
+        ),
         "coverage": {
             "available_forward_candles": len(future_candles),
             "evaluable_horizons": evaluable_horizons,
@@ -198,6 +215,32 @@ def _first_touch_timestamp(
             return candle.timestamp
     return None
 
+
+
+def _level_hit_sequence(
+    confirmation_hit_at: datetime | None, invalidation_hit_at: datetime | None
+) -> str:
+    if confirmation_hit_at is None and invalidation_hit_at is None:
+        return "neither_hit"
+    if confirmation_hit_at is None:
+        return "invalidation_only"
+    if invalidation_hit_at is None:
+        return "confirmation_only"
+    if confirmation_hit_at <= invalidation_hit_at:
+        return "confirmation_before_invalidation"
+    return "invalidation_before_confirmation"
+
+
+def _max_excursion(
+    entry: Decimal, candles: Sequence[Candle], *, favorable: bool
+) -> Decimal | None:
+    if not candles:
+        return None
+    if favorable:
+        price = max(candle.high for candle in candles)
+    else:
+        price = min(candle.low for candle in candles)
+    return _rate_of_return(entry, price)
 
 def _rate_of_return(entry: Decimal, exit_value: Decimal) -> Decimal:
     return ((exit_value - entry) / entry).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
