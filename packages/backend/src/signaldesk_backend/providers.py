@@ -38,6 +38,10 @@ _CREDENTIAL_SUBSTRING_PATTERN = re.compile(
     r"\b(apikey|api_key|x-api-key|access_token|token|secret|password)\b(\s*[:=]\s*|\s+)([^\s&;,]+)",
     re.IGNORECASE,
 )
+_AUTHORIZATION_HEADER_PATTERN = re.compile(
+    r"\b((?:proxy-)?authorization)\b\s*:\s*(?:bearer|basic|token)?\s*[^\s&;,]+",
+    re.IGNORECASE,
+)
 
 
 def redact_provider_diagnostic(text: object) -> str:
@@ -49,6 +53,7 @@ def redact_provider_diagnostic(text: object) -> str:
 
     diagnostic = str(text)
     diagnostic = _URL_PATTERN.sub(_redact_url_match, diagnostic)
+    diagnostic = _AUTHORIZATION_HEADER_PATTERN.sub(_redact_authorization_header, diagnostic)
     return _CREDENTIAL_SUBSTRING_PATTERN.sub(_redact_credential_substring, diagnostic)
 
 
@@ -86,6 +91,10 @@ def _redact_url_match(match: re.Match[str]) -> str:
         )
     )
     return f"{redacted_url}{trailing}"
+
+
+def _redact_authorization_header(match: re.Match[str]) -> str:
+    return f"{match.group(1)}: <redacted>"
 
 
 def _redact_credential_substring(match: re.Match[str]) -> str:

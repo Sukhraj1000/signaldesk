@@ -358,6 +358,20 @@ def test_redact_provider_diagnostic_redacts_common_http_credential_forms() -> No
     assert "X-API-Key: <redacted>" in redacted
 
 
+def test_redact_provider_diagnostic_redacts_authorization_headers() -> None:
+    diagnostic = (
+        "GET https://example.test/path failed with Authorization: Bearer opaque-token "
+        "and Proxy-Authorization: Basic proxy-token"
+    )
+
+    redacted = redact_provider_diagnostic(diagnostic)
+
+    assert "opaque-token" not in redacted
+    assert "proxy-token" not in redacted
+    assert "Authorization: <redacted>" in redacted
+    assert "Proxy-Authorization: <redacted>" in redacted
+
+
 
 def test_provider_rate_limit_failure_sets_retryable_taxonomy() -> None:
     result = provider_rate_limit_failure(
