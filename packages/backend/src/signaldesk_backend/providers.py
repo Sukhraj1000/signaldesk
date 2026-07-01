@@ -39,7 +39,7 @@ _CREDENTIAL_SUBSTRING_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _AUTHORIZATION_HEADER_PATTERN = re.compile(
-    r"\b((?:proxy-)?authorization)\b\s*:\s*(?:bearer|basic|token)?\s*[^\s&;,]+",
+    r"\b((?:proxy-)?authorization)\b\s*:\s*[^\r\n]+?(?=$|\r?\n|\s+(?:and\s+)?(?:proxy-)?authorization\b\s*:)",
     re.IGNORECASE,
 )
 

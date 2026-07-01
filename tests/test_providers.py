@@ -360,16 +360,28 @@ def test_redact_provider_diagnostic_redacts_common_http_credential_forms() -> No
 
 def test_redact_provider_diagnostic_redacts_authorization_headers() -> None:
     diagnostic = (
-        "GET https://example.test/path failed with Authorization: Bearer opaque-token "
-        "and Proxy-Authorization: Basic proxy-token"
+        "GET https://example.test/path failed with Authorization: Bearer bearervalue123 "
+        "and Proxy-Authorization: Basic proxyvalue456\n"
+        "Authorization: Digest username=\"client\", realm=\"example\", "
+        "response=\"digestvalue789\"\n"
+        "Proxy-Authorization: AWS4-HMAC-SHA256 "
+        "Credential=AKIAEXAMPLE/20260701/us-east-1/service/aws4_request, "
+        "SignedHeaders=host;x-amz-date, Signature=abcdef123456"
     )
 
     redacted = redact_provider_diagnostic(diagnostic)
 
-    assert "opaque-token" not in redacted
-    assert "proxy-token" not in redacted
-    assert "Authorization: <redacted>" in redacted
-    assert "Proxy-Authorization: <redacted>" in redacted
+    assert "bearervalue123" not in redacted
+    assert "proxyvalue456" not in redacted
+    assert "digestvalue789" not in redacted
+    assert "AKIAEXAMPLE" not in redacted
+    assert "abcdef123456" not in redacted
+    redacted_lines = redacted.splitlines()
+    assert redacted_lines[0].endswith(
+        "Authorization: <redacted> and Proxy-Authorization: <redacted>"
+    )
+    assert redacted_lines[1] == "Authorization: <redacted>"
+    assert redacted_lines[2] == "Proxy-Authorization: <redacted>"
 
 
 
