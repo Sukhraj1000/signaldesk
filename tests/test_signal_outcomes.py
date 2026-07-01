@@ -65,6 +65,10 @@ def test_evaluate_signal_history_outcome_tracks_forward_returns_and_levels() -> 
         "hit_at": "2026-01-12T00:00:00+00:00",
     }
     assert payload["coverage"]["data_availability_rate"] == "1.00"
+    assert payload["level_hit_sequence"] == "confirmation_before_invalidation"
+    assert payload["confirmation_before_invalidation"] is True
+    assert payload["max_adverse_excursion"] == "-0.0400"
+    assert payload["max_favorable_excursion"] == "0.0500"
     assert payload["unavailable_context"] == []
 
 
@@ -122,3 +126,37 @@ def test_evaluate_signal_history_outcome_rejects_wrong_schema() -> None:
             provider="local-fixture",
             generated_at=datetime(2026, 1, 13, tzinfo=UTC),
         )
+
+
+def test_evaluate_signal_history_outcome_tracks_invalidation_first() -> None:
+    payload = evaluate_signal_history_outcome(
+        history_record=_record(),
+        candles=(
+            _candle(1, "98", high="100", low="96"),
+            _candle(2, "105", high="106", low="104"),
+        ),
+        horizons=(1, 2),
+        provider="local-fixture",
+        generated_at=datetime(2026, 1, 13, tzinfo=UTC),
+    )
+
+    assert payload["level_hit_sequence"] == "invalidation_before_confirmation"
+    assert payload["confirmation_before_invalidation"] is False
+    assert payload["max_adverse_excursion"] == "-0.0400"
+    assert payload["max_favorable_excursion"] == "0.0600"
+
+
+def test_evaluate_signal_history_outcome_defaults_to_issue_horizons() -> None:
+    payload = evaluate_signal_history_outcome(
+        history_record=_record(),
+        candles=tuple(_candle(day, str(100 + day)) for day in range(1, 11)),
+        provider="local-fixture",
+        generated_at=datetime(2026, 1, 21, tzinfo=UTC),
+    )
+
+    assert payload["horizons"] == [5, 10, 20]
+    assert payload["forward_returns_by_horizon"] == {
+        "5": "0.0500",
+        "10": "0.1000",
+        "20": None,
+    }

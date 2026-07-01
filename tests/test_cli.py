@@ -4709,6 +4709,10 @@ def test_history_evaluate_command_reports_saved_signal_outcome(
     assert payload["provider"] == "working"
     assert payload["forward_returns_by_horizon"] == {"1": "0.0526", "5": "0.2632"}
     assert payload["confirmation"]["hit"] is True
+    assert payload["level_hit_sequence"] == "confirmation_only"
+    assert payload["confirmation_before_invalidation"] is False
+    assert payload["max_adverse_excursion"] == "0.0000"
+    assert payload["max_favorable_excursion"] == "1.6316"
     assert payload["decision_support_only"] is True
 
 

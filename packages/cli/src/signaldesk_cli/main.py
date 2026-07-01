@@ -3301,6 +3301,11 @@ def _load_signal_history_record(path: Path) -> dict[str, Any]:
     return payload
 
 
+
+def _format_optional_metric(name: str, value: object) -> str:
+    rendered = value if value is not None else "unavailable"
+    return f"{name}\t{rendered}"
+
 def _signal_outcome_table_lines(payload: dict[str, Any]) -> tuple[str, ...]:
     lines = ["metric	value"]
     lines.extend(
@@ -3312,6 +3317,13 @@ def _signal_outcome_table_lines(payload: dict[str, Any]) -> tuple[str, ...]:
             f"data_availability_rate	{payload['coverage']['data_availability_rate']}",
             f"confirmation_hit	{str(payload['confirmation']['hit']).lower()}",
             f"invalidation_hit	{str(payload['invalidation']['hit']).lower()}",
+            f"level_hit_sequence	{payload['level_hit_sequence']}",
+            _format_optional_metric(
+                "max_adverse_excursion", payload["max_adverse_excursion"]
+            ),
+            _format_optional_metric(
+                "max_favorable_excursion", payload["max_favorable_excursion"]
+            ),
         )
     )
     for horizon, value in payload["forward_returns_by_horizon"].items():
@@ -3365,7 +3377,7 @@ def history_evaluate(
         payload = evaluate_signal_history_outcome(
             history_record=record,
             candles=candles,
-            horizons=horizons or [1, 5, 20],
+            horizons=horizons or [5, 10, 20],
             provider=provider_name,
             generated_at=datetime.now(UTC),
         )
