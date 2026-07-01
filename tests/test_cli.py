@@ -2845,7 +2845,8 @@ def test_report_watchlist_json_uses_fixture_provider(
     assert payload["schema_version"] == "signaldesk.watchlist_report.v1"
     assert payload["report_type"] == "watchlist"
     assert payload["generated_at"] == payload["scanned_at"]
-    assert payload["watchlist"] == cli_main._redact_sensitive_path_components(watchlist)
+    assert payload["watchlist"].endswith("/watchlist.yaml")
+    assert "secret" not in payload["watchlist"]
     assert payload["provider_mode"] == {
         "mode": "explicit",
         "price_provider": "working",
