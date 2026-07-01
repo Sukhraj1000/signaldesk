@@ -705,6 +705,11 @@ def test_scan_command_includes_watchlist_metadata_and_skips_disabled_watchlists(
     assert "AMD\tskipped" in table_result.stdout
     assert "MSFT\tskipped" in table_result.stdout
     assert "watchlist is disabled" in table_result.stdout
+    rows = table_result.stdout.splitlines()
+    header_columns = rows[1].split("\t")
+    skipped_columns = rows[2].split("\t")
+    assert len(skipped_columns) == len(header_columns)
+    assert skipped_columns[-1] == "watchlist is disabled"
     assert "ok=0 failed=0 skipped=2 total=2" in table_result.stdout
 
 

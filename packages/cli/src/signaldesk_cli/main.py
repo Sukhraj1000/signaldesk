@@ -2009,9 +2009,9 @@ def _format_scan_table(payload: dict[str, Any]) -> tuple[str, ...]:
             f"{len(summary['unavailable_context'])}"
         )
     for result in payload["failed_symbols"]:
-        lines.append(f"	{result['symbol']}	failed						{result['error']}")
+        lines.append(f"	{result['symbol']}	failed							{result['error']}")
     for result in payload["skipped_symbols"]:
-        lines.append(f"\t{result['symbol']}\tskipped\t\t\t\t\t\t{result['reason']}")
+        lines.append(f"\t{result['symbol']}\tskipped\t\t\t\t\t\t\t{result['reason']}")
     summary = payload["summary"]
     lines.append(
         "summary\t\t\t\t\t"
