@@ -2004,6 +2004,15 @@ WATCHLIST_SIGNAL_BUCKET_STATES = (
     "range_bound",
     "unavailable",
 )
+WATCHLIST_SIGNAL_BUCKET_LABELS = {
+    "technically_strong": "Strong momentum",
+    "improving": "Improving but needs confirmation",
+    "range_bound": "Neutral / range-bound",
+    "technically_weak": "Weak / deteriorating",
+    "deteriorating": "Weak / deteriorating",
+    "stretched": "Stretched / avoid chasing",
+    "unavailable": "Unavailable",
+}
 WATCHLIST_SIGNAL_BUCKETS_SCHEMA_VERSION = "signaldesk.watchlist_signal_buckets.v1"
 
 
@@ -2022,10 +2031,17 @@ def _watchlist_signal_buckets(
 
     ranks_by_symbol = {str(result.get("symbol")): result.get("rank") for result in ranked_setups}
     buckets: dict[str, dict[str, Any]] = {
-        state: {"state": state, "count": 0, "symbols": [], "rows": []}
+        state: {
+            "state": state,
+            "label": WATCHLIST_SIGNAL_BUCKET_LABELS[state],
+            "count": 0,
+            "symbols": [],
+            "rows": [],
+        }
         for state in WATCHLIST_SIGNAL_BUCKET_STATES
     }
-    for result in sorted(results, key=_watchlist_bucket_sort_key(ranks_by_symbol)):
+    ok_results = [result for result in results if result.get("status") == "ok"]
+    for result in sorted(ok_results, key=_watchlist_bucket_sort_key(ranks_by_symbol)):
         row = _watchlist_signal_bucket_row(result, ranks_by_symbol=ranks_by_symbol)
         state = str(row["signal_state"])
         bucket = buckets[state if state in buckets else "unavailable"]
@@ -2079,41 +2095,111 @@ def _watchlist_signal_bucket_row(
         "invalidation_level": summary.get("invalidation_level"),
         "decision_support_only": bool(signal_state.get("decision_support_only", True)),
         "rationale": rationale,
+        "top_reason": _watchlist_top_reason(rationale),
+        "primary_risk": _watchlist_primary_risk(
+            summary.get("risk_flags", []),
+            summary.get("unavailable_context", []),
+        ),
         "unavailable_context": summary.get("unavailable_context", []),
         "reason": result.get("reason") or result.get("error"),
     }
 
 
+def _watchlist_top_reason(rationale: list[object]) -> str:
+    for item in rationale:
+        if isinstance(item, str) and item.strip():
+            return item.strip()
+    return "No deterministic rationale emitted."
+
+
+def _watchlist_primary_risk(risk_flags: object, unavailable_context: object) -> str:
+    if isinstance(risk_flags, list):
+        for flag in risk_flags:
+            if isinstance(flag, dict):
+                message = flag.get("message") or flag.get("kind")
+                if isinstance(message, str) and message.strip():
+                    return message.strip()
+    if isinstance(unavailable_context, list) and unavailable_context:
+        return "context unavailable"
+    return "none"
+
+
+def _watchlist_level_text(level: object) -> str:
+    if isinstance(level, dict):
+        price = level.get("price")
+        if price is not None:
+            return str(price)
+    return "unavailable"
+
+
+def _watchlist_bucket_rows(payload: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
+    signal_buckets = payload.get("signal_buckets")
+    if not isinstance(signal_buckets, dict):
+        return []
+    buckets = signal_buckets.get("buckets", [])
+    if not isinstance(buckets, list):
+        return []
+    rows: list[tuple[str, dict[str, Any]]] = []
+    for bucket in buckets:
+        if not isinstance(bucket, dict):
+            continue
+        label = str(bucket.get("label") or bucket.get("state") or "Unavailable")
+        bucket_rows = bucket.get("rows", [])
+        if not isinstance(bucket_rows, list):
+            continue
+        for row in bucket_rows:
+            if isinstance(row, dict):
+                rows.append((label, row))
+    return rows
+
+
+
 def _format_scan_table(payload: dict[str, Any]) -> tuple[str, ...]:
     header = (
-        "rank	symbol	status	provider	latest_close	trend_regime	signal_state	"
-        "setup_quality_score	risk_score	unavailable_context"
+        "rank\tsymbol\tstatus\tprovider\tlatest_close\ttrend_regime\tsignal_state\t"
+        "setup_quality_score\trisk_score\tunavailable_context"
     )
-    lines = [f"run_id\t{payload.get('run_id', 'unavailable')}", header]
+    lines = [f"run_id\t{payload.get("run_id", "unavailable")}"]
+    bucket_rows = _watchlist_bucket_rows(payload)
+    if bucket_rows:
+        lines.append("bucket\tsymbol\tstate\tclose\tconfirm\tinvalidate\ttop_reason\tprimary_risk")
+        for bucket_label, row in bucket_rows:
+            lines.append(
+                "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}".format(
+                    bucket_label.lower(),
+                    row.get("symbol") or "unavailable",
+                    row.get("signal_state") or "unavailable",
+                    row.get("latest_close") or "unavailable",
+                    _watchlist_level_text(row.get("confirmation_level")),
+                    _watchlist_level_text(row.get("invalidation_level")),
+                    row.get("top_reason") or "No deterministic rationale emitted.",
+                    row.get("primary_risk") or "none",
+                )
+            )
+    lines.append(header)
     for result in payload["ranked_setups"]:
         summary = result["summary"]
         lines.append(
-            f"{result['rank']}	"
-            f"{summary['symbol']}	ok	"
-            f"{summary['provider']}	"
-            f"{summary['latest_close']}	"
-            f"{summary['trend_regime']['regime']}	"
-            f"{_signal_state_label(summary.get('signal_state'))}	"
-            f"{summary['setup_quality_score']}	"
-            f"{summary['risk_score']}	"
-            f"{len(summary['unavailable_context'])}"
+            f"{result["rank"]}\t"
+            f"{summary["symbol"]}\tok\t"
+            f"{summary["provider"]}\t"
+            f"{summary["latest_close"]}\t"
+            f"{summary["trend_regime"]["regime"]}\t"
+            f"{_signal_state_label(summary.get("signal_state"))}\t"
+            f"{summary["setup_quality_score"]}\t"
+            f"{summary["risk_score"]}\t"
+            f"{len(summary["unavailable_context"])}"
         )
     for result in payload["failed_symbols"]:
-        lines.append(f"	{result['symbol']}	failed							{result['error']}")
+        lines.append(f"\t{result["symbol"]}\tfailed\t\t\t\t\t\t\t{result["error"]}")
     for result in payload["skipped_symbols"]:
-        lines.append(f"\t{result['symbol']}\tskipped\t\t\t\t\t\t\t{result['reason']}")
+        lines.append(f"\t{result["symbol"]}\tskipped\t\t\t\t\t\t\t{result["reason"]}")
     summary = payload["summary"]
     lines.append(
         "summary\t\t\t\t\t"
         + "ok={ok} failed={failed} skipped={skipped} total={total}".format(**summary)
     )
     return tuple(lines)
-
 
 @llm_app.command("output-schema")
 def llm_output_schema(
@@ -2812,6 +2898,45 @@ def _format_report_enhanced_fact_lines(summary: dict[str, Any]) -> list[str]:
     return _format_enhanced_fact_lines(facts)
 
 
+def _format_watchlist_dashboard_markdown(payload: dict[str, Any]) -> list[str]:
+    lines = ["", "## Signal dashboard"]
+    signal_buckets = payload.get("signal_buckets")
+    buckets = signal_buckets.get("buckets", []) if isinstance(signal_buckets, dict) else []
+    rendered = False
+    for bucket in buckets:
+        if not isinstance(bucket, dict):
+            continue
+        rows = bucket.get("rows", [])
+        if not isinstance(rows, list) or not rows:
+            continue
+        rendered = True
+        label = str(bucket.get("label") or bucket.get("state") or "Unavailable")
+        lines.extend([
+            "",
+            f"### {label}",
+            "",
+            "| Symbol | State | Close | Confirm | Invalidate | Top reason | Primary risk |",
+            "| --- | --- | ---: | ---: | ---: | --- | --- |",
+        ])
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            lines.append(
+                "| {} | {} | {} | {} | {} | {} | {} |".format(
+                    row.get("symbol") or "unavailable",
+                    row.get("signal_state") or "unavailable",
+                    row.get("latest_close") or "unavailable",
+                    _watchlist_level_text(row.get("confirmation_level")),
+                    _watchlist_level_text(row.get("invalidation_level")),
+                    row.get("top_reason") or "No deterministic rationale emitted.",
+                    row.get("primary_risk") or "none",
+                )
+            )
+    if not rendered:
+        lines.extend(["", "- No deterministic signal bucket rows available."])
+    return lines
+
+
 def _format_report_markdown(payload: dict[str, Any]) -> str:
     lines = [
         "# SignalDesk watchlist report",
@@ -2848,6 +2973,7 @@ def _format_report_markdown(payload: dict[str, Any]) -> str:
     else:
         lines.append("- Unavailable context: none")
     lines.extend(_markdown_report_boundary_lines())
+    lines.extend(_format_watchlist_dashboard_markdown(payload))
     lines.extend(
         [
             "",
