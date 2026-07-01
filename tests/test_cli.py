@@ -642,6 +642,13 @@ def test_scan_command_outputs_markdown_watchlist_report(
     assert "| 2 | MSFT | ok | working | 49 | unknown | 50 | 60 |" in result.stdout
     assert "- Symbols scanned: `2`" in result.stdout
     assert "- Failed symbols: `0`" in result.stdout
+    assert "## Signal dashboard" in result.stdout
+    assert "### Neutral / range-bound" in result.stdout
+    assert (
+        "| Symbol | State | Close | Confirm | Invalidate | Top reason | Primary risk |"
+        in result.stdout
+    )
+    assert "| AMD | range_bound | 49 | unavailable | unavailable |" in result.stdout
     assert "## Provenance" in result.stdout
     assert "provider `working`" in result.stdout
 
@@ -2710,6 +2717,9 @@ def test_report_watchlist_markdown_uses_fixture_provider(
 
     assert result.exit_code == 0
     assert "# SignalDesk watchlist report" in result.stdout
+    assert "## Signal dashboard" in result.stdout
+    assert "### Neutral / range-bound" in result.stdout
+    assert "| AMD | range_bound | 49 | unavailable | unavailable |" in result.stdout
     assert "| 1 | AMD | ok | working | 49 | unknown | 50 | 60 |" in result.stdout
     assert "| 2 | MSFT | ok | working | 49 | unknown | 50 | 60 |" in result.stdout
     assert "## Provenance" in result.stdout
@@ -2875,6 +2885,11 @@ def test_report_watchlist_table_uses_fixture_provider(
 
     assert result.exit_code == 0
     assert "rank\tsymbol\tstatus\tprovider\tlatest_close\ttrend_regime" in result.stdout
+    assert (
+        "bucket\tsymbol\tstate\tclose\tconfirm\tinvalidate\ttop_reason\tprimary_risk"
+        in result.stdout
+    )
+    assert "neutral / range-bound\tAMD\trange_bound\t49\tunavailable\tunavailable" in result.stdout
     assert "1\tAMD\tok\tworking\t49\tunknown" in result.stdout
     assert "2\tMSFT\tok\tworking\t49\tunknown" in result.stdout
     assert "summary\t\t\t\t\tok=2 failed=0 skipped=0 total=2" in result.stdout
