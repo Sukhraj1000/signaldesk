@@ -1,6 +1,7 @@
 import csv
 import json
 import os
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -1884,12 +1885,13 @@ def _yaml_scalar(value: str) -> str | bool | None:
 
 
 def _load_watchlist_model(path: Path) -> dict[str, Any]:
+    safe_path = _redact_sensitive_path_components(path)
     if not path.is_file():
-        raise ValueError(f"watchlist file not found: {path}")
+        raise ValueError(f"watchlist file not found: {safe_path}")
     try:
         raw_lines = path.read_text(encoding="utf-8").splitlines()
     except OSError as exc:
-        raise ValueError(f"watchlist file could not be read: {path}") from exc
+        raise ValueError(f"watchlist file could not be read: {safe_path}") from exc
 
     metadata: dict[str, Any] = {
         "name": path.stem,
@@ -1925,9 +1927,9 @@ def _load_watchlist_model(path: Path) -> dict[str, Any]:
             metadata[normalized_key] = _yaml_scalar(value)
 
     if not symbols:
-        raise ValueError(f"watchlist file has no symbols: {path}")
+        raise ValueError(f"watchlist file has no symbols: {safe_path}")
     if not isinstance(metadata["enabled"], bool):
-        raise ValueError(f"watchlist enabled must be true or false: {path}")
+        raise ValueError(f"watchlist enabled must be true or false: {safe_path}")
 
     metadata["symbols"] = list(dict.fromkeys(symbols))
     metadata["tags"] = list(dict.fromkeys(str(tag) for tag in metadata["tags"] if str(tag)))
@@ -2444,6 +2446,35 @@ def _watchlist_report_provenance(results: list[dict[str, Any]]) -> list[dict[str
     return provenance_items
 
 
+
+_SENSITIVE_PATH_COMPONENT_RE = re.compile(
+    r"(token|secret|password|api[_-]?key|private[_-]?key|access[_-]?key)", re.IGNORECASE
+)
+
+
+def _redact_sensitive_path_components(path: Path) -> str:
+    """Return a display-safe path with secret-like path components removed.
+
+    Watchlist paths are user-facing provenance, but temporary directories and
+    operator-chosen folders may themselves contain credential-like names. Keep the
+    path shape useful while ensuring obvious secret words do not leak into JSON or
+    Markdown report payloads.
+    """
+
+    rendered = str(path)
+    if not rendered:
+        return rendered
+    parts = path.parts
+    if not parts:
+        return rendered
+    redacted_parts = tuple(
+        "<redacted>" if _SENSITIVE_PATH_COMPONENT_RE.search(part) else part for part in parts
+    )
+    if redacted_parts == parts:
+        return rendered
+    return str(Path(*redacted_parts))
+
+
 def _watchlist_report_payload(
     *,
     watchlist: Path,
@@ -2476,7 +2507,7 @@ def _watchlist_report_payload(
             "skipped_count": len(skipped_symbols),
             "max_workers": max_workers,
         },
-        "watchlist": str(watchlist),
+        "watchlist": _redact_sensitive_path_components(watchlist),
         "watchlist_model": watchlist_model,
         "scanned_at": scanned_at.isoformat(),
         "provider_mode": provider_mode,

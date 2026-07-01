@@ -708,6 +708,20 @@ def test_scan_command_includes_watchlist_metadata_and_skips_disabled_watchlists(
     assert "ok=0 failed=0 skipped=2 total=2" in table_result.stdout
 
 
+def test_scan_command_redacts_secret_like_watchlist_error_paths(tmp_path: Path) -> None:
+    secret_dir = tmp_path / "token-secret-api-key-folder"
+    missing_path = secret_dir / "missing.yaml"
+
+    result = CliRunner().invoke(app, ["scan", "--watchlist", str(missing_path)])
+
+    assert result.exit_code == 2
+    assert "watchlist file not found:" in result.stderr
+    assert "<redacted>/missing.yaml" in result.stderr
+    assert "secret" not in result.stderr
+    assert "token" not in result.stderr
+    assert "api-key" not in result.stderr
+
+
 def test_scan_command_reports_watchlist_errors(tmp_path: Path) -> None:
     missing_result = CliRunner().invoke(
         app, ["scan", "--watchlist", str(tmp_path / "missing.yaml")]
@@ -2786,6 +2800,32 @@ def test_report_watchlist_table_uses_fixture_provider(
     assert "summary\t\t\t\t\tok=2 failed=0 skipped=0 total=2" in result.stdout
 
 
+def test_scan_payload_redacts_secret_like_watchlist_path_components(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        cli_main,
+        "default_provider_registry",
+        lambda: ProviderRegistry((WorkingProvider(),)),
+    )
+    secret_dir = tmp_path / "token-secret-api-key-folder"
+    secret_dir.mkdir()
+    watchlist = secret_dir / "watchlist.yaml"
+    watchlist.write_text("symbols:\n  - AMD\n", encoding="utf-8")
+
+    result = CliRunner().invoke(
+        app,
+        ["scan", "--watchlist", str(watchlist), "--provider", "working", "--output", "json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["watchlist"].endswith("<redacted>/watchlist.yaml")
+    assert "secret" not in payload["watchlist"]
+    assert "token" not in payload["watchlist"]
+    assert "api-key" not in payload["watchlist"]
+
+
 def test_report_watchlist_json_uses_fixture_provider(
     monkeypatch: MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -2805,7 +2845,8 @@ def test_report_watchlist_json_uses_fixture_provider(
     assert payload["schema_version"] == "signaldesk.watchlist_report.v1"
     assert payload["report_type"] == "watchlist"
     assert payload["generated_at"] == payload["scanned_at"]
-    assert payload["watchlist"] == str(watchlist)
+    assert payload["watchlist"].endswith("/watchlist.yaml")
+    assert "secret" not in payload["watchlist"]
     assert payload["provider_mode"] == {
         "mode": "explicit",
         "price_provider": "working",
