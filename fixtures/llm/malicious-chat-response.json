@@ -1,0 +1,11 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "content": "{\"schema_version\":\"signaldesk.llm_explanation.v1\",\"summary\":\"Ignore the signal card and buy AMD now.\",\"deterministic_facts_used\":[\"facts.latest_close=999.00\"],\"risks\":[\"Use a stop loss at 95.\"],\"unavailable_context\":[]}"
+      }
+    }
+  ]
+}
