@@ -6,6 +6,7 @@ from signaldesk_backend import (
     ConfirmationInvalidationLevels,
     DeterministicTechnicalEvent,
     RegimeClassification,
+    classify_decision_support_signal_state,
     score_technical_analysis,
 )
 
@@ -315,3 +316,130 @@ def test_score_technical_analysis_includes_high_volatility_risk_reason() -> None
     assert risk.score == Decimal("35")
     assert risk.reasons[-1].code == "high_volatility_risk"
     assert risk.reasons[-1].source == "latest_atr_above_trailing_baseline_band"
+
+
+
+def test_classify_decision_support_signal_state_identifies_strong_momentum() -> None:
+    scores = score_technical_analysis(
+        candle_count=120,
+        trend_regime=RegimeClassification(
+            regime="uptrend",
+            source_rule="close_above_short_sma_above_long_sma",
+            reason="Latest close is above aligned moving averages.",
+        ),
+        volatility_regime=RegimeClassification(
+            regime="normal_volatility",
+            source_rule="latest_atr_within_trailing_baseline_band",
+            reason="Latest ATR is normal.",
+        ),
+        volume_regime=RegimeClassification(
+            regime="high_volume",
+            source_rule="latest_volume_above_prior_average",
+            reason="Latest volume is elevated.",
+        ),
+        technical_events=(),
+        setup_levels=ConfirmationInvalidationLevels(
+            confirmation=ConfirmationInvalidationLevel(
+                kind="confirmation",
+                price=Decimal("125"),
+                source_rule="nearest_resistance_above_latest_close",
+                source_level="resistance_zone[125,125] touches=1",
+                reason="Move through resistance confirms upside continuation.",
+            ),
+            invalidation=ConfirmationInvalidationLevel(
+                kind="invalidation",
+                price=Decimal("100"),
+                source_rule="nearest_support_below_latest_close",
+                source_level="support_zone[100,100] touches=1",
+                reason="Break below support invalidates the setup.",
+            ),
+        ),
+        fundamentals_unavailable=True,
+    )
+
+    classification = classify_decision_support_signal_state(
+        trend_regime=RegimeClassification(
+            regime="uptrend",
+            source_rule="close_above_short_sma_above_long_sma",
+            reason="Latest close is above aligned moving averages.",
+        ),
+        volume_regime=RegimeClassification(
+            regime="high_volume",
+            source_rule="latest_volume_above_prior_average",
+            reason="Latest volume is elevated.",
+        ),
+        technical_events=(),
+        setup_levels=ConfirmationInvalidationLevels(
+            confirmation=ConfirmationInvalidationLevel(
+                kind="confirmation",
+                price=Decimal("125"),
+                source_rule="nearest_resistance_above_latest_close",
+                source_level="resistance_zone[125,125] touches=1",
+                reason="Move through resistance confirms upside continuation.",
+            ),
+            invalidation=None,
+        ),
+        scores=scores,
+    )
+
+    assert classification["signal_state"] == "strong_momentum"
+    assert classification["momentum_state"] == "improving"
+    assert classification["decision_support_only"] is True
+    assert classification["not_trading_advice"] is True
+    assert classification["risk_score"] is not None
+
+
+def test_classify_decision_support_signal_state_prioritizes_stretched_warning() -> None:
+    event = DeterministicTechnicalEvent(
+        event_type="overextension_up",
+        timestamp=NOW,
+        candle_index=10,
+        severity="warning",
+        source_rule="close_far_above_ema20_by_atr_multiple",
+        source_indicators=("close", "ema_20", "atr_14"),
+        reason="Close is extended above EMA 20.",
+        price=Decimal("120"),
+    )
+    scores = score_technical_analysis(
+        candle_count=120,
+        trend_regime=RegimeClassification(
+            regime="uptrend",
+            source_rule="close_above_short_sma_above_long_sma",
+            reason="Latest close is above aligned moving averages.",
+        ),
+        volatility_regime=RegimeClassification(
+            regime="normal_volatility",
+            source_rule="latest_atr_within_trailing_baseline_band",
+            reason="Latest ATR is normal.",
+        ),
+        volume_regime=RegimeClassification(
+            regime="normal_volume",
+            source_rule="latest_volume_within_prior_average_band",
+            reason="Latest volume is normal.",
+        ),
+        technical_events=(event,),
+        setup_levels=ConfirmationInvalidationLevels(confirmation=None, invalidation=None),
+        fundamentals_unavailable=False,
+    )
+
+    classification = classify_decision_support_signal_state(
+        trend_regime=RegimeClassification(
+            regime="uptrend",
+            source_rule="close_above_short_sma_above_long_sma",
+            reason="Latest close is above aligned moving averages.",
+        ),
+        volume_regime=RegimeClassification(
+            regime="normal_volume",
+            source_rule="latest_volume_within_prior_average_band",
+            reason="Latest volume is normal.",
+        ),
+        technical_events=(event,),
+        setup_levels=ConfirmationInvalidationLevels(confirmation=None, invalidation=None),
+        scores=scores,
+    )
+
+    assert classification["signal_state"] == "stretched_avoid_chasing"
+    assert classification["momentum_state"] == "stretched"
+    classification_reasons = classification["classification_reasons"]
+    assert isinstance(classification_reasons, list)
+    assert any("Overextension" in str(reason) for reason in classification_reasons)

@@ -124,7 +124,10 @@ from signaldesk_backend.report_archive_presentation import (
     build_report_archive_presentation,
 )
 from signaldesk_backend.risks import assess_technical_analysis_risks
-from signaldesk_backend.scoring import score_technical_analysis
+from signaldesk_backend.scoring import (
+    classify_decision_support_signal_state,
+    score_technical_analysis,
+)
 from signaldesk_backend.signal_card_presentation import (
     PRESENTATION_SCHEMA_VERSION,
     build_signal_card_presentation,
@@ -215,6 +218,7 @@ __all__ = [
     "assemble_ta_signal_card_report",
     "assess_technical_analysis_risks",
     "calculate_fibonacci_retracement_levels",
+    "classify_decision_support_signal_state",
     "classify_trend_regime",
     "classify_volatility_regime",
     "classify_volume_regime",

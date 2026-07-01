@@ -12,6 +12,7 @@ _CANONICAL_SIGNAL_CARD_SECTIONS = (
     "events",
     "risk",
     "score",
+    "decision_support",
     "provenance",
     "unavailable_context",
     "llm",
@@ -30,6 +31,7 @@ def assemble_ta_signal_card_report(
     events: tuple[dict[str, Any], ...],
     risk: dict[str, Any],
     score: dict[str, Any],
+    decision_support: dict[str, Any],
     provenance: list[dict[str, Any]],
     unavailable_context: list[dict[str, Any]],
     deterministic_signals: dict[str, Any],
@@ -57,6 +59,7 @@ def assemble_ta_signal_card_report(
         levels=levels,
         risk=risk,
         score=score,
+        decision_support=decision_support,
     )
     signal_card: dict[str, Any] = {
         "identity": identity,
@@ -67,6 +70,7 @@ def assemble_ta_signal_card_report(
         "events": events,
         "risk": risk,
         "score": score,
+        "decision_support": decision_support,
         "provenance": provenance,
         "unavailable_context": unavailable_context,
         "llm": llm,
@@ -84,6 +88,7 @@ def assemble_ta_signal_card_report(
         "events": events,
         "risk": risk,
         "score": score,
+        "decision_support": decision_support,
         "signal_card": signal_card,
         "deterministic_signals": deterministic_signals,
         "risks": risk["flags"],
@@ -197,3 +202,5 @@ def _require_signal_card_sections(**sections: dict[str, Any]) -> None:
         raise ValueError("signal-card risk section must include flags and unavailable_context")
     if "breakdowns" not in sections["score"]:
         raise ValueError("signal-card score section must include breakdowns")
+    if "signal_state" not in sections["decision_support"]:
+        raise ValueError("signal-card decision_support section must include signal_state")

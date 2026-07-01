@@ -1850,6 +1850,7 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
     expected["score"] = {
         "breakdowns": expected["scores"],
     }
+    expected["decision_support"] = payload["decision_support"]
     expected["signal_state"] = payload["signal_state"]
     expected["deterministic_signals"]["signal_state"] = payload["signal_state"]
     expected["signal_card"] = {
@@ -1861,6 +1862,7 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
         "events": expected["events"],
         "risk": expected["risk"],
         "score": expected["score"],
+        "decision_support": expected["decision_support"],
         "provenance": expected["provenance"],
         "unavailable_context": expected["unavailable_context"],
         "llm": "none",

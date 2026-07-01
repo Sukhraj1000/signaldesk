@@ -22,6 +22,22 @@ def _base_sections() -> dict[str, object]:
         "unavailable_context": unavailable_context,
     }
     score = {"breakdowns": [{"category": "data_quality", "score": "100", "reasons": []}]}
+    decision_support = {
+        "signal_state": "neutral_range",
+        "momentum_state": "neutral",
+        "trend_state": "range_bound",
+        "strength_score": "50",
+        "risk_score": "20",
+        "setup_quality_score": "50",
+        "classification_reasons": ["No directional confirmation dominates."],
+        "source_rule": "deterministic_decision_support_classification_v1",
+        "decision_support_only": True,
+        "not_trading_advice": True,
+        "confirmation_level": None,
+        "invalidation_level": None,
+        "bullish_event_count": 0,
+        "bearish_event_count": 0,
+    }
     return {
         "schema_version": "signaldesk.ta.v1",
         "identity": {
@@ -37,6 +53,7 @@ def _base_sections() -> dict[str, object]:
         "events": (),
         "risk": risk,
         "score": score,
+        "decision_support": decision_support,
         "provenance": [{"provider": "fixture", "source": "historical_candles"}],
         "unavailable_context": unavailable_context,
         "deterministic_signals": {"events": ()},
@@ -59,6 +76,7 @@ def test_assemble_ta_signal_card_report_uses_single_canonical_card_object() -> N
     assert payload["signal_card"]["events"] is payload["events"]
     assert payload["signal_card"]["risk"] is payload["risk"]
     assert payload["signal_card"]["score"] is payload["score"]
+    assert payload["signal_card"]["decision_support"] is payload["decision_support"]
     assert payload["signal_card"]["provenance"] is payload["provenance"]
     assert payload["signal_card"]["unavailable_context"] is payload["unavailable_context"]
     assert payload["risks"] is payload["risk"]["flags"]
@@ -198,6 +216,7 @@ def test_schema_required_sections_match_canonical_card_contract() -> None:
         "events",
         "risk",
         "score",
+        "decision_support",
         "provenance",
         "unavailable_context",
         "llm",
@@ -263,7 +282,7 @@ def test_schema_keeps_enhanced_context_out_of_deterministic_sections() -> None:
     )
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
 
-    for section_name in ("trend", "levels", "risk", "score"):
+    for section_name in ("trend", "levels", "risk", "score", "decision_support"):
         section_schema = schema["$defs"][section_name]
         assert "fundamentals" not in section_schema.get("properties", {})
         assert "catalysts" not in section_schema.get("properties", {})

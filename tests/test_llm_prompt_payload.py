@@ -91,6 +91,22 @@ def _report_with_untrusted_provider_text() -> dict[str, Any]:
         events=(),
         risk=risk,
         score={"breakdowns": [{"category": "data_quality", "score": "100", "reasons": []}]},
+        decision_support={
+            "signal_state": "neutral_range",
+            "momentum_state": "neutral",
+            "trend_state": "range_bound",
+            "strength_score": "50",
+            "risk_score": "20",
+            "setup_quality_score": "50",
+            "classification_reasons": ["No directional confirmation dominates."],
+            "source_rule": "deterministic_decision_support_classification_v1",
+            "decision_support_only": True,
+            "not_trading_advice": True,
+            "confirmation_level": None,
+            "invalidation_level": None,
+            "bullish_event_count": 0,
+            "bearish_event_count": 0,
+        },
         provenance=[
             {
                 "provider": "fixture",
