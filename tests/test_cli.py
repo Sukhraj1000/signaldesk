@@ -1917,6 +1917,9 @@ def test_ta_command_outputs_markdown_from_signal_card(monkeypatch: MonkeyPatch) 
     assert "## Decision support" in result.stdout
     assert "- Signal state: `neutral_range`" in result.stdout
     assert "- Momentum state: `neutral`" in result.stdout
+    assert "- Trend state: `unavailable`" in result.stdout
+    assert "- Strength score: `50`" in result.stdout
+    assert "  - Trend regime is unknown by insufficient_history_for_trend_regime." in result.stdout
     assert "- Decision-support only: `true`" in result.stdout
     assert "- Not trading advice: `true`" in result.stdout
     assert "- Price provider: `working`" in result.stdout
