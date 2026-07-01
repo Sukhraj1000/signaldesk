@@ -365,7 +365,10 @@ def technical_analysis(
     save_dir: Path | None = typer.Option(  # noqa: B008
         None,
         "--save-dir",
-        help="Directory where the canonical TA report JSON artifact should be saved.",
+        help=(
+            "Directory where canonical TA report JSON and signal-history-* artifacts "
+            "should be saved."
+        ),
     ),
     cache_dir: Path | None = typer.Option(  # noqa: B008
         None,
@@ -3226,7 +3229,10 @@ def report_watchlist(
     save_dir: Path | None = typer.Option(  # noqa: B008
         None,
         "--save-dir",
-        help="Directory where the canonical watchlist report JSON artifact should be saved.",
+        help=(
+            "Directory where canonical watchlist report JSON and signal-history-* artifacts "
+            "should be saved."
+        ),
     ),
     cache_dir: Path | None = typer.Option(  # noqa: B008
         None,

@@ -154,7 +154,14 @@ class SignalHistoryRecord:
                 if str(reason).strip()
             ),
         )
-        object.__setattr__(self, "unavailable_context", tuple(self.unavailable_context))
+        for field_name in ("confirmation_level", "invalidation_level"):
+            value = getattr(self, field_name)
+            object.__setattr__(self, field_name, None if value is None else dict(value))
+        object.__setattr__(
+            self,
+            "unavailable_context",
+            tuple(dict(item) for item in self.unavailable_context),
+        )
 
     def to_payload(self) -> dict[str, object]:
         """Return a stable JSON-ready history artifact payload."""
@@ -176,8 +183,12 @@ class SignalHistoryRecord:
             "momentum_state": self.momentum_state,
             "strength_score": None if self.strength_score is None else str(self.strength_score),
             "risk_score": None if self.risk_score is None else str(self.risk_score),
-            "confirmation_level": self.confirmation_level,
-            "invalidation_level": self.invalidation_level,
+            "confirmation_level": (
+                None if self.confirmation_level is None else dict(self.confirmation_level)
+            ),
+            "invalidation_level": (
+                None if self.invalidation_level is None else dict(self.invalidation_level)
+            ),
             "classification_reasons": list(self.classification_reasons),
             "unavailable_context": [dict(item) for item in self.unavailable_context],
             "decision_support_only": True,
