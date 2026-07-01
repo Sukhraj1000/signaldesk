@@ -708,6 +708,20 @@ def test_scan_command_includes_watchlist_metadata_and_skips_disabled_watchlists(
     assert "ok=0 failed=0 skipped=2 total=2" in table_result.stdout
 
 
+def test_scan_command_redacts_secret_like_watchlist_error_paths(tmp_path: Path) -> None:
+    secret_dir = tmp_path / "token-secret-api-key-folder"
+    missing_path = secret_dir / "missing.yaml"
+
+    result = CliRunner().invoke(app, ["scan", "--watchlist", str(missing_path)])
+
+    assert result.exit_code == 2
+    assert "watchlist file not found:" in result.stderr
+    assert "<redacted>/missing.yaml" in result.stderr
+    assert "secret" not in result.stderr
+    assert "token" not in result.stderr
+    assert "api-key" not in result.stderr
+
+
 def test_scan_command_reports_watchlist_errors(tmp_path: Path) -> None:
     missing_result = CliRunner().invoke(
         app, ["scan", "--watchlist", str(tmp_path / "missing.yaml")]

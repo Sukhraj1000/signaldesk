@@ -1885,12 +1885,13 @@ def _yaml_scalar(value: str) -> str | bool | None:
 
 
 def _load_watchlist_model(path: Path) -> dict[str, Any]:
+    safe_path = _redact_sensitive_path_components(path)
     if not path.is_file():
-        raise ValueError(f"watchlist file not found: {path}")
+        raise ValueError(f"watchlist file not found: {safe_path}")
     try:
         raw_lines = path.read_text(encoding="utf-8").splitlines()
     except OSError as exc:
-        raise ValueError(f"watchlist file could not be read: {path}") from exc
+        raise ValueError(f"watchlist file could not be read: {safe_path}") from exc
 
     metadata: dict[str, Any] = {
         "name": path.stem,
@@ -1926,9 +1927,9 @@ def _load_watchlist_model(path: Path) -> dict[str, Any]:
             metadata[normalized_key] = _yaml_scalar(value)
 
     if not symbols:
-        raise ValueError(f"watchlist file has no symbols: {path}")
+        raise ValueError(f"watchlist file has no symbols: {safe_path}")
     if not isinstance(metadata["enabled"], bool):
-        raise ValueError(f"watchlist enabled must be true or false: {path}")
+        raise ValueError(f"watchlist enabled must be true or false: {safe_path}")
 
     metadata["symbols"] = list(dict.fromkeys(symbols))
     metadata["tags"] = list(dict.fromkeys(str(tag) for tag in metadata["tags"] if str(tag)))
