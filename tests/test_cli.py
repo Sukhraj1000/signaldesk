@@ -771,6 +771,51 @@ def test_scan_uses_watchlist_provider_preference_when_provider_is_omitted(
     assert payload["results"][0]["summary"]["provider"] == "working"
 
 
+def test_scan_payload_groups_decision_support_signal_buckets(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        cli_main,
+        "default_provider_registry",
+        lambda: ProviderRegistry((WorkingProvider(name="working"),)),
+    )
+    watchlist = tmp_path / "watchlist.yaml"
+    watchlist.write_text("symbols:\n  - MSFT\n  - AMD\n", encoding="utf-8")
+
+    result = CliRunner().invoke(
+        app,
+        ["scan", "--watchlist", str(watchlist), "--provider", "working", "--output", "json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    signal_buckets = payload["signal_buckets"]
+    assert signal_buckets["schema_version"] == "signaldesk.watchlist_signal_buckets.v1"
+    assert signal_buckets["source_rule"] == "deterministic_watchlist_signal_buckets_v1"
+    assert signal_buckets["decision_support_only"] is True
+    buckets = {bucket["state"]: bucket for bucket in signal_buckets["buckets"]}
+    assert set(buckets) == {
+        "technically_strong",
+        "technically_weak",
+        "improving",
+        "deteriorating",
+        "stretched",
+        "range_bound",
+        "unavailable",
+    }
+    first_state = payload["results"][0]["summary"]["signal_state"]["state"]
+    assert buckets[first_state]["count"] == 2
+    assert buckets[first_state]["symbols"] == ["AMD", "MSFT"]
+    first_row = buckets[first_state]["rows"][0]
+    assert first_row["symbol"] == "AMD"
+    assert first_row["rank"] == 1
+    assert first_row["decision_support_only"] is True
+    assert first_row["signal_state"] == first_state
+    assert "confirmation_level" in first_row
+    assert "invalidation_level" in first_row
+    assert first_row["rationale"]
+
+
 def test_scan_payload_ranks_successes_and_splits_failures(
     monkeypatch: MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -3772,6 +3817,9 @@ def test_web_watchlist_scan_command_renders_dashboard_presentation() -> None:
     assert payload["run_summary"]["symbol_count"] == 2
     assert payload["run_summary"]["failed_count"] == 0
     assert {row["symbol"] for row in payload["ranked_setup_rows"]} == {"AMD", "MSFT"}
+    assert payload["ranked_setup_rows"][0]["signal_state"]
+    assert payload["signal_buckets"]["schema_version"] == "signaldesk.watchlist_signal_buckets.v1"
+    assert any(bucket["count"] for bucket in payload["signal_buckets"]["buckets"])
     assert payload["rendering_contract"]["no_dashboard_analysis"] is True
 
 

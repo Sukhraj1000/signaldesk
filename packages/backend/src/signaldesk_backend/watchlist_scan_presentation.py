@@ -41,6 +41,7 @@ def build_watchlist_scan_presentation(watchlist_report: Mapping[str, Any]) -> di
             _ranked_setup_row(result)
             for result in _mapping_items(watchlist_report.get("ranked_setups"))
         ],
+        "signal_buckets": _signal_buckets(watchlist_report.get("signal_buckets")),
         "failed_rows": _status_rows(watchlist_report.get("failed_symbols")),
         "skipped_rows": _status_rows(watchlist_report.get("skipped_symbols")),
         "provider_unavailable_context": _mapping_items(
@@ -150,6 +151,27 @@ def _mapping_items(value: object) -> list[dict[str, Any]]:
     return items
 
 
+def _signal_buckets(value: object) -> dict[str, Any]:
+    """Return deterministic watchlist signal buckets after validating row shapes."""
+
+    if value is None:
+        return {
+            "schema_version": None,
+            "source_rule": None,
+            "decision_support_only": True,
+            "buckets": [],
+        }
+    if not isinstance(value, Mapping):
+        raise ValueError("watchlist report signal_buckets section must be a JSON object")
+    buckets = _mapping_items(value.get("buckets"))
+    return {
+        "schema_version": value.get("schema_version"),
+        "source_rule": value.get("source_rule"),
+        "decision_support_only": value.get("decision_support_only"),
+        "buckets": buckets,
+    }
+
+
 def _ranked_setup_row(result: Mapping[str, Any]) -> dict[str, Any]:
     """Build a renderer row from one backend-ranked watchlist setup result."""
 
@@ -157,6 +179,12 @@ def _ranked_setup_row(result: Mapping[str, Any]) -> dict[str, Any]:
     if not isinstance(summary, Mapping):
         raise ValueError("ranked watchlist setup rows must include a summary object")
     levels = summary.get("levels") if isinstance(summary.get("levels"), Mapping) else {}
+    signal_state = summary.get("signal_state")
+    signal_state_label = (
+        signal_state.get("state")
+        if isinstance(signal_state, Mapping) and isinstance(signal_state.get("state"), str)
+        else None
+    )
     return {
         "symbol": result.get("symbol") or summary.get("symbol"),
         "status": result.get("status"),
@@ -164,10 +192,15 @@ def _ranked_setup_row(result: Mapping[str, Any]) -> dict[str, Any]:
         "provider": summary.get("provider"),
         "latest_close": summary.get("latest_close"),
         "trend_regime": summary.get("trend_regime"),
+        "signal_state": signal_state_label,
         "setup_quality_score": summary.get("setup_quality_score"),
         "risk_score": summary.get("risk_score"),
-        "confirmation": levels.get("confirmation") if isinstance(levels, Mapping) else None,
-        "invalidation": levels.get("invalidation") if isinstance(levels, Mapping) else None,
+        "confirmation": (
+            levels.get("confirmation") if isinstance(levels, Mapping) else None
+        ) or summary.get("confirmation_level"),
+        "invalidation": (
+            levels.get("invalidation") if isinstance(levels, Mapping) else None
+        ) or summary.get("invalidation_level"),
         "unavailable_context": _mapping_items(summary.get("unavailable_context")),
         "value": dict(result),
     }
