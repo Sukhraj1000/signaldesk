@@ -58,6 +58,7 @@ from signaldesk_backend import (
     detect_trend_regime_shift_events,
     detect_volatility_regime_events,
     evaluate_setup_replay,
+    evaluate_signal_history_outcome,
     exponential_moving_average,
     extract_ta_signal_card,
     llm_explanation_output_schema,
@@ -75,6 +76,7 @@ from signaldesk_backend import (
     simple_moving_average,
     supported_setup_label_details,
     supported_setup_labels,
+    validate_signal_history_record_payload,
     validate_ta_signal_card_report,
     volume_moving_average,
 )
@@ -92,12 +94,14 @@ llm_app = typer.Typer(
 )
 web_app = typer.Typer(help="Render dashboard-facing payloads from canonical SignalDesk JSON.")
 backtest_app = typer.Typer(help="Evaluate historical deterministic setup labels.")
+history_app = typer.Typer(help="Evaluate saved signal-history records against later candles.")
 app.add_typer(providers_app, name="providers")
 app.add_typer(config_app, name="config")
 app.add_typer(fixtures_app, name="fixtures")
 app.add_typer(llm_app, name="llm")
 app.add_typer(web_app, name="web")
 app.add_typer(backtest_app, name="backtest")
+app.add_typer(history_app, name="history")
 
 
 @app.callback()
@@ -3284,6 +3288,98 @@ def report_watchlist(
         typer.echo(_format_report_markdown(payload), nl=False)
     if exit_code:
         raise typer.Exit(exit_code)
+
+
+def _load_signal_history_record(path: Path) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"invalid signal history JSON file {path}: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"signal history file {path} must contain a JSON object")
+    validate_signal_history_record_payload(payload)
+    return payload
+
+
+def _signal_outcome_table_lines(payload: dict[str, Any]) -> tuple[str, ...]:
+    lines = ["metric	value"]
+    lines.extend(
+        (
+            f"symbol	{payload['symbol']}",
+            f"signal_state	{payload['signal_state']}",
+            f"momentum_state	{payload['momentum_state']}",
+            f"available_forward_candles	{payload['coverage']['available_forward_candles']}",
+            f"data_availability_rate	{payload['coverage']['data_availability_rate']}",
+            f"confirmation_hit	{str(payload['confirmation']['hit']).lower()}",
+            f"invalidation_hit	{str(payload['invalidation']['hit']).lower()}",
+        )
+    )
+    for horizon, value in payload["forward_returns_by_horizon"].items():
+        lines.append(f"forward_return_{horizon}	{value if value is not None else 'unavailable'}")
+    if payload["unavailable_context"]:
+        reasons = "; ".join(str(item["reason"]) for item in payload["unavailable_context"])
+        lines.append(f"unavailable_context	{reasons}")
+    return tuple(lines)
+
+
+@history_app.command("evaluate")
+def history_evaluate(
+    history_file: Path = typer.Option(  # noqa: B008
+        ...,
+        "--history-file",
+        help="Saved signal-history-*.json artifact to evaluate.",
+    ),
+    horizons: list[int] | None = typer.Option(  # noqa: B008
+        None,
+        "--horizon",
+        help="Forward candle horizon to evaluate. Repeatable.",
+    ),
+    provider: str | None = typer.Option(
+        None,
+        help="Registered price provider. When omitted, SignalDesk uses --mode.",
+    ),
+    mode: str = typer.Option("default", help="Provider role mode."),
+    days: int = typer.Option(120, min=1, help="Number of calendar days of history to request."),
+    output: str = typer.Option("table", help="Output format: table or json."),
+) -> None:
+    """Track paper-only forward outcomes for a saved signal-history record."""
+
+    output_format = output.strip().lower()
+    if output_format not in {"table", "json"}:
+        typer.echo("--output must be table or json.", err=True)
+        raise typer.Exit(2)
+    history_provider = provider
+    if history_provider is None and mode.strip().lower() == "default":
+        history_provider = "local-fixture"
+    try:
+        record = _load_signal_history_record(history_file)
+        _, provider_name, candles = _fetch_backtest_candles(
+            default_provider_registry(),
+            symbol=str(record["symbol"]),
+            provider=history_provider,
+            mode=mode,
+            interval=str(record.get("interval") or "1d"),
+            days=days,
+            as_of=datetime.now(UTC),
+        )
+        payload = evaluate_signal_history_outcome(
+            history_record=record,
+            candles=candles,
+            horizons=horizons or [1, 5, 20],
+            provider=provider_name,
+            generated_at=datetime.now(UTC),
+        )
+    except (KeyError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from exc
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
+    if output_format == "json":
+        typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+        return
+    for line in _signal_outcome_table_lines(payload):
+        typer.echo(line)
 
 
 def _ta_table_report_values(report: dict[str, Any]) -> dict[str, Any]:
