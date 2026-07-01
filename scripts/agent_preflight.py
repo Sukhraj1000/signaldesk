@@ -15,7 +15,9 @@ SECRET_NAME_RE = re.compile(
     r"(TOKEN|SECRET|PASSWORD|API_KEY|PRIVATE_KEY|ACCESS_KEY)", re.IGNORECASE
 )
 SECRET_VALUE_RE = re.compile(
-    r"(ghp_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|"
+    r"(ghp_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{22,}|"
+    r"glpat-[A-Za-z0-9_-]{20,}|xox[abprs]-[A-Za-z0-9-]{30,}|"
+    r"sk-(?:proj-|or-v1-)?[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|"
     r"-----BEGIN [A-Z ]*PRIVATE KEY-----)"
 )
 

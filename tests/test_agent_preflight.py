@@ -35,3 +35,32 @@ def test_sensitive_secret_path_detection_allows_documented_templates() -> None:
     assert preflight.is_sensitive_secret_path("docs/.env.sample") is False
     assert preflight.is_sensitive_secret_path("config/.env.template") is False
     assert preflight.is_sensitive_secret_path("docs/public-key-example.txt") is False
+
+
+def test_secret_value_detection_catches_modern_provider_tokens() -> None:
+    preflight = _load_agent_preflight()
+
+    obvious_secrets = [
+        "github_pat_" + "A" * 82,
+        "glpat-" + "A" * 20,
+        "xoxb-" + "123456789012" + "-" + "123456789012" + "-" + "a" * 24,
+        "sk-proj-" + "A" * 40,
+        "sk-or-v1-" + "a" * 64,
+    ]
+
+    for value in obvious_secrets:
+        assert preflight.SECRET_VALUE_RE.search(value) is not None
+
+
+def test_secret_value_detection_ignores_documentation_placeholders() -> None:
+    preflight = _load_agent_preflight()
+
+    placeholders = [
+        "github_pat_<redacted>",
+        "glpat-example-token",
+        "sk-pro...E_ME",
+        "sk-or-...E_ME",
+    ]
+
+    for value in placeholders:
+        assert preflight.SECRET_VALUE_RE.search(value) is None
