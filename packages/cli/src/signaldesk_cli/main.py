@@ -1965,6 +1965,7 @@ def _scan_result_summary(report: dict[str, Any]) -> dict[str, Any]:
         "latest_timestamp": card["facts"]["latest_timestamp"],
         "latest_close": card["facts"]["latest_close"],
         "trend_regime": card["trend"]["regimes"]["trend"],
+        "signal_state": report.get("deterministic_signals", {}).get("signal_state"),
         "confirmation_level": card["levels"]["confirmation"],
         "invalidation_level": card["levels"]["invalidation"],
         "risk_flags": card["risk"]["flags"],
@@ -1980,9 +1981,17 @@ def _scan_result_summary(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+
+def _signal_state_label(signal_state: object) -> str:
+    if isinstance(signal_state, dict):
+        label = signal_state.get("state")
+        if isinstance(label, str) and label.strip():
+            return label
+    return "unavailable"
+
 def _format_scan_table(payload: dict[str, Any]) -> tuple[str, ...]:
     header = (
-        "rank	symbol	status	provider	latest_close	trend_regime	"
+        "rank	symbol	status	provider	latest_close	trend_regime	signal_state	"
         "setup_quality_score	risk_score	unavailable_context"
     )
     lines = [f"run_id\t{payload.get('run_id', 'unavailable')}", header]
@@ -1994,6 +2003,7 @@ def _format_scan_table(payload: dict[str, Any]) -> tuple[str, ...]:
             f"{summary['provider']}	"
             f"{summary['latest_close']}	"
             f"{summary['trend_regime']['regime']}	"
+            f"{_signal_state_label(summary.get('signal_state'))}	"
             f"{summary['setup_quality_score']}	"
             f"{summary['risk_score']}	"
             f"{len(summary['unavailable_context'])}"
@@ -2782,9 +2792,10 @@ def _format_report_markdown(payload: dict[str, Any]) -> str:
                 *_format_report_enhanced_fact_lines(summary),
                 "",
                 "#### Setup",
-                "- What is the setup? `{}` trend regime with setup quality `{}` "
-                "and risk `{}`.".format(
+                "- What is the setup? `{}` trend regime with signal state `{}`, "
+                "setup quality `{}`, and risk `{}`.".format(
                     summary["trend_regime"]["regime"],
+                    _signal_state_label(summary.get("signal_state")),
                     summary["setup_quality_score"],
                     summary["risk_score"],
                 ),
@@ -3435,6 +3446,13 @@ def _technical_analysis_report(
             fundamentals_unavailable=fundamentals_unavailable,
         )
     )
+    signal_state = _decision_support_signal_state(
+        regimes=regimes,
+        events=events,
+        levels=setup,
+        scores=scores,
+        risks=risks,
+    )
 
     report_run_id = run_id or f"ta-{uuid4()}"
     identity = {
@@ -3508,6 +3526,7 @@ def _technical_analysis_report(
             "swing_levels": swing_levels,
             "fibonacci_levels": fibonacci_levels,
             "setup_levels": setup,
+            "signal_state": signal_state,
         },
         llm=llm_provider,
         flat_fields={
@@ -3537,6 +3556,7 @@ def _technical_analysis_report(
             "volatility_regime": regimes["volatility"],
             "volume_regime": regimes["volume"],
             "technical_events": events,
+            "signal_state": signal_state,
             "latest_swing_high": swing_levels["latest_swing_high"],
             "latest_swing_low": swing_levels["latest_swing_low"],
             "confirmation_level": setup["confirmation_level"],
@@ -3544,6 +3564,73 @@ def _technical_analysis_report(
         },
     )
 
+
+
+def _score_value(scores: tuple[dict[str, Any], ...], category: str) -> Decimal | None:
+    for score in scores:
+        if score.get("category") == category and score.get("score") is not None:
+            return Decimal(str(score["score"]))
+    return None
+
+
+def _decision_support_signal_state(
+    *,
+    regimes: dict[str, dict[str, Any]],
+    events: tuple[dict[str, Any], ...],
+    levels: dict[str, Any],
+    scores: tuple[dict[str, Any], ...],
+    risks: tuple[dict[str, Any], ...],
+) -> dict[str, Any]:
+    """Return a deterministic decision-support state, not trading advice."""
+
+    setup_score = _score_value(scores, "setup_quality")
+    risk_score = _score_value(scores, "risk")
+    trend_regime = regimes["trend"]["regime"]
+    volume_regime = regimes["volume"]["regime"]
+    bullish_events = [event for event in events if event.get("severity") == "bullish"]
+    bearish_events = [event for event in events if event.get("severity") == "bearish"]
+    stretched = any(
+        event.get("event_type") == "overextension"
+        or "stretch" in str(event.get("reason", "")).lower()
+        for event in events
+    ) or any(risk.get("kind") == "overextension" for risk in risks)
+
+    state = "range_bound"
+    rationale = [f"Trend regime is {trend_regime}."]
+    if stretched:
+        state = "stretched"
+        rationale.append("Overextension or stretch risk is present.")
+    elif trend_regime == "uptrend" and setup_score is not None and setup_score >= Decimal("70"):
+        state = "technically_strong"
+        rationale.append("Setup quality is at least 70 in an uptrend.")
+    elif trend_regime == "downtrend" or (setup_score is not None and setup_score <= Decimal("35")):
+        state = "technically_weak"
+        rationale.append("Downtrend or low setup quality weakens the setup.")
+    elif len(bullish_events) > len(bearish_events):
+        state = "improving"
+        rationale.append("Bullish deterministic events outnumber bearish events.")
+    elif len(bearish_events) > len(bullish_events):
+        state = "deteriorating"
+        rationale.append("Bearish deterministic events outnumber bullish events.")
+    else:
+        rationale.append("No directional confirmation dominates, so the setup remains range-bound.")
+
+    if volume_regime in {"high_volume", "elevated_volume"}:
+        rationale.append(f"Volume regime is {volume_regime}.")
+    return {
+        "state": state,
+        "source_rule": "deterministic_decision_support_signal_state_v1",
+        "setup_quality_score": str(setup_score) if setup_score is not None else None,
+        "risk_score": str(risk_score) if risk_score is not None else None,
+        "trend_regime": trend_regime,
+        "volume_regime": volume_regime,
+        "bullish_event_count": len(bullish_events),
+        "bearish_event_count": len(bearish_events),
+        "confirmation_level": levels["confirmation_level"],
+        "invalidation_level": levels["invalidation_level"],
+        "decision_support_only": True,
+        "rationale": rationale,
+    }
 
 def _fibonacci_level_payloads(
     *, latest_swing_low: dict[str, Any] | None, latest_swing_high: dict[str, Any] | None

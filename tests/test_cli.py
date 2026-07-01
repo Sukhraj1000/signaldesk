@@ -1800,6 +1800,8 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
     expected["score"] = {
         "breakdowns": expected["scores"],
     }
+    expected["signal_state"] = payload["signal_state"]
+    expected["deterministic_signals"]["signal_state"] = payload["signal_state"]
     expected["signal_card"] = {
         "identity": expected["identity"],
         "provider_mode": expected["provider_mode"],
@@ -4329,3 +4331,69 @@ def test_backtest_setup_batch_table_keeps_no_signal_labels_visible() -> None:
     assert "setup_label\tstatus\tsignal_count" in result.stdout
     assert "breakout_watch" in result.stdout
     assert "No historical candles matched this deterministic setup label." in result.stdout
+
+
+
+def test_ta_json_includes_deterministic_decision_support_signal_state(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        cli_main,
+        "default_provider_registry",
+        lambda: ProviderRegistry((WorkingProvider(name="working"),)),
+    )
+
+    result = CliRunner().invoke(
+        app, ["ta", "AMD", "--provider", "working", "--llm", "none", "--output", "json"]
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    signal_state = payload["deterministic_signals"]["signal_state"]
+    assert payload["signal_state"] == signal_state
+    assert signal_state["source_rule"] == "deterministic_decision_support_signal_state_v1"
+    assert signal_state["decision_support_only"] is True
+    assert signal_state["state"] in {
+        "technically_strong",
+        "technically_weak",
+        "improving",
+        "deteriorating",
+        "stretched",
+        "range_bound",
+    }
+    assert signal_state["setup_quality_score"] is not None
+    assert signal_state["risk_score"] is not None
+    assert signal_state["confirmation_level"] == payload["confirmation_level"]
+    assert signal_state["invalidation_level"] == payload["invalidation_level"]
+    assert signal_state["rationale"]
+
+
+def test_scan_table_surfaces_decision_support_signal_state(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        cli_main,
+        "default_provider_registry",
+        lambda: ProviderRegistry((WorkingProvider(name="working"),)),
+    )
+    watchlist = tmp_path / "watchlist.yaml"
+    watchlist.write_text("symbols:\n  - AMD\n", encoding="utf-8")
+
+    result = CliRunner().invoke(
+        app,
+        ["scan", "--watchlist", str(watchlist), "--provider", "working", "--output", "table"],
+    )
+
+    assert result.exit_code == 0
+    assert "trend_regime	signal_state	setup_quality_score" in result.stdout
+    assert any(
+        state in result.stdout
+        for state in (
+            "technically_strong",
+            "technically_weak",
+            "improving",
+            "deteriorating",
+            "stretched",
+            "range_bound",
+        )
+    )
