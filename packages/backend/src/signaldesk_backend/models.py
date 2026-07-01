@@ -1,5 +1,6 @@
 """Deterministic domain models for market data and provider responses."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
@@ -89,6 +90,110 @@ class Quote:
                 _require_positive_decimal(value, field_name)
         if self.bid is not None and self.ask is not None and self.ask < self.bid:
             raise ValueError("ask must be greater than or equal to bid")
+
+
+SIGNAL_HISTORY_SCHEMA_VERSION = "signaldesk.signal_history.v1"
+
+
+@dataclass(frozen=True, kw_only=True)
+class SignalHistoryRecord:
+    """Small deterministic record used for later signal outcome evaluation."""
+
+    run_id: str
+    generated_at: datetime
+    symbol: str
+    provider: str
+    provider_mode: str
+    interval: str
+    requested_days: int
+    candle_count: int
+    latest_timestamp: datetime
+    latest_close: Decimal
+    signal_state: str
+    momentum_state: str
+    strength_score: Decimal | None
+    risk_score: Decimal | None
+    confirmation_level: Mapping[str, object] | None
+    invalidation_level: Mapping[str, object] | None
+    classification_reasons: tuple[str, ...]
+    unavailable_context: tuple[Mapping[str, object], ...] = ()
+    source_schema_version: str = "signaldesk.ta.v1"
+    schema_version: str = SIGNAL_HISTORY_SCHEMA_VERSION
+
+    def __post_init__(self) -> None:
+        _require_timezone_aware(self.generated_at)
+        _require_timezone_aware(self.latest_timestamp)
+        for field_name in ("run_id", "symbol", "provider", "provider_mode", "interval"):
+            value = str(getattr(self, field_name)).strip()
+            if not value:
+                raise ValueError(f"{field_name} is required")
+            object.__setattr__(self, field_name, value)
+        object.__setattr__(self, "symbol", self.symbol.strip().upper())
+        if self.requested_days <= 0:
+            raise ValueError("requested_days must be positive")
+        if self.candle_count <= 0:
+            raise ValueError("candle_count must be positive")
+        _require_positive_decimal(self.latest_close, "latest_close")
+        for field_name in ("signal_state", "momentum_state", "source_schema_version"):
+            value = str(getattr(self, field_name)).strip()
+            if not value:
+                raise ValueError(f"{field_name} is required")
+            object.__setattr__(self, field_name, value)
+        if self.schema_version != SIGNAL_HISTORY_SCHEMA_VERSION:
+            raise ValueError(f"schema_version must be {SIGNAL_HISTORY_SCHEMA_VERSION}")
+        if self.strength_score is not None and self.strength_score < Decimal("0"):
+            raise ValueError("strength_score must be non-negative when available")
+        if self.risk_score is not None and self.risk_score < Decimal("0"):
+            raise ValueError("risk_score must be non-negative when available")
+        object.__setattr__(
+            self,
+            "classification_reasons",
+            tuple(
+                str(reason).strip()
+                for reason in self.classification_reasons
+                if str(reason).strip()
+            ),
+        )
+        for field_name in ("confirmation_level", "invalidation_level"):
+            value = getattr(self, field_name)
+            object.__setattr__(self, field_name, None if value is None else dict(value))
+        object.__setattr__(
+            self,
+            "unavailable_context",
+            tuple(dict(item) for item in self.unavailable_context),
+        )
+
+    def to_payload(self) -> dict[str, object]:
+        """Return a stable JSON-ready history artifact payload."""
+
+        return {
+            "schema_version": self.schema_version,
+            "source_schema_version": self.source_schema_version,
+            "run_id": self.run_id,
+            "generated_at": self.generated_at.isoformat(),
+            "symbol": self.symbol,
+            "provider": self.provider,
+            "provider_mode": self.provider_mode,
+            "interval": self.interval,
+            "requested_days": self.requested_days,
+            "candle_count": self.candle_count,
+            "latest_timestamp": self.latest_timestamp.isoformat(),
+            "latest_close": str(self.latest_close),
+            "signal_state": self.signal_state,
+            "momentum_state": self.momentum_state,
+            "strength_score": None if self.strength_score is None else str(self.strength_score),
+            "risk_score": None if self.risk_score is None else str(self.risk_score),
+            "confirmation_level": (
+                None if self.confirmation_level is None else dict(self.confirmation_level)
+            ),
+            "invalidation_level": (
+                None if self.invalidation_level is None else dict(self.invalidation_level)
+            ),
+            "classification_reasons": list(self.classification_reasons),
+            "unavailable_context": [dict(item) for item in self.unavailable_context],
+            "decision_support_only": True,
+            "source_rule": "canonical_ta_signal_history_v1",
+        }
 
 
 @dataclass(frozen=True, kw_only=True)

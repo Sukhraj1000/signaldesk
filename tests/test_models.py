@@ -2,6 +2,7 @@ from collections.abc import Callable
 from dataclasses import asdict
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import Any
 
 import pytest
 from signaldesk_backend import (
@@ -21,6 +22,7 @@ from signaldesk_backend import (
     ScoreBreakdown,
     ScoreReason,
     SignalCard,
+    SignalHistoryRecord,
     Symbol,
     TechnicalEvent,
     TechnicalSnapshot,
@@ -352,6 +354,118 @@ def test_unavailable_context_normalizes_without_asserting_absence() -> None:
     assert unavailable.reason == "FMP_API_KEY is not configured"
     assert unavailable.provider == "fmp"
     assert unavailable.details is None
+
+
+
+
+
+def _signal_history_record_kwargs(**overrides: object) -> dict[str, Any]:
+    kwargs: dict[str, Any] = {
+        "run_id": "ta-123",
+        "generated_at": NOW,
+        "symbol": "AMD",
+        "provider": "local-fixture",
+        "provider_mode": "default",
+        "interval": "1d",
+        "requested_days": 120,
+        "candle_count": 60,
+        "latest_timestamp": NOW,
+        "latest_close": Decimal("102.50"),
+        "signal_state": "improving",
+        "momentum_state": "constructive",
+        "strength_score": Decimal("62"),
+        "risk_score": Decimal("18"),
+        "confirmation_level": {"price": "105.00", "source_rule": "swing_high"},
+        "invalidation_level": {"price": "95.00", "source_rule": "swing_low"},
+        "classification_reasons": ("price above sma",),
+    }
+    kwargs.update(overrides)
+    return kwargs
+
+def test_signal_history_record_payload_is_small_and_evaluation_ready() -> None:
+    record = SignalHistoryRecord(
+        run_id="ta-123",
+        generated_at=NOW,
+        symbol="amd",
+        provider="local-fixture",
+        provider_mode="default",
+        interval="1d",
+        requested_days=120,
+        candle_count=60,
+        latest_timestamp=NOW,
+        latest_close=Decimal("102.50"),
+        signal_state="improving",
+        momentum_state="constructive",
+        strength_score=Decimal("62"),
+        risk_score=Decimal("18"),
+        confirmation_level={"price": "105.00", "source_rule": "swing_high"},
+        invalidation_level={"price": "95.00", "source_rule": "swing_low"},
+        classification_reasons=(" price above sma ", ""),
+        unavailable_context=({"context_type": "fundamentals", "reason": "default mode"},),
+    )
+
+    payload = record.to_payload()
+
+    assert payload == {
+        "schema_version": "signaldesk.signal_history.v1",
+        "source_schema_version": "signaldesk.ta.v1",
+        "run_id": "ta-123",
+        "generated_at": NOW.isoformat(),
+        "symbol": "AMD",
+        "provider": "local-fixture",
+        "provider_mode": "default",
+        "interval": "1d",
+        "requested_days": 120,
+        "candle_count": 60,
+        "latest_timestamp": NOW.isoformat(),
+        "latest_close": "102.50",
+        "signal_state": "improving",
+        "momentum_state": "constructive",
+        "strength_score": "62",
+        "risk_score": "18",
+        "confirmation_level": {"price": "105.00", "source_rule": "swing_high"},
+        "invalidation_level": {"price": "95.00", "source_rule": "swing_low"},
+        "classification_reasons": ["price above sma"],
+        "unavailable_context": [{"context_type": "fundamentals", "reason": "default mode"}],
+        "decision_support_only": True,
+        "source_rule": "canonical_ta_signal_history_v1",
+    }
+
+
+def test_signal_history_record_accepts_missing_levels() -> None:
+    record = SignalHistoryRecord(
+        **_signal_history_record_kwargs(
+            confirmation_level=None,
+            invalidation_level=None,
+        )
+    )
+
+    payload = record.to_payload()
+
+    assert payload["confirmation_level"] is None
+    assert payload["invalidation_level"] is None
+
+
+@pytest.mark.parametrize(
+    ("field_name", "value"),
+    (
+        ("generated_at", datetime(2026, 1, 15, 14, 30)),
+        ("latest_timestamp", datetime(2026, 1, 15, 14, 30)),
+        ("symbol", " "),
+        ("run_id", " "),
+        ("requested_days", 0),
+        ("candle_count", 0),
+        ("latest_close", Decimal("0")),
+        ("schema_version", "signaldesk.signal_history.v0"),
+        ("strength_score", Decimal("-1")),
+        ("risk_score", Decimal("-1")),
+    ),
+)
+def test_signal_history_record_rejects_invalid_values(
+    field_name: str, value: object
+) -> None:
+    with pytest.raises(ValueError):
+        SignalHistoryRecord(**_signal_history_record_kwargs(**{field_name: value}))
 
 
 def test_signal_card_defaults_to_no_unavailable_context() -> None:

@@ -1814,6 +1814,7 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
         "generated_at": generated_at,
         "provider_fetch_duration_ms": payload["run"]["provider_fetch_duration_ms"],
         "price_provider": "working",
+        "requested_days": 120,
     }
     expected["identity"] = {
         "symbol": "AMD",
@@ -3887,12 +3888,30 @@ def test_ta_command_saves_canonical_report_artifact_for_archive_readback(tmp_pat
 
     assert result.exit_code == 0, result.output
     artifacts = sorted(reports_dir.glob("*.json"))
-    assert len(artifacts) == 1
-    saved_payload = json.loads(artifacts[0].read_text(encoding="utf-8"))
+    assert len(artifacts) == 2
+    report_artifact = next(
+        path for path in artifacts if not path.name.startswith("signal-history-")
+    )
+    history_artifact = next(path for path in artifacts if path.name.startswith("signal-history-"))
+    saved_payload = json.loads(report_artifact.read_text(encoding="utf-8"))
     stdout_payload = json.loads(result.stdout)
     assert saved_payload == stdout_payload
     assert saved_payload["schema_version"] == "signaldesk.ta.v1"
     assert saved_payload["signal_card"]["facts"]["provider"] == "local-fixture"
+    history_payload = json.loads(history_artifact.read_text(encoding="utf-8"))
+    assert history_payload["schema_version"] == "signaldesk.signal_history.v1"
+    assert history_payload["source_schema_version"] == "signaldesk.ta.v1"
+    assert history_payload["run_id"] == saved_payload["run_id"]
+    assert history_payload["symbol"] == "AMD"
+    assert history_payload["provider"] == "local-fixture"
+    assert history_payload["requested_days"] == 120
+    assert history_payload["signal_state"] == saved_payload["decision_support"]["signal_state"]
+    assert history_payload["momentum_state"] == saved_payload["decision_support"]["momentum_state"]
+    assert (
+        history_payload["confirmation_level"]
+        == saved_payload["signal_card"]["levels"]["confirmation"]
+    )
+    assert history_payload["unavailable_context"] == saved_payload["unavailable_context"]
 
     archive_result = CliRunner().invoke(
         app,
@@ -3933,12 +3952,26 @@ def test_report_watchlist_saves_canonical_json_artifact(
 
     assert result.exit_code == 0, result.output
     artifacts = sorted(reports_dir.glob("*.json"))
-    assert len(artifacts) == 1
-    saved_payload = json.loads(artifacts[0].read_text(encoding="utf-8"))
+    assert len(artifacts) == 2
+    report_artifact = next(
+        path for path in artifacts if not path.name.startswith("signal-history-")
+    )
+    history_artifact = next(path for path in artifacts if path.name.startswith("signal-history-"))
+    saved_payload = json.loads(report_artifact.read_text(encoding="utf-8"))
     assert saved_payload == json.loads(result.stdout)
     assert saved_payload["schema_version"] == "signaldesk.watchlist_report.v1"
     assert saved_payload["report_type"] == "watchlist"
     assert saved_payload["summary"]["total"] == 1
+    history_payload = json.loads(history_artifact.read_text(encoding="utf-8"))
+    assert history_payload["schema_version"] == "signaldesk.signal_history.v1"
+    assert history_payload["source_schema_version"] == "signaldesk.watchlist_report.v1"
+    assert history_payload["symbol"] == "AMD"
+    assert history_payload["provider"] == "working"
+    assert history_payload["requested_days"] == saved_payload["run"]["requested_days"]
+    assert (
+        history_payload["unavailable_context"]
+        == saved_payload["results"][0]["summary"]["unavailable_context"]
+    )
 
 
 def test_ta_command_reports_artifact_save_errors(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
