@@ -2,6 +2,7 @@ import csv
 import json
 import os
 import re
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -1982,12 +1983,94 @@ def _scan_result_summary(report: dict[str, Any]) -> dict[str, Any]:
 
 
 
+WATCHLIST_SIGNAL_BUCKET_STATES = (
+    "technically_strong",
+    "technically_weak",
+    "improving",
+    "deteriorating",
+    "stretched",
+    "range_bound",
+    "unavailable",
+)
+WATCHLIST_SIGNAL_BUCKETS_SCHEMA_VERSION = "signaldesk.watchlist_signal_buckets.v1"
+
+
 def _signal_state_label(signal_state: object) -> str:
     if isinstance(signal_state, dict):
         label = signal_state.get("state")
         if isinstance(label, str) and label.strip():
             return label
     return "unavailable"
+
+
+def _watchlist_signal_buckets(
+    results: list[dict[str, Any]], ranked_setups: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Group a watchlist run into deterministic decision-support buckets."""
+
+    ranks_by_symbol = {str(result.get("symbol")): result.get("rank") for result in ranked_setups}
+    buckets: dict[str, dict[str, Any]] = {
+        state: {"state": state, "count": 0, "symbols": [], "rows": []}
+        for state in WATCHLIST_SIGNAL_BUCKET_STATES
+    }
+    for result in sorted(results, key=_watchlist_bucket_sort_key(ranks_by_symbol)):
+        row = _watchlist_signal_bucket_row(result, ranks_by_symbol=ranks_by_symbol)
+        state = str(row["signal_state"])
+        bucket = buckets[state if state in buckets else "unavailable"]
+        bucket["rows"].append(row)
+        bucket["symbols"].append(row["symbol"])
+        bucket["count"] += 1
+    return {
+        "schema_version": WATCHLIST_SIGNAL_BUCKETS_SCHEMA_VERSION,
+        "source_rule": "deterministic_watchlist_signal_buckets_v1",
+        "decision_support_only": True,
+        "buckets": [buckets[state] for state in WATCHLIST_SIGNAL_BUCKET_STATES],
+    }
+
+
+def _watchlist_bucket_sort_key(
+    ranks_by_symbol: dict[str, object],
+) -> Callable[[dict[str, Any]], tuple[int, str]]:
+    def sort_key(result: dict[str, Any]) -> tuple[int, str]:
+        symbol = str(result.get("symbol") or "")
+        rank = ranks_by_symbol.get(symbol)
+        if isinstance(rank, int):
+            return (rank, symbol)
+        return (10_000, symbol)
+
+    return sort_key
+
+
+def _watchlist_signal_bucket_row(
+    result: dict[str, Any], *, ranks_by_symbol: dict[str, object]
+) -> dict[str, Any]:
+    symbol = str(result.get("symbol") or "")
+    raw_summary = result.get("summary")
+    summary: dict[str, Any] = raw_summary if isinstance(raw_summary, dict) else {}
+    raw_signal_state = summary.get("signal_state")
+    signal_state: dict[str, Any] = raw_signal_state if isinstance(raw_signal_state, dict) else {}
+    state = _signal_state_label(signal_state)
+    rationale = signal_state.get("rationale", [])
+    if not isinstance(rationale, list):
+        rationale = []
+    return {
+        "symbol": symbol,
+        "status": result.get("status"),
+        "rank": ranks_by_symbol.get(symbol),
+        "provider": summary.get("provider"),
+        "latest_close": summary.get("latest_close"),
+        "trend_regime": summary.get("trend_regime"),
+        "signal_state": state,
+        "setup_quality_score": summary.get("setup_quality_score"),
+        "risk_score": summary.get("risk_score"),
+        "confirmation_level": summary.get("confirmation_level"),
+        "invalidation_level": summary.get("invalidation_level"),
+        "decision_support_only": bool(signal_state.get("decision_support_only", True)),
+        "rationale": rationale,
+        "unavailable_context": summary.get("unavailable_context", []),
+        "reason": result.get("reason") or result.get("error"),
+    }
+
 
 def _format_scan_table(payload: dict[str, Any]) -> tuple[str, ...]:
     header = (
@@ -2527,6 +2610,7 @@ def _watchlist_report_payload(
         "failed_symbols": failed_symbols,
         "skipped_symbols": skipped_symbols,
         "summary": summary,
+        "signal_buckets": _watchlist_signal_buckets(results, ranked_setups),
         "provenance": _watchlist_report_provenance(results),
     }
 
