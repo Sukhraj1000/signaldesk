@@ -498,6 +498,15 @@ def test_report_archive_presentation_groups_canonical_ta_reports() -> None:
     assert row["score_summary"] == {"setup_quality": "70", "risk": "40"}
     assert row["unavailable_context_count"] == 2
     assert presentation["rendering_contract"]["no_dashboard_analysis"] is True
+    assert presentation["rendering_contract"]["report_boundaries_visible"] is True
+    assert presentation["report_boundaries"]["missing_context_policy"] == (
+        "Missing enhanced provider or LLM context is unavailable context, "
+        "not a silent all-clear."
+    )
+    assert presentation["report_boundaries"]["disclaimer"] == (
+        "This report is not investment advice and does not include trade "
+        "execution instructions."
+    )
 
 
 def test_report_archive_presentation_rejects_non_report_shape() -> None:
