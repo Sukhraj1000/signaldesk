@@ -3354,7 +3354,9 @@ def test_llm_validate_chat_response_rejects_malformed_json_without_leaking_text(
 
 
 def test_llm_validate_chat_response_rejects_malicious_fixture_without_leaking_text() -> None:
-    response_path = Path("fixtures/llm/malicious-chat-response.json")
+    response_path = (
+        Path(__file__).resolve().parents[1] / "fixtures/llm/malicious-chat-response.json"
+    )
 
     result = CliRunner().invoke(app, ["llm", "validate-chat-response", str(response_path)])
 
