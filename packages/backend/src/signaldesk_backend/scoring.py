@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from signaldesk_backend.indicators import (
+    ConfirmationInvalidationLevel,
     ConfirmationInvalidationLevels,
     DeterministicTechnicalEvent,
     RegimeClassification,
@@ -351,6 +352,121 @@ def _data_quality_score(
         )
     return score, reasons
 
+
+
+def classify_decision_support_signal_state(
+    *,
+    trend_regime: RegimeClassification,
+    volume_regime: RegimeClassification,
+    technical_events: Sequence[DeterministicTechnicalEvent],
+    setup_levels: ConfirmationInvalidationLevels,
+    scores: Sequence[ScoreBreakdown],
+) -> dict[str, object]:
+    setup_score = _score_breakdown_value(scores, "setup_quality")
+    risk_score = _score_breakdown_value(scores, "risk")
+    bullish_events = tuple(event for event in technical_events if event.severity == "bullish")
+    bearish_events = tuple(event for event in technical_events if event.severity == "bearish")
+    warning_events = tuple(event for event in technical_events if event.severity == "warning")
+    stretched = any(
+        event.event_type in {"overextension", "overextension_up", "overextension_down"}
+        or "stretch" in event.reason.lower()
+        or "extended" in event.reason.lower()
+        for event in warning_events
+    )
+    strength_score = _bounded_score(
+        Decimal("50")
+        + (Decimal("20") if trend_regime.regime == "uptrend" else Decimal("0"))
+        - (Decimal("20") if trend_regime.regime == "downtrend" else Decimal("0"))
+        + min(Decimal("15"), Decimal(len(bullish_events) * 5))
+        - min(Decimal("15"), Decimal(len(bearish_events) * 5))
+        + (
+            Decimal("10")
+            if volume_regime.regime in {"high_volume", "elevated_volume"}
+            else Decimal("0")
+        )
+        - (Decimal("10") if volume_regime.regime == "low_volume" else Decimal("0"))
+    )
+    bullish_dominates = len(bullish_events) > len(bearish_events)
+    bearish_dominates = len(bearish_events) > len(bullish_events)
+    momentum_state = "neutral"
+    if stretched:
+        momentum_state = "stretched"
+    elif bearish_dominates or trend_regime.regime == "downtrend":
+        momentum_state = "fading"
+    elif bullish_dominates or (
+        trend_regime.regime == "uptrend"
+        and volume_regime.regime in {"high_volume", "elevated_volume"}
+    ):
+        momentum_state = "improving"
+    trend_state_by_regime = {
+        "uptrend": "technically_strong",
+        "downtrend": "technically_weak",
+        "range_bound": "range_bound",
+        "sideways": "range_bound",
+        "unknown": "unavailable",
+    }
+    trend_state = trend_state_by_regime.get(trend_regime.regime, "range_bound")
+    signal_state = "neutral_range"
+    classification_reasons = [
+        f"Trend regime is {trend_regime.regime} by {trend_regime.source_rule}.",
+    ]
+    if stretched:
+        signal_state = "stretched_avoid_chasing"
+        classification_reasons.append("Overextension warning indicates stretched momentum risk.")
+    elif bearish_dominates or trend_regime.regime == "downtrend" or strength_score <= Decimal("35"):
+        signal_state = "weak_deteriorating"
+        classification_reasons.append(
+            "Bearish evidence, downtrend, or weak strength score indicates deterioration."
+        )
+    elif trend_regime.regime == "uptrend" and strength_score >= Decimal("70"):
+        signal_state = "strong_momentum"
+        classification_reasons.append("Strength score is at least 70 in an uptrend.")
+    elif bullish_dominates and setup_levels.confirmation is not None:
+        signal_state = "improving_needs_confirmation"
+        classification_reasons.append("Bullish evidence is present but still needs confirmation.")
+    else:
+        classification_reasons.append(
+            "No directional confirmation dominates; classify as neutral/range-bound."
+        )
+    if volume_regime.regime in {"high_volume", "elevated_volume", "low_volume"}:
+        classification_reasons.append(f"Volume regime is {volume_regime.regime}.")
+    return {
+        "signal_state": signal_state,
+        "momentum_state": momentum_state,
+        "trend_state": trend_state,
+        "strength_score": str(strength_score),
+        "risk_score": str(risk_score) if risk_score is not None else None,
+        "setup_quality_score": str(setup_score) if setup_score is not None else None,
+        "classification_reasons": classification_reasons,
+        "source_rule": "deterministic_decision_support_classification_v1",
+        "decision_support_only": True,
+        "not_trading_advice": True,
+        "confirmation_level": _classification_level_payload(setup_levels.confirmation),
+        "invalidation_level": _classification_level_payload(setup_levels.invalidation),
+        "bullish_event_count": len(bullish_events),
+        "bearish_event_count": len(bearish_events),
+    }
+
+
+def _score_breakdown_value(scores: Sequence[ScoreBreakdown], category: str) -> Decimal | None:
+    for score in scores:
+        if score.category == category:
+            return score.score
+    return None
+
+
+def _classification_level_payload(
+    level: ConfirmationInvalidationLevel | None,
+) -> dict[str, str] | None:
+    if level is None:
+        return None
+    return {
+        "kind": level.kind,
+        "price": str(level.price),
+        "source_rule": level.source_rule,
+        "source_level": level.source_level,
+        "reason": level.reason,
+    }
 
 def _bounded_score(value: Decimal) -> Decimal:
     return min(Decimal("100"), max(Decimal("0"), value))

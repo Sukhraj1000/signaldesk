@@ -77,6 +77,98 @@
       ],
       "type": "object"
     },
+    "decision_support": {
+      "additionalProperties": false,
+      "properties": {
+        "bearish_event_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "bullish_event_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "classification_reasons": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "confirmation_level": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "decision_support_only": {
+          "const": true
+        },
+        "invalidation_level": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "momentum_state": {
+          "enum": [
+            "improving",
+            "fading",
+            "neutral",
+            "stretched"
+          ]
+        },
+        "not_trading_advice": {
+          "const": true
+        },
+        "risk_score": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "setup_quality_score": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "signal_state": {
+          "enum": [
+            "strong_momentum",
+            "improving_needs_confirmation",
+            "neutral_range",
+            "weak_deteriorating",
+            "stretched_avoid_chasing"
+          ]
+        },
+        "source_rule": {
+          "const": "deterministic_decision_support_classification_v1"
+        },
+        "strength_score": {
+          "type": "string"
+        },
+        "trend_state": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "signal_state",
+        "momentum_state",
+        "trend_state",
+        "strength_score",
+        "risk_score",
+        "setup_quality_score",
+        "classification_reasons",
+        "source_rule",
+        "decision_support_only",
+        "not_trading_advice",
+        "confirmation_level",
+        "invalidation_level",
+        "bullish_event_count",
+        "bearish_event_count"
+      ],
+      "type": "object"
+    },
     "facts": {
       "additionalProperties": true,
       "properties": {
@@ -565,6 +657,9 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": true,
   "properties": {
+    "decision_support": {
+      "$ref": "#/$defs/decision_support"
+    },
     "events": {
       "items": {
         "$ref": "#/$defs/technical_event"
@@ -610,6 +705,9 @@
     "signal_card": {
       "additionalProperties": false,
       "properties": {
+        "decision_support": {
+          "$ref": "#/$defs/decision_support"
+        },
         "events": {
           "items": {
             "$ref": "#/$defs/technical_event"
@@ -668,6 +766,7 @@
         "events",
         "risk",
         "score",
+        "decision_support",
         "provenance",
         "unavailable_context",
         "llm",
@@ -695,6 +794,7 @@
     "events",
     "risk",
     "score",
+    "decision_support",
     "provenance",
     "unavailable_context",
     "llm",

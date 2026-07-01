@@ -41,6 +41,7 @@ from signaldesk_backend import (
     build_ta_llm_prompt_payload,
     build_watchlist_scan_presentation,
     calculate_fibonacci_retracement_levels,
+    classify_decision_support_signal_state,
     classify_trend_regime,
     classify_volatility_regime,
     classify_volume_regime,
@@ -3517,18 +3518,24 @@ def _technical_analysis_report(
             fundamentals_unavailable=fundamentals_unavailable,
         )
     )
-    scores = _score_payloads(
-        score_technical_analysis(
-            candle_count=len(candles),
-            latest_candle_timestamp=latest_candle.timestamp,
-            as_of=as_of,
-            trend_regime=trend_regime,
-            volatility_regime=volatility_regime,
-            volume_regime=volume_regime,
-            technical_events=technical_events,
-            setup_levels=setup_levels,
-            fundamentals_unavailable=fundamentals_unavailable,
-        )
+    score_models = score_technical_analysis(
+        candle_count=len(candles),
+        latest_candle_timestamp=latest_candle.timestamp,
+        as_of=as_of,
+        trend_regime=trend_regime,
+        volatility_regime=volatility_regime,
+        volume_regime=volume_regime,
+        technical_events=technical_events,
+        setup_levels=setup_levels,
+        fundamentals_unavailable=fundamentals_unavailable,
+    )
+    scores = _score_payloads(score_models)
+    decision_support = classify_decision_support_signal_state(
+        trend_regime=trend_regime,
+        volume_regime=volume_regime,
+        technical_events=technical_events,
+        setup_levels=setup_levels,
+        scores=score_models,
     )
     signal_state = _decision_support_signal_state(
         regimes=regimes,
@@ -3537,6 +3544,15 @@ def _technical_analysis_report(
         scores=scores,
         risks=risks,
     )
+    signal_state = {
+        **signal_state,
+        "canonical_state": decision_support["signal_state"],
+        "momentum_state": decision_support["momentum_state"],
+        "trend_state": decision_support["trend_state"],
+        "strength_score": decision_support["strength_score"],
+        "classification_reasons": decision_support["classification_reasons"],
+        "canonical_source_rule": decision_support["source_rule"],
+    }
 
     report_run_id = run_id or f"ta-{uuid4()}"
     identity = {
@@ -3601,6 +3617,7 @@ def _technical_analysis_report(
         events=events,
         risk=risk,
         score=score,
+        decision_support=decision_support,
         provenance=provenance,
         unavailable_context=unavailable_context,
         deterministic_signals={

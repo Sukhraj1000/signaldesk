@@ -1850,6 +1850,25 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
     expected["score"] = {
         "breakdowns": expected["scores"],
     }
+    expected["decision_support"] = {
+        "signal_state": "neutral_range",
+        "momentum_state": "neutral",
+        "trend_state": "unavailable",
+        "strength_score": "50",
+        "risk_score": "60",
+        "setup_quality_score": "50",
+        "classification_reasons": [
+            "Trend regime is unknown by insufficient_history_for_trend_regime.",
+            "No directional confirmation dominates; classify as neutral/range-bound.",
+        ],
+        "source_rule": "deterministic_decision_support_classification_v1",
+        "decision_support_only": True,
+        "not_trading_advice": True,
+        "confirmation_level": None,
+        "invalidation_level": None,
+        "bullish_event_count": 0,
+        "bearish_event_count": 0,
+    }
     expected["signal_state"] = payload["signal_state"]
     expected["deterministic_signals"]["signal_state"] = payload["signal_state"]
     expected["signal_card"] = {
@@ -1861,6 +1880,7 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
         "events": expected["events"],
         "risk": expected["risk"],
         "score": expected["score"],
+        "decision_support": expected["decision_support"],
         "provenance": expected["provenance"],
         "unavailable_context": expected["unavailable_context"],
         "llm": "none",
