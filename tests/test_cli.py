@@ -1914,6 +1914,11 @@ def test_ta_command_outputs_markdown_from_signal_card(monkeypatch: MonkeyPatch) 
     assert "- Run ID: `ta-" in result.stdout
     assert "- Provider fetch duration: `" in result.stdout
     assert "- Schema version: `signaldesk.ta.v1`" in result.stdout
+    assert "## Decision support" in result.stdout
+    assert "- Signal state: `neutral_range`" in result.stdout
+    assert "- Momentum state: `neutral`" in result.stdout
+    assert "- Decision-support only: `true`" in result.stdout
+    assert "- Not trading advice: `true`" in result.stdout
     assert "- Price provider: `working`" in result.stdout
     assert "- Latest close: `49`" in result.stdout
     assert "## Setup" in result.stdout
