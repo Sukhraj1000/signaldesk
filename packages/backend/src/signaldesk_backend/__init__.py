@@ -139,6 +139,11 @@ from signaldesk_backend.signal_cards import (
     extract_ta_signal_card,
     validate_ta_signal_card_report,
 )
+from signaldesk_backend.signal_outcomes import (
+    SIGNAL_OUTCOME_EVALUATION_SCHEMA_VERSION,
+    evaluate_signal_history_outcome,
+    validate_signal_history_record_payload,
+)
 from signaldesk_backend.watchlist_scan_presentation import (
     WATCHLIST_SCAN_PRESENTATION_SCHEMA_VERSION,
     build_watchlist_scan_presentation,
@@ -189,6 +194,7 @@ __all__ = [
     "ScoreReason",
     "SIGNAL_HISTORY_SCHEMA_VERSION",
     "SignalHistoryRecord",
+    "SIGNAL_OUTCOME_EVALUATION_SCHEMA_VERSION",
     "SetupReplayMetrics",
     "SetupReplayObservation",
     "SetupReplayReport",
@@ -240,6 +246,7 @@ __all__ = [
     "detect_swing_points",
     "detect_trend_regime_shift_events",
     "evaluate_setup_replay",
+    "evaluate_signal_history_outcome",
     "supported_setup_label_details",
     "supported_setup_labels",
     "exponential_moving_average",
@@ -261,5 +268,6 @@ __all__ = [
     "validate_llm_explanation_output_against_prompt",
     "validate_llm_prompt_payload",
     "validate_ta_signal_card_report",
+    "validate_signal_history_record_payload",
     "volume_moving_average",
 ]

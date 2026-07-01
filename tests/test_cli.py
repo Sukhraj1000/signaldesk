@@ -4526,3 +4526,117 @@ def test_scan_table_surfaces_decision_support_signal_state(
             "range_bound",
         )
     )
+
+
+def test_history_evaluate_command_reports_saved_signal_outcome(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    history_file = tmp_path / "signal-history-amd.json"
+    history_file.write_text(
+        json.dumps(
+            {
+                "schema_version": "signaldesk.signal_history.v1",
+                "run_id": "run-1",
+                "generated_at": "2024-01-01T00:00:00+00:00",
+                "symbol": "AMD",
+                "provider": "working",
+                "provider_mode": "default",
+                "interval": "1d",
+                "requested_days": 10,
+                "candle_count": 1,
+                "latest_timestamp": "2024-01-10T00:00:00+00:00",
+                "latest_close": "19",
+                "signal_state": "improving",
+                "momentum_state": "confirmed",
+                "strength_score": "0.8",
+                "risk_score": "0.1",
+                "confirmation_level": {"price": "21", "kind": "resistance"},
+                "invalidation_level": {"price": "18", "kind": "support"},
+                "classification_reasons": ["fixture"],
+                "unavailable_context": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        cli_main,
+        "default_provider_registry",
+        lambda: ProviderRegistry((WorkingProvider(name="working"),)),
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "history",
+            "evaluate",
+            "--history-file",
+            str(history_file),
+            "--provider",
+            "working",
+            "--horizon",
+            "1",
+            "--horizon",
+            "5",
+            "--output",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["schema_version"] == "signaldesk.signal_outcome_evaluation.v1"
+    assert payload["symbol"] == "AMD"
+    assert payload["provider"] == "working"
+    assert payload["forward_returns_by_horizon"] == {"1": "0.0526", "5": "0.2632"}
+    assert payload["confirmation"]["hit"] is True
+    assert payload["decision_support_only"] is True
+
+
+def test_history_evaluate_command_uses_local_fixture_in_default_mode(tmp_path: Path) -> None:
+    history_file = tmp_path / "signal-history-amd.json"
+    history_file.write_text(
+        json.dumps(
+            {
+                "schema_version": "signaldesk.signal_history.v1",
+                "run_id": "run-1",
+                "generated_at": "2024-01-01T00:00:00+00:00",
+                "symbol": "AMD",
+                "provider": "local-fixture",
+                "provider_mode": "default",
+                "interval": "1d",
+                "requested_days": 10,
+                "candle_count": 1,
+                "latest_timestamp": "2100-01-01T00:00:00+00:00",
+                "latest_close": "100",
+                "signal_state": "range_bound",
+                "momentum_state": "mixed",
+                "strength_score": None,
+                "risk_score": None,
+                "confirmation_level": None,
+                "invalidation_level": None,
+                "classification_reasons": [],
+                "unavailable_context": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "history",
+            "evaluate",
+            "--history-file",
+            str(history_file),
+            "--horizon",
+            "1",
+            "--output",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["provider"] == "local-fixture"
+    assert payload["forward_returns_by_horizon"] == {"1": None}
+    assert payload["unavailable_context"]
