@@ -4528,6 +4528,126 @@ def test_scan_table_surfaces_decision_support_signal_state(
     )
 
 
+def _write_history_eval_record(
+    path: Path, *, schema_version: str = "signaldesk.signal_history.v1"
+) -> None:
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": schema_version,
+                "run_id": "run-table",
+                "generated_at": "2100-01-01T00:00:00+00:00",
+                "symbol": "AMD",
+                "provider": "local-fixture",
+                "provider_mode": "default",
+                "interval": "1d",
+                "requested_days": 10,
+                "candle_count": 1,
+                "latest_timestamp": "2100-01-01T00:00:00+00:00",
+                "latest_close": "100",
+                "signal_state": "range_bound",
+                "momentum_state": "mixed",
+                "strength_score": None,
+                "risk_score": None,
+                "confirmation_level": None,
+                "invalidation_level": None,
+                "classification_reasons": [],
+                "unavailable_context": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_history_evaluate_command_renders_table_output(tmp_path: Path) -> None:
+    history_file = tmp_path / "signal-history-amd.json"
+    _write_history_eval_record(history_file)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "history",
+            "evaluate",
+            "--history-file",
+            str(history_file),
+            "--horizon",
+            "1",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "metric	value" in result.stdout
+    assert "symbol	AMD" in result.stdout
+    assert "forward_return_1	unavailable" in result.stdout
+    assert "confirmation_hit	false" in result.stdout
+
+
+def test_history_evaluate_command_rejects_invalid_output(tmp_path: Path) -> None:
+    history_file = tmp_path / "signal-history-amd.json"
+    _write_history_eval_record(history_file)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "history",
+            "evaluate",
+            "--history-file",
+            str(history_file),
+            "--output",
+            "xml",
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert "--output must be table or json." in result.stderr
+
+
+def test_history_evaluate_command_rejects_malformed_history_json(tmp_path: Path) -> None:
+    history_file = tmp_path / "signal-history-amd.json"
+    history_file.write_text("not-json", encoding="utf-8")
+
+    result = CliRunner().invoke(
+        app,
+        ["history", "evaluate", "--history-file", str(history_file)],
+    )
+
+    assert result.exit_code == 2
+    assert "invalid signal history JSON file" in result.stderr
+
+
+def test_history_evaluate_command_rejects_schema_mismatch(tmp_path: Path) -> None:
+    history_file = tmp_path / "signal-history-amd.json"
+    _write_history_eval_record(history_file, schema_version="wrong")
+
+    result = CliRunner().invoke(
+        app,
+        ["history", "evaluate", "--history-file", str(history_file)],
+    )
+
+    assert result.exit_code == 2
+    assert "schema_version must be signaldesk.signal_history.v1" in result.stderr
+
+
+def test_history_evaluate_command_reports_unknown_provider(tmp_path: Path) -> None:
+    history_file = tmp_path / "signal-history-amd.json"
+    _write_history_eval_record(history_file)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "history",
+            "evaluate",
+            "--history-file",
+            str(history_file),
+            "--provider",
+            "missing-provider",
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert "missing-provider" in result.stderr
+
+
 def test_history_evaluate_command_reports_saved_signal_outcome(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:

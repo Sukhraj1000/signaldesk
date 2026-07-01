@@ -68,6 +68,31 @@ def test_evaluate_signal_history_outcome_tracks_forward_returns_and_levels() -> 
     assert payload["unavailable_context"] == []
 
 
+def test_evaluate_signal_history_outcome_sorts_future_candles_and_partial_coverage() -> None:
+    payload = evaluate_signal_history_outcome(
+        history_record=_record(),
+        candles=(
+            _candle(2, "110", high="110"),
+            _candle(0, "100"),
+            _candle(1, "103", high="105"),
+        ),
+        horizons=(1, 5),
+        provider="local-fixture",
+        generated_at=datetime(2026, 1, 13, tzinfo=UTC),
+    )
+
+    assert payload["forward_returns_by_horizon"] == {"1": "0.0300", "5": None}
+    assert payload["confirmation"]["hit_at"] == "2026-01-11T00:00:00+00:00"
+    assert payload["coverage"]["data_availability_rate"] == "0.50"
+    assert payload["unavailable_context"] == [
+        {
+            "context_type": "forward_outcome",
+            "reason": "forward candle horizon is not available yet",
+            "horizon": 5,
+        }
+    ]
+
+
 def test_evaluate_signal_history_outcome_reports_missing_forward_context() -> None:
     record = _record()
     record["confirmation_level"] = None

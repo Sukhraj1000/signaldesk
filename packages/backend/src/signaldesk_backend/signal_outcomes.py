@@ -42,7 +42,10 @@ def evaluate_signal_history_outcome(
             raise ValueError("all outcome candles must match the history record symbol")
 
     future_candles = tuple(
-        candle for candle in normalized_candles if candle.timestamp > latest_timestamp
+        sorted(
+            (candle for candle in normalized_candles if candle.timestamp > latest_timestamp),
+            key=lambda candle: candle.timestamp,
+        )
     )
     returns_by_horizon: dict[str, str | None] = {}
     unavailable_context: list[dict[str, str | int]] = []
