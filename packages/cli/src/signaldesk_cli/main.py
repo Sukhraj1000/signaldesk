@@ -1452,6 +1452,7 @@ def _format_ta_markdown(report: dict[str, Any]) -> str:
     levels = card["levels"]
     risk = card["risk"]
     score = card["score"]
+    decision_support = card["decision_support"]
     provider_mode = card["provider_mode"]
     unavailable_context = card["unavailable_context"]
 
@@ -1494,6 +1495,16 @@ def _format_ta_markdown(report: dict[str, Any]) -> str:
         f"- Invalidation level: `{invalidation_level}`",
         f"- Setup quality score: `{setup_quality_score}`",
         f"- Risk score: `{risk_score}`",
+        "",
+        "## Decision support",
+        f"- Signal state: `{decision_support["signal_state"]}`",
+        f"- Momentum state: `{decision_support["momentum_state"]}`",
+        f"- Trend state: `{decision_support["trend_state"]}`",
+        f"- Strength score: `{decision_support["strength_score"]}`",
+        f"- Decision-support only: `{str(decision_support["decision_support_only"]).lower()}`",
+        f"- Not trading advice: `{str(decision_support["not_trading_advice"]).lower()}`",
+        "- Classification reasons:",
+        *(f"  - {reason}" for reason in decision_support["classification_reasons"]),
     ]
     lines.extend(_format_score_reason_lines(score["breakdowns"]))
     lines.extend(
