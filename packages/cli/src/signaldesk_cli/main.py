@@ -1,6 +1,7 @@
 import csv
 import json
 import os
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -2444,6 +2445,35 @@ def _watchlist_report_provenance(results: list[dict[str, Any]]) -> list[dict[str
     return provenance_items
 
 
+
+_SENSITIVE_PATH_COMPONENT_RE = re.compile(
+    r"(token|secret|password|api[_-]?key|private[_-]?key|access[_-]?key)", re.IGNORECASE
+)
+
+
+def _redact_sensitive_path_components(path: Path) -> str:
+    """Return a display-safe path with secret-like path components removed.
+
+    Watchlist paths are user-facing provenance, but temporary directories and
+    operator-chosen folders may themselves contain credential-like names. Keep the
+    path shape useful while ensuring obvious secret words do not leak into JSON or
+    Markdown report payloads.
+    """
+
+    rendered = str(path)
+    if not rendered:
+        return rendered
+    parts = path.parts
+    if not parts:
+        return rendered
+    redacted_parts = tuple(
+        "<redacted>" if _SENSITIVE_PATH_COMPONENT_RE.search(part) else part for part in parts
+    )
+    if redacted_parts == parts:
+        return rendered
+    return str(Path(*redacted_parts))
+
+
 def _watchlist_report_payload(
     *,
     watchlist: Path,
@@ -2476,7 +2506,7 @@ def _watchlist_report_payload(
             "skipped_count": len(skipped_symbols),
             "max_workers": max_workers,
         },
-        "watchlist": str(watchlist),
+        "watchlist": _redact_sensitive_path_components(watchlist),
         "watchlist_model": watchlist_model,
         "scanned_at": scanned_at.isoformat(),
         "provider_mode": provider_mode,
