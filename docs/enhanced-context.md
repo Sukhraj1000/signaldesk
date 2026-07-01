@@ -23,6 +23,11 @@ Enhanced context is rendered alongside, not inside, deterministic TA facts:
 
 Every enhanced payload must carry provider attribution and timestamps. If a fundamental or catalyst timestamp is absent or older than the deterministic freshness threshold, currently 7 days for enhanced context, report warnings in provenance. Stale warnings are context about data quality; they are not trading recommendations.
 
+
+## Redistribution boundary
+
+Enhanced provider payloads can be used to produce canonical facts, risks, unavailable context, and provenance for the runtime operator, but paid or license-restricted raw payloads must not be committed or published as fixtures, report examples, screenshots, dumps, or dashboard artifacts unless redistribution is explicitly permitted. Prefer synthetic/open fixtures for tests and docs. If enhanced context cannot be fetched or shared safely, keep it as explicit unavailable context rather than implying the catalyst/fundamental risk is absent. See [Provider data redistribution policy](provider-data-redistribution.md).
+
 ## Runtime verification examples
 
 Default-mode smoke checks must work without paid keys:

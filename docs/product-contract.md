@@ -37,7 +37,7 @@ Enhanced mode is optional. Adapters such as FMP can add richer or more reliable 
 - Enhanced data may include company facts, fundamentals, earnings, catalysts, analyst/estimate context, and paid price feeds.
 - Enhanced fields must remain separated from deterministic TA facts.
 - Missing keys or unavailable enhanced data must be reported as unavailable context, not treated as proof that no catalyst or risk exists.
-- Paid provider payloads must not be redistributed through committed fixtures or generated reports unless explicitly permitted.
+- Paid provider payloads must not be redistributed through committed fixtures, public examples, generated reports, or dashboard artifacts unless explicitly permitted by the provider terms. See [Provider data redistribution policy](provider-data-redistribution.md).
 
 ## Output boundaries
 
