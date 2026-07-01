@@ -21,7 +21,7 @@ Default-mode examples should work without paid keys by using `yfinance`, `local-
 
 Saved single-symbol TA artifacts can be read back with `signaldesk web report-archive --reports-dir PATH --output json`, which validates required canonical sections before building dashboard-facing archive rows. Watchlist report artifacts use `signaldesk.watchlist_report.v1` and are intended for direct JSON/Markdown/table readback rather than TA archive rows.
 
-Provider failures and missing enhanced/LLM context must remain explicit in the saved JSON. A saved report artifact is not a data cache: rerun the command to refresh market data, and delete or replace old artifacts when provider inputs, symbol lists, intervals, date ranges, or provider modes change.
+Provider failures and missing enhanced/LLM context must remain explicit in the saved JSON. A saved report artifact is not a data cache or redistribution bundle: rerun the command to refresh market data, delete or replace old artifacts when provider inputs, symbol lists, intervals, date ranges, or provider modes change, and do not commit or publish paid/restricted provider payloads through generated report artifacts unless explicitly permitted. See [Provider data redistribution policy](provider-data-redistribution.md).
 
 ## Required report sections
 

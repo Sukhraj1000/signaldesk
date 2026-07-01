@@ -60,7 +60,7 @@ Rules:
 - CLI/API/dashboard/reporting render the same canonical signal-card output.
 - LLMs consume structured facts only and are optional.
 
-See `docs/product-contract.md` for the durable product contract: supported default and enhanced provider modes, output category boundaries, unavailable-context handling, and non-goals. See `docs/enhanced-context.md` for the FMP-backed catalyst/fundamental context boundary, `docs/reporting.md` for the renderer contract used by JSON, table, and Markdown reports, `docs/backtesting-evaluation.md` for deterministic setup-rule replay limits and metrics, and `docs/persistence-caching-scheduling.md` for the report artifact, provider-cache invalidation, and local scheduling policy.
+See `docs/product-contract.md` for the durable product contract: supported default and enhanced provider modes, output category boundaries, unavailable-context handling, and non-goals. See `docs/provider-data-redistribution.md` for the paid/restricted provider data-sharing policy. See `docs/enhanced-context.md` for the FMP-backed catalyst/fundamental context boundary, `docs/reporting.md` for the renderer contract used by JSON, table, and Markdown reports, `docs/backtesting-evaluation.md` for deterministic setup-rule replay limits and metrics, and `docs/persistence-caching-scheduling.md` for the report artifact, provider-cache invalidation, and local scheduling policy.
 
 ## Non-goals
 
@@ -199,4 +199,4 @@ FMP_API_KEY=
 POLYGON_API_KEY=
 ```
 
-Secrets must never appear in logs, PRs, generated reports, fixtures, or committed data.
+Secrets must never appear in logs, PRs, generated reports, fixtures, or committed data. Paid or license-restricted provider payloads must not be committed as fixtures, dumps, public examples, or redistributable generated reports unless the provider terms explicitly allow it; use synthetic/open fixtures and unavailable-context entries instead.
