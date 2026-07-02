@@ -1903,7 +1903,44 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
     }
     expected["signal_state"] = payload["signal_state"]
     expected["deterministic_signals"]["signal_state"] = payload["signal_state"]
-    expected["context_overlays"] = payload["context_overlays"]
+    expected["context_overlays"] = {
+        "items": [
+            {
+                "overlay_type": "market_sector_relative_strength",
+                "status": "unavailable",
+                "provider": None,
+                "summary": (
+                    "market/sector relative-strength context is not configured for this run"
+                ),
+                "decision_support_impact": (
+                    "none; overlays do not mutate deterministic signal_state"
+                ),
+                "provenance_source": "unavailable_context.market_sector_relative_strength",
+            },
+            {
+                "overlay_type": "fundamental_valuation",
+                "status": "unavailable",
+                "provider": "working",
+                "summary": "not available in the default technical-analysis CLI path",
+                "decision_support_impact": (
+                    "none; overlays do not mutate deterministic signal_state"
+                ),
+                "provenance_source": "unavailable_context",
+            },
+            {
+                "overlay_type": "earnings_catalyst_risk",
+                "status": "unavailable",
+                "provider": "working",
+                "summary": "not available in the default technical-analysis CLI path",
+                "decision_support_impact": (
+                    "none; overlays do not mutate deterministic signal_state"
+                ),
+                "provenance_source": "unavailable_context",
+            },
+        ],
+        "source_rule": "separated_context_overlays_v1",
+        "decision_support_impact": "none; overlays do not mutate deterministic signal_state",
+    }
     expected["signal_card"] = {
         "identity": expected["identity"],
         "provider_mode": expected["provider_mode"],
