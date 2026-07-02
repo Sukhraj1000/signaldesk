@@ -4880,3 +4880,216 @@ def test_history_evaluate_command_uses_local_fixture_in_default_mode(tmp_path: P
     assert payload["provider"] == "local-fixture"
     assert payload["forward_returns_by_horizon"] == {"1": None}
     assert payload["unavailable_context"]
+
+
+def _write_watchlist_alert_report(
+    path: Path, *, run_id: str, rows: list[dict[str, object]]
+) -> None:
+    results = []
+    attention_rows = []
+    for row in rows:
+        symbol = str(row["symbol"])
+        state = str(row.get("state", "range_bound"))
+        confirmation_level = row.get("confirmation_level")
+        invalidation_level = row.get("invalidation_level")
+        summary = {
+            "symbol": symbol,
+            "provider": "local-fixture",
+            "latest_close": row["latest_close"],
+            "signal_state": {"state": state, "rationale": ["fixture alert row"]},
+            "confirmation_level": confirmation_level,
+            "invalidation_level": invalidation_level,
+            "signal_card": {"events": row.get("events", [])},
+        }
+        results.append({"symbol": symbol, "status": "ok", "summary": summary})
+        attention_rows.append(
+            {
+                "symbol": symbol,
+                "state": state,
+                "latest_close": row["latest_close"],
+                "confirmation_level": confirmation_level,
+                "invalidation_level": invalidation_level,
+                "top_reason": "fixture alert row",
+                "primary_risk": "none",
+            }
+        )
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": "signaldesk.watchlist_report.v1",
+                "report_type": "watchlist",
+                "run_id": run_id,
+                "generated_at": "2024-01-02T00:00:00+00:00",
+                "decision_attention": {
+                    "schema_version": "signaldesk.watchlist_decision_attention.v1",
+                    "rows": attention_rows,
+                },
+                "results": results,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_alerts_watchlist_generates_deterministic_deduped_json(tmp_path: Path) -> None:
+    previous = tmp_path / "previous.json"
+    current = tmp_path / "current.json"
+    level = {"price": "101", "kind": "resistance"}
+    _write_watchlist_alert_report(
+        previous,
+        run_id="previous-run",
+        rows=[
+            {
+                "symbol": "AMD",
+                "state": "range_bound",
+                "latest_close": "100",
+                "confirmation_level": level,
+                "invalidation_level": {"price": "95", "kind": "support"},
+            }
+        ],
+    )
+    _write_watchlist_alert_report(
+        current,
+        run_id="current-run",
+        rows=[
+            {
+                "symbol": "AMD",
+                "state": "improving",
+                "latest_close": "102",
+                "confirmation_level": level,
+                "invalidation_level": {"price": "95", "kind": "support"},
+                "events": [{"event_type": "high_volume_breakout"}],
+            }
+        ],
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "alerts",
+            "watchlist",
+            "--current-report",
+            str(current),
+            "--previous-report",
+            str(previous),
+            "--output",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["schema_version"] == "signaldesk.watchlist_signal_alerts.v1"
+    assert payload["source_rule"] == "deterministic_watchlist_signal_alerts_v1"
+    assert payload["decision_support_only"] is True
+    assert payload["not_trading_advice"] is True
+    assert "not investment advice" in payload["disclaimer"]
+    assert [alert["alert_type"] for alert in payload["alerts"]] == [
+        "confirmation_cross",
+        "signal_state_improved",
+        "high_volume_breakout",
+    ]
+    assert all(alert["ticker"] == "AMD" for alert in payload["alerts"])
+    assert payload["alerts"][0]["close"] == "102"
+    assert payload["alerts"][0]["confirmation_level"] == level
+
+
+def test_alerts_watchlist_reports_invalidation_deterioration_and_markdown(tmp_path: Path) -> None:
+    previous = tmp_path / "previous.json"
+    current = tmp_path / "current.json"
+    _write_watchlist_alert_report(
+        previous,
+        run_id="previous-run",
+        rows=[
+            {
+                "symbol": "MSFT",
+                "state": "improving",
+                "latest_close": "96",
+                "confirmation_level": {"price": "110", "kind": "resistance"},
+                "invalidation_level": {"price": "95", "kind": "support"},
+            }
+        ],
+    )
+    _write_watchlist_alert_report(
+        current,
+        run_id="current-run",
+        rows=[
+            {
+                "symbol": "MSFT",
+                "state": "deteriorating",
+                "latest_close": "94",
+                "confirmation_level": {"price": "110", "kind": "resistance"},
+                "invalidation_level": {"price": "95", "kind": "support"},
+            }
+        ],
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "alerts",
+            "watchlist",
+            "--current-report",
+            str(current),
+            "--previous-report",
+            str(previous),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "# SignalDesk watchlist signal alerts" in result.stdout
+    assert "| MSFT | invalidation_break | deteriorating | 94 | 110 | 95 |" in result.stdout
+    assert "signal_state_deteriorated" in result.stdout
+    assert "Decision-support only; not investment advice" in result.stdout
+
+
+def test_alerts_watchlist_dedupes_unchanged_prior_state(tmp_path: Path) -> None:
+    previous = tmp_path / "previous.json"
+    current = tmp_path / "current.json"
+    row: dict[str, object] = {
+        "symbol": "AMD",
+        "state": "stretched",
+        "latest_close": "120",
+        "confirmation_level": {"price": "101", "kind": "resistance"},
+        "invalidation_level": {"price": "95", "kind": "support"},
+        "events": [{"event_type": "high_volume_breakout"}],
+    }
+    _write_watchlist_alert_report(previous, run_id="previous-run", rows=[row])
+    _write_watchlist_alert_report(current, run_id="current-run", rows=[row])
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "alerts",
+            "watchlist",
+            "--current-report",
+            str(current),
+            "--previous-report",
+            str(previous),
+            "--output",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["alerts"] == []
+
+
+def test_alerts_watchlist_rejects_invalid_output_and_schema(tmp_path: Path) -> None:
+    current = tmp_path / "current.json"
+    current.write_text(json.dumps({"schema_version": "wrong"}), encoding="utf-8")
+
+    bad_output = CliRunner().invoke(
+        app,
+        ["alerts", "watchlist", "--current-report", str(current), "--output", "xml"],
+    )
+    assert bad_output.exit_code == 2
+    assert "--output must be markdown or json." in bad_output.stderr
+
+    bad_schema = CliRunner().invoke(
+        app,
+        ["alerts", "watchlist", "--current-report", str(current), "--output", "json"],
+    )
+    assert bad_schema.exit_code == 2
+    assert "schema_version signaldesk.watchlist_report.v1" in bad_schema.stderr
