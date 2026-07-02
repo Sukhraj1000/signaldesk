@@ -2497,6 +2497,26 @@ def _watchlist_attention_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return [dict(row) for row in rows if isinstance(row, dict)]
 
 
+def _watchlist_signal_row_cells(row: dict[str, Any]) -> list[str]:
+    return [
+        str(row.get("symbol") or "unavailable"),
+        str(row.get("state") or row.get("signal_state") or "unavailable"),
+        str(row.get("latest_close") or "unavailable"),
+        _watchlist_level_text(row.get("confirmation_level")),
+        _watchlist_level_text(row.get("invalidation_level")),
+        str(row.get("top_reason") or "No deterministic rationale emitted."),
+        str(row.get("primary_risk") or "none"),
+    ]
+
+
+def _watchlist_tsv_row(*cells: str) -> str:
+    return "\t".join(cells)
+
+
+def _watchlist_markdown_row(cells: list[str]) -> str:
+    return "| " + " | ".join(cells) + " |"
+
+
 def _watchlist_bucket_rows(payload: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
     signal_buckets = payload.get("signal_buckets")
     if not isinstance(signal_buckets, dict):
@@ -2532,15 +2552,9 @@ def _format_scan_table(payload: dict[str, Any]) -> tuple[str, ...]:
         )
         for row in attention_rows:
             lines.append(
-                "{}	{}	{}	{}	{}	{}	{}	{}".format(
-                    row.get("attention_type") or "unavailable_context",
-                    row.get("symbol") or "unavailable",
-                    row.get("state") or "unavailable",
-                    row.get("latest_close") or "unavailable",
-                    _watchlist_level_text(row.get("confirmation_level")),
-                    _watchlist_level_text(row.get("invalidation_level")),
-                    row.get("top_reason") or "No deterministic rationale emitted.",
-                    row.get("primary_risk") or "none",
+                _watchlist_tsv_row(
+                    str(row.get("attention_type") or "unavailable_context"),
+                    *_watchlist_signal_row_cells(row),
                 )
             )
     bucket_rows = _watchlist_bucket_rows(payload)
@@ -3312,15 +3326,11 @@ def _format_watchlist_dashboard_markdown(payload: dict[str, Any]) -> list[str]:
         )
         for row in attention_rows:
             lines.append(
-                "| {} | {} | {} | {} | {} | {} | {} | {} |".format(
-                    row.get("attention_type") or "unavailable_context",
-                    row.get("symbol") or "unavailable",
-                    row.get("state") or "unavailable",
-                    row.get("latest_close") or "unavailable",
-                    _watchlist_level_text(row.get("confirmation_level")),
-                    _watchlist_level_text(row.get("invalidation_level")),
-                    row.get("top_reason") or "No deterministic rationale emitted.",
-                    row.get("primary_risk") or "none",
+                _watchlist_markdown_row(
+                    [
+                        str(row.get("attention_type") or "unavailable_context"),
+                        *_watchlist_signal_row_cells(row),
+                    ]
                 )
             )
     signal_buckets = payload.get("signal_buckets")
@@ -3344,17 +3354,7 @@ def _format_watchlist_dashboard_markdown(payload: dict[str, Any]) -> list[str]:
         for row in rows:
             if not isinstance(row, dict):
                 continue
-            lines.append(
-                "| {} | {} | {} | {} | {} | {} | {} |".format(
-                    row.get("symbol") or "unavailable",
-                    row.get("signal_state") or "unavailable",
-                    row.get("latest_close") or "unavailable",
-                    _watchlist_level_text(row.get("confirmation_level")),
-                    _watchlist_level_text(row.get("invalidation_level")),
-                    row.get("top_reason") or "No deterministic rationale emitted.",
-                    row.get("primary_risk") or "none",
-                )
-            )
+            lines.append(_watchlist_markdown_row(_watchlist_signal_row_cells(row)))
     if not rendered:
         lines.extend(["", "- No deterministic signal bucket rows available."])
     return lines
