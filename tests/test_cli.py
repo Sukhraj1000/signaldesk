@@ -559,6 +559,13 @@ def test_scan_command_runs_watchlist_against_fixture_provider(
     ]
     assert first_summary["unavailable_context"] == [
         {
+            "context_type": "market_sector_relative_strength",
+            "reason": (
+                "market/sector relative-strength context is not configured for this run"
+            ),
+            "provider": None,
+        },
+        {
             "context_type": "fundamentals",
             "reason": "not available in the default technical-analysis CLI path",
             "provider": "working",
@@ -1398,6 +1405,16 @@ def test_ta_command_enhanced_mode_adds_fmp_context_without_ta_signal_blending(
         item["context_type"] == "fundamentals" for item in payload["unavailable_context"]
     )
     assert payload["deterministic_signals"]["events"] == payload["events"]
+    assert payload["signal_card"]["context_overlays"] == payload["context_overlays"]
+    overlays = {item["overlay_type"]: item for item in payload["context_overlays"]["items"]}
+    assert overlays["fundamental_valuation"]["status"] == "available"
+    assert overlays["fundamental_valuation"]["fields"]["pe_ratio"] == "42.5"
+    assert overlays["earnings_catalyst_risk"]["status"] == "available"
+    assert overlays["earnings_catalyst_risk"]["fields"]["event_count"] == 1
+    assert all(
+        item["decision_support_impact"] == "none; overlays do not mutate deterministic signal_state"
+        for item in payload["context_overlays"]["items"]
+    )
 
     table_result = CliRunner().invoke(
         app, ["ta", "AMD", "--mode", "enhanced", "--llm", "none", "--output", "table"]
@@ -1777,6 +1794,13 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
         ],
         "unavailable_context": [
             {
+                "context_type": "market_sector_relative_strength",
+                "reason": (
+                        "market/sector relative-strength context is not configured for this run"
+                    ),
+                "provider": None,
+            },
+            {
                 "context_type": "fundamentals",
                 "reason": "not available in the default technical-analysis CLI path",
                 "provider": "working",
@@ -1879,6 +1903,44 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
     }
     expected["signal_state"] = payload["signal_state"]
     expected["deterministic_signals"]["signal_state"] = payload["signal_state"]
+    expected["context_overlays"] = {
+        "items": [
+            {
+                "overlay_type": "market_sector_relative_strength",
+                "status": "unavailable",
+                "provider": None,
+                "summary": (
+                    "market/sector relative-strength context is not configured for this run"
+                ),
+                "decision_support_impact": (
+                    "none; overlays do not mutate deterministic signal_state"
+                ),
+                "provenance_source": "unavailable_context.market_sector_relative_strength",
+            },
+            {
+                "overlay_type": "fundamental_valuation",
+                "status": "unavailable",
+                "provider": "working",
+                "summary": "not available in the default technical-analysis CLI path",
+                "decision_support_impact": (
+                    "none; overlays do not mutate deterministic signal_state"
+                ),
+                "provenance_source": "unavailable_context",
+            },
+            {
+                "overlay_type": "earnings_catalyst_risk",
+                "status": "unavailable",
+                "provider": "working",
+                "summary": "not available in the default technical-analysis CLI path",
+                "decision_support_impact": (
+                    "none; overlays do not mutate deterministic signal_state"
+                ),
+                "provenance_source": "unavailable_context",
+            },
+        ],
+        "source_rule": "separated_context_overlays_v1",
+        "decision_support_impact": "none; overlays do not mutate deterministic signal_state",
+    }
     expected["signal_card"] = {
         "identity": expected["identity"],
         "provider_mode": expected["provider_mode"],
@@ -1889,6 +1951,7 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
         "risk": expected["risk"],
         "score": expected["score"],
         "decision_support": expected["decision_support"],
+        "context_overlays": expected["context_overlays"],
         "provenance": expected["provenance"],
         "unavailable_context": expected["unavailable_context"],
         "llm": "none",
@@ -1945,6 +2008,8 @@ def test_ta_command_outputs_markdown_from_signal_card(monkeypatch: MonkeyPatch) 
     assert "## Confirmation and invalidation" in result.stdout
     assert "- What confirms it: `unavailable`" in result.stdout
     assert "- What invalidates it: `unavailable`" in result.stdout
+    assert "## Context overlays" in result.stdout
+    assert "`fundamental_valuation` `unavailable` via `working`" in result.stdout
     assert "## Risks" in result.stdout
     assert "technical analysis only" in result.stdout
     assert "## Unavailable context" in result.stdout
@@ -1991,9 +2056,11 @@ def test_ta_table_output_stays_flat_when_json_contract_sections_are_added(
     assert "what_invalidates\tunavailable" in result.stdout
     assert "risk_summary\t" in result.stdout
     assert (
-        "unavailable_context_summary\tfundamentals via working: not available in the "
-        "default technical-analysis CLI path; catalyst via working: not available in the "
-        "default technical-analysis CLI path" in result.stdout
+        "unavailable_context_summary\tmarket_sector_relative_strength via none: "
+        "market/sector relative-strength context is not configured for this run; "
+        "fundamentals via working: not available in the default technical-analysis CLI path; "
+        "catalyst via working: not available in the default technical-analysis CLI path"
+        in result.stdout
     )
     assert "facts\t" not in result.stdout
     assert "deterministic_signals\t" not in result.stdout
@@ -2848,6 +2915,13 @@ def test_report_watchlist_markdown_keeps_provider_mode_unavailable_details() -> 
             "price_provider": "local-fixture",
             "unavailable_context": [
                 {
+                    "context_type": "market_sector_relative_strength",
+                    "reason": (
+                        "market/sector relative-strength context is not configured for this run"
+                    ),
+                    "provider": None,
+                },
+                {
                     "context_type": "fundamentals",
                     "provider": "fmp",
                     "reason": "FMP_API_KEY is not configured",
@@ -3001,6 +3075,7 @@ def test_report_watchlist_json_uses_fixture_provider(
         "catalyst",
         "fundamentals",
         "llm_explanation",
+        "market_sector_relative_strength",
     ]
 
 

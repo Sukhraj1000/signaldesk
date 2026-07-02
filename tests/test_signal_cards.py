@@ -54,6 +54,22 @@ def _base_sections() -> dict[str, object]:
         "risk": risk,
         "score": score,
         "decision_support": decision_support,
+        "context_overlays": {
+            "items": [
+                {
+                    "overlay_type": "fundamental_valuation",
+                    "status": "unavailable",
+                    "provider": "fixture",
+                    "summary": "not available in fixture",
+                    "decision_support_impact": (
+                        "none; overlays do not mutate deterministic signal_state"
+                    ),
+                    "provenance_source": "unavailable_context",
+                }
+            ],
+            "source_rule": "separated_context_overlays_v1",
+            "decision_support_impact": "none; overlays do not mutate deterministic signal_state",
+        },
         "provenance": [{"provider": "fixture", "source": "historical_candles"}],
         "unavailable_context": unavailable_context,
         "deterministic_signals": {"events": ()},
@@ -77,6 +93,7 @@ def test_assemble_ta_signal_card_report_uses_single_canonical_card_object() -> N
     assert payload["signal_card"]["risk"] is payload["risk"]
     assert payload["signal_card"]["score"] is payload["score"]
     assert payload["signal_card"]["decision_support"] is payload["decision_support"]
+    assert payload["signal_card"]["context_overlays"] is payload["context_overlays"]
     assert payload["signal_card"]["provenance"] is payload["provenance"]
     assert payload["signal_card"]["unavailable_context"] is payload["unavailable_context"]
     assert payload["risks"] is payload["risk"]["flags"]
@@ -217,6 +234,7 @@ def test_schema_required_sections_match_canonical_card_contract() -> None:
         "risk",
         "score",
         "decision_support",
+        "context_overlays",
         "provenance",
         "unavailable_context",
         "llm",

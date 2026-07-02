@@ -76,6 +76,22 @@ def _fixture_ta_report() -> dict[str, object]:
             "bullish_event_count": 1,
             "bearish_event_count": 0,
         },
+        context_overlays={
+            "items": [
+                {
+                    "overlay_type": "fundamental_valuation",
+                    "status": "unavailable",
+                    "provider": "fixture",
+                    "summary": "not available in fixture",
+                    "decision_support_impact": (
+                        "none; overlays do not mutate deterministic signal_state"
+                    ),
+                    "provenance_source": "unavailable_context",
+                }
+            ],
+            "source_rule": "separated_context_overlays_v1",
+            "decision_support_impact": "none; overlays do not mutate deterministic signal_state",
+        },
         provenance=[{"provider": "local-fixture", "source": "historical_candles"}],
         unavailable_context=unavailable_context,
         deterministic_signals={"events": ({"kind": "breakout"},)},
@@ -111,6 +127,7 @@ def test_fixture_signal_card_builds_dashboard_presentation_model() -> None:
     assert presentation["level_groups"]["invalidation"][0]["label"] == "setup_invalidation"
     assert presentation["level_groups"]["invalidation"][0]["emphasis"] is True
     assert presentation["event_rows"][0]["label"] == "breakout"
+    assert presentation["context_overlay_panel"][0]["label"] == "fundamental_valuation"
     assert presentation["risk_panel"]["flags"][0]["label"] == "missing_context"
     assert {
         row["label"] for row in presentation["risk_panel"]["unavailable_context"]
@@ -129,6 +146,7 @@ def test_fixture_signal_card_builds_dashboard_presentation_model() -> None:
             "facts",
             "deterministic_signals",
             "risks",
+            "context_overlays",
             "unavailable_context",
             "optional_narrative",
         ],

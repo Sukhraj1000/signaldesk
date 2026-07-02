@@ -1638,6 +1638,9 @@ def _format_ta_markdown(report: dict[str, Any]) -> str:
             f"- What confirms it: `{confirmation_level}`",
             f"- What invalidates it: `{invalidation_level}`",
             "",
+            "## Context overlays",
+            *_format_context_overlay_lines(card["context_overlays"]),
+            "",
             "## Risks",
         ]
     )
@@ -1789,6 +1792,128 @@ def _summarize_enhanced_context(facts: dict[str, Any]) -> str:
             summaries.append(f"catalysts via {provider}: 0 event(s)")
     return "; ".join(summaries) if summaries else "none"
 
+
+
+_CONTEXT_OVERLAY_NO_IMPACT = "none; overlays do not mutate deterministic signal_state"
+
+def _context_overlay_items(
+    *,
+    facts: dict[str, Any],
+    unavailable_context: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Return provider/context overlays kept separate from deterministic TA state."""
+
+    overlays: list[dict[str, Any]] = []
+    unavailable_by_type = {str(item.get("context_type")): item for item in unavailable_context}
+    market_item = unavailable_by_type.get("market_sector_relative_strength", {})
+    overlays.append(
+        {
+            "overlay_type": "market_sector_relative_strength",
+            "status": "unavailable",
+            "provider": market_item.get("provider"),
+            "summary": market_item.get(
+                "reason",
+                "Market/sector relative-strength context is not configured for this run.",
+            ),
+            "decision_support_impact": _CONTEXT_OVERLAY_NO_IMPACT,
+            "provenance_source": "unavailable_context.market_sector_relative_strength",
+        }
+    )
+
+    fundamentals = facts.get("fundamentals")
+    if isinstance(fundamentals, dict):
+        sector = fundamentals.get("sector") or "sector unavailable"
+        industry = fundamentals.get("industry") or "industry unavailable"
+        pe_ratio = fundamentals.get("pe_ratio") or "valuation metric unavailable"
+        company = fundamentals.get("company_name") or fundamentals.get("symbol") or "Company"
+        overlays.append(
+            {
+                "overlay_type": "fundamental_valuation",
+                "status": "available",
+                "provider": fundamentals.get("provider"),
+                "summary": (
+                    f"{company} context: sector {sector}, industry {industry}, "
+                    f"P/E {pe_ratio}."
+                ),
+                "fields": {
+                    "sector": fundamentals.get("sector"),
+                    "industry": fundamentals.get("industry"),
+                    "market_cap": fundamentals.get("market_cap"),
+                    "pe_ratio": fundamentals.get("pe_ratio"),
+                    "beta": fundamentals.get("beta"),
+                },
+                "decision_support_impact": _CONTEXT_OVERLAY_NO_IMPACT,
+                "provenance_source": "facts.fundamentals",
+            }
+        )
+    else:
+        item = unavailable_by_type.get("fundamentals", {})
+        overlays.append(
+            {
+                "overlay_type": "fundamental_valuation",
+                "status": "unavailable",
+                "provider": item.get("provider"),
+                "summary": item.get("reason", "Fundamental/valuation context is unavailable."),
+                "decision_support_impact": _CONTEXT_OVERLAY_NO_IMPACT,
+                "provenance_source": "unavailable_context",
+            }
+        )
+
+    catalysts = facts.get("catalysts")
+    if isinstance(catalysts, dict):
+        candidate_events = catalysts.get("events")
+        events = candidate_events if isinstance(candidate_events, list) else []
+        latest = events[0] if events and isinstance(events[0], dict) else {}
+        headline = latest.get("headline") or "no headline available"
+        overlays.append(
+            {
+                "overlay_type": "earnings_catalyst_risk",
+                "status": "available",
+                "provider": catalysts.get("provider"),
+                "summary": f"{len(events)} catalyst event(s) available; latest: {headline}.",
+                "fields": {
+                    "event_count": len(events),
+                    "latest_headline": latest.get("headline"),
+                    "latest_published_at": latest.get("published_at"),
+                    "latest_source": latest.get("source"),
+                },
+                "decision_support_impact": _CONTEXT_OVERLAY_NO_IMPACT,
+                "provenance_source": "facts.catalysts",
+            }
+        )
+    else:
+        item = unavailable_by_type.get("catalyst", {})
+        overlays.append(
+            {
+                "overlay_type": "earnings_catalyst_risk",
+                "status": "unavailable",
+                "provider": item.get("provider"),
+                "summary": item.get("reason", "Earnings/catalyst context is unavailable."),
+                "decision_support_impact": _CONTEXT_OVERLAY_NO_IMPACT,
+                "provenance_source": "unavailable_context",
+            }
+        )
+    return overlays
+
+
+def _format_context_overlay_lines(overlays: dict[str, Any]) -> list[str]:
+    items = overlays.get("items") if isinstance(overlays, dict) else []
+    if not isinstance(items, list) or not items:
+        return ["- none"]
+    lines: list[str] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        lines.append(
+            "- `{}` `{}` via `{}`: {} Impact: {}".format(
+                _markdown_inline_code_text(item.get("overlay_type") or "context_overlay"),
+                _markdown_inline_code_text(item.get("status") or "unknown"),
+                _markdown_inline_code_text(item.get("provider") or "none"),
+                item.get("summary") or "unavailable",
+                item.get("decision_support_impact") or "none",
+            )
+        )
+    return lines or ["- none"]
 
 def _format_score_reason_lines(score_breakdowns: list[dict[str, Any]]) -> list[str]:
     """Return compact deterministic score reasons for Markdown reports."""
@@ -3846,6 +3971,11 @@ def _technical_analysis_report(
     unavailable_context = [
         *mode_unavailable_context,
         *enhanced_unavailable_context,
+        {
+            "context_type": "market_sector_relative_strength",
+            "reason": "market/sector relative-strength context is not configured for this run",
+            "provider": None,
+        },
     ]
     fundamentals_already_unavailable = any(
         item["context_type"] == "fundamentals" for item in unavailable_context
@@ -3975,6 +4105,11 @@ def _technical_analysis_report(
     score = {
         "breakdowns": scores,
     }
+    context_overlays = {
+        "items": _context_overlay_items(facts=facts, unavailable_context=unavailable_context),
+        "source_rule": "separated_context_overlays_v1",
+        "decision_support_impact": _CONTEXT_OVERLAY_NO_IMPACT,
+    }
     return assemble_ta_signal_card_report(
         schema_version="signaldesk.ta.v1",
         identity=identity,
@@ -3986,6 +4121,7 @@ def _technical_analysis_report(
         risk=risk,
         score=score,
         decision_support=decision_support,
+        context_overlays=context_overlays,
         provenance=provenance,
         unavailable_context=unavailable_context,
         deterministic_signals={
