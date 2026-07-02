@@ -95,6 +95,7 @@ llm_app = typer.Typer(
 web_app = typer.Typer(help="Render dashboard-facing payloads from canonical SignalDesk JSON.")
 backtest_app = typer.Typer(help="Evaluate historical deterministic setup labels.")
 history_app = typer.Typer(help="Evaluate saved signal-history records against later candles.")
+alerts_app = typer.Typer(help="Generate deterministic watchlist signal alerts from saved reports.")
 app.add_typer(providers_app, name="providers")
 app.add_typer(config_app, name="config")
 app.add_typer(fixtures_app, name="fixtures")
@@ -102,6 +103,7 @@ app.add_typer(llm_app, name="llm")
 app.add_typer(web_app, name="web")
 app.add_typer(backtest_app, name="backtest")
 app.add_typer(history_app, name="history")
+app.add_typer(alerts_app, name="alerts")
 
 
 @app.callback()
@@ -2278,6 +2280,257 @@ WATCHLIST_DECISION_SUPPORT_DISCLAIMER = (
 )
 
 
+WATCHLIST_SIGNAL_ALERTS_SCHEMA_VERSION = "signaldesk.watchlist_signal_alerts.v1"
+WATCHLIST_SIGNAL_ALERT_STRENGTH_ORDER = {
+    "unavailable": 0,
+    "technically_weak": 1,
+    "deteriorating": 2,
+    "stretched": 3,
+    "range_bound": 4,
+    "improving": 5,
+    "technically_strong": 6,
+}
+WATCHLIST_SIGNAL_ALERT_EVENT_KEYWORDS = (
+    ("high_volume_breakout", ("breakout", "relative_volume_spike")),
+    ("moving_average_reclaim", ("moving_average_reclaim", "reclaim")),
+)
+
+
+def _decimal_from_alert_value(value: object) -> Decimal | None:
+    if value is None:
+        return None
+    try:
+        return Decimal(str(value))
+    except Exception:
+        return None
+
+
+def _alert_level_price(level: object) -> Decimal | None:
+    if not isinstance(level, dict):
+        return None
+    for key in ("price", "value", "level"):
+        if key in level:
+            return _decimal_from_alert_value(level.get(key))
+    return None
+
+
+def _load_watchlist_alert_report(path: Path) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"invalid watchlist report JSON file {path}: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"watchlist report file {path} must contain a JSON object")
+    if payload.get("schema_version") != WATCHLIST_REPORT_SCHEMA_VERSION:
+        raise ValueError(
+            f"watchlist report file {path} must use schema_version "
+            f"{WATCHLIST_REPORT_SCHEMA_VERSION}"
+        )
+    return payload
+
+
+def _event_names_from_signal_card(signal_card: object) -> tuple[str, ...]:
+    if not isinstance(signal_card, dict):
+        return ()
+    raw_events = signal_card.get("events", [])
+    if not isinstance(raw_events, list):
+        return ()
+    names: list[str] = []
+    for event in raw_events:
+        if not isinstance(event, dict):
+            continue
+        for key in ("event_type", "type", "name", "kind"):
+            value = event.get(key)
+            if isinstance(value, str) and value.strip():
+                names.append(value.strip())
+                break
+    return tuple(names)
+
+
+def _watchlist_alert_rows(report: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    rows: dict[str, dict[str, Any]] = {}
+    decision_attention = report.get("decision_attention")
+    raw_rows = decision_attention.get("rows", []) if isinstance(decision_attention, dict) else []
+    if isinstance(raw_rows, list):
+        for row in raw_rows:
+            if isinstance(row, dict) and row.get("symbol"):
+                symbol = str(row["symbol"]).upper()
+                rows[symbol] = {**row, "symbol": symbol, "events": ()}
+    for result in report.get("results", []):
+        if not isinstance(result, dict) or result.get("status") != "ok":
+            continue
+        symbol = str(result.get("symbol") or "").upper()
+        if not symbol:
+            continue
+        raw_summary = result.get("summary")
+        summary: dict[str, Any] = raw_summary if isinstance(raw_summary, dict) else {}
+        row = rows.setdefault(
+            symbol,
+            {
+                "symbol": symbol,
+                "state": _signal_state_label(summary.get("signal_state")),
+                "latest_close": summary.get("latest_close"),
+                "confirmation_level": summary.get("confirmation_level"),
+                "invalidation_level": summary.get("invalidation_level"),
+                "top_reason": "No deterministic rationale emitted.",
+                "primary_risk": "none",
+            },
+        )
+        row.setdefault("state", _signal_state_label(summary.get("signal_state")))
+        row.setdefault("latest_close", summary.get("latest_close"))
+        row.setdefault("confirmation_level", summary.get("confirmation_level"))
+        row.setdefault("invalidation_level", summary.get("invalidation_level"))
+        row["events"] = _event_names_from_signal_card(summary.get("signal_card"))
+    return rows
+
+
+def _watchlist_signal_alert_payload(
+    current_report: dict[str, Any], previous_report: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    current_rows = _watchlist_alert_rows(current_report)
+    previous_rows = _watchlist_alert_rows(previous_report or {})
+    alerts: list[dict[str, Any]] = []
+    for symbol in sorted(current_rows):
+        current = current_rows[symbol]
+        previous = previous_rows.get(symbol, {})
+        close = _decimal_from_alert_value(current.get("latest_close"))
+        previous_close = _decimal_from_alert_value(previous.get("latest_close"))
+        state = str(current.get("state") or current.get("signal_state") or "unavailable")
+        previous_state = str(previous.get("state") or previous.get("signal_state") or "unavailable")
+        confirmation_level = current.get("confirmation_level")
+        invalidation_level = current.get("invalidation_level")
+        confirmation_price = _alert_level_price(confirmation_level)
+        invalidation_price = _alert_level_price(invalidation_level)
+        common = {
+            "ticker": symbol,
+            "symbol": symbol,
+            "state": state,
+            "previous_state": previous_state if previous else None,
+            "close": None if close is None else str(close),
+            "confirmation_level": confirmation_level,
+            "invalidation_level": invalidation_level,
+            "decision_support_only": True,
+            "not_trading_advice": True,
+        }
+        if (
+            close is not None
+            and previous_close is not None
+            and confirmation_price is not None
+            and previous_close < confirmation_price <= close
+        ):
+            alerts.append(
+                {
+                    **common,
+                    "alert_type": "confirmation_cross",
+                    "reason": f"Close crossed above confirmation level {confirmation_price}.",
+                }
+            )
+        if (
+            close is not None
+            and previous_close is not None
+            and invalidation_price is not None
+            and previous_close > invalidation_price >= close
+        ):
+            alerts.append(
+                {
+                    **common,
+                    "alert_type": "invalidation_break",
+                    "reason": f"Close broke below invalidation level {invalidation_price}.",
+                }
+            )
+        current_rank = WATCHLIST_SIGNAL_ALERT_STRENGTH_ORDER.get(state)
+        previous_rank = WATCHLIST_SIGNAL_ALERT_STRENGTH_ORDER.get(previous_state)
+        if current_rank is not None and previous_rank is not None and state != previous_state:
+            alert_type = (
+                "signal_state_improved"
+                if current_rank > previous_rank
+                else "signal_state_deteriorated"
+            )
+            alerts.append(
+                {
+                    **common,
+                    "alert_type": alert_type,
+                    "reason": f"Signal state changed from {previous_state} to {state}.",
+                }
+            )
+        if state == "stretched" and previous_state != "stretched":
+            alerts.append(
+                {
+                    **common,
+                    "alert_type": "stretch_risk",
+                    "reason": "Stretched/avoid-chasing state appeared after strong momentum.",
+                }
+            )
+        current_events = set(str(item) for item in current.get("events", ()))
+        previous_events = set(str(item) for item in previous.get("events", ()))
+        new_events = current_events - previous_events
+        lowered_events = {event.lower() for event in new_events}
+        for alert_type, keywords in WATCHLIST_SIGNAL_ALERT_EVENT_KEYWORDS:
+            if any(keyword in event for event in lowered_events for keyword in keywords):
+                alerts.append(
+                    {
+                        **common,
+                        "alert_type": alert_type,
+                        "reason": (
+                            "New deterministic event appeared: "
+                            f"{', '.join(sorted(new_events))}."
+                        ),
+                    }
+                )
+    deduped: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for alert in alerts:
+        key = (str(alert["ticker"]), str(alert["alert_type"]), str(alert["reason"]))
+        if key not in seen:
+            seen.add(key)
+            deduped.append(alert)
+    return {
+        "schema_version": WATCHLIST_SIGNAL_ALERTS_SCHEMA_VERSION,
+        "source_rule": "deterministic_watchlist_signal_alerts_v1",
+        "current_run_id": current_report.get("run_id"),
+        "previous_run_id": None if previous_report is None else previous_report.get("run_id"),
+        "decision_support_only": True,
+        "not_trading_advice": True,
+        "alerts": deduped,
+        "disclaimer": WATCHLIST_DECISION_SUPPORT_DISCLAIMER,
+    }
+
+
+def _watchlist_signal_alert_markdown(payload: dict[str, Any]) -> str:
+    lines = [
+        "# SignalDesk watchlist signal alerts",
+        "",
+        f"- Schema version: `{payload['schema_version']}`",
+        f"- Current run: `{payload.get('current_run_id') or 'unavailable'}`",
+        f"- Previous run: `{payload.get('previous_run_id') or 'unavailable'}`",
+        f"- Disclaimer: {payload['disclaimer']}",
+        "",
+        "| Ticker | Alert | State | Close | Confirm | Invalidate | Reason |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    alerts = payload.get("alerts", [])
+    if not alerts:
+        lines.append(
+            "| none | none | unavailable | unavailable | unavailable | unavailable | "
+            "No deterministic alerts emitted. |"
+        )
+    else:
+        for alert in alerts:
+            lines.append(
+                _watchlist_markdown_row([
+                    str(alert.get("ticker") or "unavailable"),
+                    str(alert.get("alert_type") or "unavailable"),
+                    str(alert.get("state") or "unavailable"),
+                    str(alert.get("close") or "unavailable"),
+                    _watchlist_level_text(alert.get("confirmation_level")),
+                    _watchlist_level_text(alert.get("invalidation_level")),
+                    str(alert.get("reason") or "No deterministic reason emitted."),
+                ])
+            )
+    return "\n".join(lines) + "\n"
+
+
+
 def _signal_state_label(signal_state: object) -> str:
     if isinstance(signal_state, dict):
         label = signal_state.get("state")
@@ -3588,6 +3841,41 @@ def report_watchlist(
         typer.echo(_format_report_markdown(payload), nl=False)
     if exit_code:
         raise typer.Exit(exit_code)
+
+
+@alerts_app.command("watchlist")
+def alerts_watchlist(
+    current_report: Path = typer.Option(  # noqa: B008
+        ..., "--current-report", help="Current saved canonical watchlist report JSON."
+    ),
+    previous_report: Path | None = typer.Option(  # noqa: B008
+        None,
+        "--previous-report",
+        help="Prior saved canonical watchlist report JSON used for dedupe/state changes.",
+    ),
+    output: str = typer.Option("markdown", help="Output format: markdown or json."),
+) -> None:
+    """Generate deterministic research-only watchlist signal alerts from saved runs."""
+
+    output_format = output.strip().lower()
+    if output_format not in {"markdown", "md", "json"}:
+        typer.echo("--output must be markdown or json.", err=True)
+        raise typer.Exit(2)
+    try:
+        current_payload = _load_watchlist_alert_report(current_report)
+        previous_payload = (
+            None if previous_report is None else _load_watchlist_alert_report(previous_report)
+        )
+        payload = _watchlist_signal_alert_payload(current_payload, previous_payload)
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from exc
+    if output_format == "json":
+        typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+    else:
+        typer.echo(_watchlist_signal_alert_markdown(payload), nl=False)
+
+
 
 
 def _load_signal_history_record(path: Path) -> dict[str, Any]:
