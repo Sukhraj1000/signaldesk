@@ -133,6 +133,8 @@ def test_fixture_signal_card_builds_dashboard_presentation_model() -> None:
         ],
         "confirmation_level": {"kind": "breakout_confirmation", "price": "121.00"},
         "invalidation_level": {"kind": "setup_invalidation", "price": "99.00"},
+        "bullish_event_count": 1,
+        "bearish_event_count": 0,
         "source_rule": "deterministic_decision_support_classification_v1",
         "decision_support_only": True,
         "not_trading_advice": True,
