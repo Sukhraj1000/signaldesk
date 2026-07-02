@@ -48,6 +48,7 @@ def build_signal_card_presentation(signal_card: Mapping[str, Any]) -> dict[str, 
     levels = _mapping_section(signal_card, "levels")
     risk = _mapping_section(signal_card, "risk")
     score = _mapping_section(signal_card, "score")
+    decision_support = _mapping_section(signal_card, "decision_support")
     context_overlays = _mapping_section(signal_card, "context_overlays")
 
     return {
@@ -62,6 +63,7 @@ def build_signal_card_presentation(signal_card: Mapping[str, Any]) -> dict[str, 
             "mode": provider_mode.get("mode"),
             "price_provider": provider_mode.get("price_provider") or facts.get("provider"),
         },
+        "decision_support_panel": _decision_support_panel(decision_support),
         "level_groups": {
             "support": _display_items(levels.get("support")),
             "resistance": _display_items(levels.get("resistance")),
@@ -89,6 +91,27 @@ def build_signal_card_presentation(signal_card: Mapping[str, Any]) -> dict[str, 
     }
 
 
+
+def _decision_support_panel(decision_support: Mapping[str, Any]) -> dict[str, Any]:
+    """Expose deterministic decision-support states without recalculating analysis."""
+
+    return {
+        "signal_state": decision_support.get("signal_state"),
+        "momentum_state": decision_support.get("momentum_state"),
+        "trend_state": decision_support.get("trend_state"),
+        "strength_score": decision_support.get("strength_score"),
+        "risk_score": decision_support.get("risk_score"),
+        "setup_quality_score": decision_support.get("setup_quality_score"),
+        "classification_reasons": list(
+            decision_support.get("classification_reasons") or []
+        ),
+        "confirmation_level": decision_support.get("confirmation_level"),
+        "invalidation_level": decision_support.get("invalidation_level"),
+        "source_rule": decision_support.get("source_rule"),
+        "decision_support_only": decision_support.get("decision_support_only", True),
+        "not_trading_advice": decision_support.get("not_trading_advice", True),
+    }
+
 def _require_card_sections(signal_card: Mapping[str, Any]) -> None:
     required = (
         "identity",
@@ -98,6 +121,7 @@ def _require_card_sections(signal_card: Mapping[str, Any]) -> None:
         "events",
         "risk",
         "score",
+        "decision_support",
         "context_overlays",
         "provenance",
         "unavailable_context",
