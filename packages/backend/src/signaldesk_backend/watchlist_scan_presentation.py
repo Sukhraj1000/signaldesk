@@ -39,6 +39,7 @@ def build_watchlist_scan_presentation(watchlist_report: Mapping[str, Any]) -> di
         "decision_support_summary": _decision_support_summary(
             watchlist_report.get("decision_support_summary")
         ),
+        "decision_attention": _decision_attention(watchlist_report.get("decision_attention")),
         "run_summary": _run_summary(watchlist_report, run),
         "ranked_setup_rows": [
             _ranked_setup_row(result)
@@ -146,6 +147,30 @@ def _decision_support_summary(value: object) -> dict[str, Any]:
             value.get("top_symbols_by_state", defaults["top_symbols_by_state"])
         ),
         "disclaimer": value.get("disclaimer", defaults["disclaimer"]),
+    }
+
+
+def _decision_attention(value: object) -> dict[str, Any]:
+    """Expose backend decision-attention rows without dashboard recalculation."""
+
+    if value is None:
+        return {
+            "schema_version": None,
+            "source_rule": None,
+            "decision_support_only": True,
+            "not_trading_advice": True,
+            "rows": [],
+            "disclaimer": None,
+        }
+    if not isinstance(value, Mapping):
+        raise ValueError("watchlist report decision_attention section must be a JSON object")
+    return {
+        "schema_version": value.get("schema_version"),
+        "source_rule": value.get("source_rule"),
+        "decision_support_only": value.get("decision_support_only", True),
+        "not_trading_advice": value.get("not_trading_advice", True),
+        "rows": _mapping_items(value.get("rows")),
+        "disclaimer": value.get("disclaimer"),
     }
 
 

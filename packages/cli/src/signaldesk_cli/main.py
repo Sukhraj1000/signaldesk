@@ -2261,6 +2261,18 @@ WATCHLIST_SIGNAL_BUCKETS_SCHEMA_VERSION = "signaldesk.watchlist_signal_buckets.v
 WATCHLIST_DECISION_SUPPORT_SUMMARY_SCHEMA_VERSION = (
     "signaldesk.watchlist_decision_support_summary.v1"
 )
+WATCHLIST_DECISION_ATTENTION_SCHEMA_VERSION = (
+    "signaldesk.watchlist_decision_attention.v1"
+)
+WATCHLIST_DECISION_ATTENTION_TYPES = {
+    "technically_strong": (1, "strength_confirmed"),
+    "improving": (2, "needs_confirmation"),
+    "stretched": (3, "stretch_risk"),
+    "technically_weak": (4, "weakness_watch"),
+    "deteriorating": (4, "weakness_watch"),
+    "range_bound": (5, "range_bound_watch"),
+    "unavailable": (6, "unavailable_context"),
+}
 WATCHLIST_DECISION_SUPPORT_DISCLAIMER = (
     "Decision-support only; not investment advice or trade instructions."
 )
@@ -2303,6 +2315,58 @@ def _watchlist_signal_buckets(
         "source_rule": "deterministic_watchlist_signal_buckets_v1",
         "decision_support_only": True,
         "buckets": [buckets[state] for state in WATCHLIST_SIGNAL_BUCKET_STATES],
+    }
+
+
+def _watchlist_decision_attention(signal_buckets: dict[str, Any]) -> dict[str, Any]:
+    """Build deterministic attention rows from already-classified watchlist buckets."""
+
+    buckets = signal_buckets.get("buckets", [])
+    if not isinstance(buckets, list):
+        buckets = []
+    rows: list[dict[str, Any]] = []
+    for bucket in buckets:
+        if not isinstance(bucket, dict):
+            continue
+        state = str(bucket.get("state") or "unavailable")
+        priority, attention_type = WATCHLIST_DECISION_ATTENTION_TYPES.get(
+            state, WATCHLIST_DECISION_ATTENTION_TYPES["unavailable"]
+        )
+        bucket_rows = bucket.get("rows", [])
+        if not isinstance(bucket_rows, list):
+            continue
+        for row in bucket_rows:
+            if not isinstance(row, dict):
+                continue
+            rows.append(
+                {
+                    "symbol": row.get("symbol"),
+                    "state": row.get("signal_state") or state,
+                    "attention_type": attention_type,
+                    "priority": priority,
+                    "rank": row.get("rank"),
+                    "latest_close": row.get("latest_close"),
+                    "confirmation_level": row.get("confirmation_level"),
+                    "invalidation_level": row.get("invalidation_level"),
+                    "top_reason": row.get("top_reason"),
+                    "primary_risk": row.get("primary_risk"),
+                    "decision_support_only": row.get("decision_support_only", True),
+                }
+            )
+    rows.sort(
+        key=lambda row: (
+            int(row["priority"]),
+            int(row["rank"] if isinstance(row.get("rank"), int) else 10_000),
+            str(row.get("symbol") or ""),
+        )
+    )
+    return {
+        "schema_version": WATCHLIST_DECISION_ATTENTION_SCHEMA_VERSION,
+        "source_rule": "deterministic_watchlist_decision_attention_v1",
+        "decision_support_only": True,
+        "not_trading_advice": True,
+        "rows": rows,
+        "disclaimer": WATCHLIST_DECISION_SUPPORT_DISCLAIMER,
     }
 
 
@@ -2423,6 +2487,16 @@ def _watchlist_level_text(level: object) -> str:
     return "unavailable"
 
 
+def _watchlist_attention_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    decision_attention = payload.get("decision_attention")
+    if not isinstance(decision_attention, dict):
+        return []
+    rows = decision_attention.get("rows", [])
+    if not isinstance(rows, list):
+        return []
+    return [dict(row) for row in rows if isinstance(row, dict)]
+
+
 def _watchlist_bucket_rows(payload: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
     signal_buckets = payload.get("signal_buckets")
     if not isinstance(signal_buckets, dict):
@@ -2451,6 +2525,24 @@ def _format_scan_table(payload: dict[str, Any]) -> tuple[str, ...]:
         "setup_quality_score\trisk_score\tunavailable_context"
     )
     lines = [f"run_id\t{payload.get("run_id", "unavailable")}"]
+    attention_rows = _watchlist_attention_rows(payload)
+    if attention_rows:
+        lines.append(
+            "attention	symbol	state	close	confirm	invalidate	top_reason	primary_risk"
+        )
+        for row in attention_rows:
+            lines.append(
+                "{}	{}	{}	{}	{}	{}	{}	{}".format(
+                    row.get("attention_type") or "unavailable_context",
+                    row.get("symbol") or "unavailable",
+                    row.get("state") or "unavailable",
+                    row.get("latest_close") or "unavailable",
+                    _watchlist_level_text(row.get("confirmation_level")),
+                    _watchlist_level_text(row.get("invalidation_level")),
+                    row.get("top_reason") or "No deterministic rationale emitted.",
+                    row.get("primary_risk") or "none",
+                )
+            )
     bucket_rows = _watchlist_bucket_rows(payload)
     if bucket_rows:
         lines.append("bucket\tsymbol\tstate\tclose\tconfirm\tinvalidate\ttop_reason\tprimary_risk")
@@ -2977,6 +3069,7 @@ def _watchlist_report_payload(
 
     summary = _watchlist_scan_summary(results, ranked_setups, failed_symbols, skipped_symbols)
     signal_buckets = _watchlist_signal_buckets(results, ranked_setups)
+    decision_attention = _watchlist_decision_attention(signal_buckets)
     return {
         "schema_version": WATCHLIST_REPORT_SCHEMA_VERSION,
         "report_type": "watchlist",
@@ -3004,6 +3097,7 @@ def _watchlist_report_payload(
         "summary": summary,
         "signal_buckets": signal_buckets,
         "decision_support_summary": _watchlist_decision_support_summary(signal_buckets),
+        "decision_attention": decision_attention,
         "provenance": _watchlist_report_provenance(results),
     }
 
@@ -3197,6 +3291,38 @@ def _format_report_enhanced_fact_lines(summary: dict[str, Any]) -> list[str]:
 
 def _format_watchlist_dashboard_markdown(payload: dict[str, Any]) -> list[str]:
     lines = ["", "## Signal dashboard"]
+    attention_rows = _watchlist_attention_rows(payload)
+    if attention_rows:
+        lines.extend(
+            [
+                "",
+                "### Decision-support attention",
+                "",
+                (
+                    "These rows reorder deterministic signal states for review; "
+                    "they are not trade instructions."
+                ),
+                "",
+                (
+                    "| Attention | Symbol | State | Close | Confirm | Invalidate | "
+                    "Top reason | Primary risk |"
+                ),
+                "| --- | --- | --- | ---: | ---: | ---: | --- | --- |",
+            ]
+        )
+        for row in attention_rows:
+            lines.append(
+                "| {} | {} | {} | {} | {} | {} | {} | {} |".format(
+                    row.get("attention_type") or "unavailable_context",
+                    row.get("symbol") or "unavailable",
+                    row.get("state") or "unavailable",
+                    row.get("latest_close") or "unavailable",
+                    _watchlist_level_text(row.get("confirmation_level")),
+                    _watchlist_level_text(row.get("invalidation_level")),
+                    row.get("top_reason") or "No deterministic rationale emitted.",
+                    row.get("primary_risk") or "none",
+                )
+            )
     signal_buckets = payload.get("signal_buckets")
     buckets = signal_buckets.get("buckets", []) if isinstance(signal_buckets, dict) else []
     rendered = False

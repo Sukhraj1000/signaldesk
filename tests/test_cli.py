@@ -650,6 +650,15 @@ def test_scan_command_outputs_markdown_watchlist_report(
     assert "- Symbols scanned: `2`" in result.stdout
     assert "- Failed symbols: `0`" in result.stdout
     assert "## Signal dashboard" in result.stdout
+    assert "### Decision-support attention" in result.stdout
+    assert (
+        "These rows reorder deterministic signal states for review; "
+        "they are not trade instructions."
+    ) in result.stdout
+    assert (
+        "| range_bound_watch | AMD | range_bound | 49 | unavailable | unavailable |"
+        in result.stdout
+    )
     assert "### Neutral / range-bound" in result.stdout
     assert (
         "| Symbol | State | Close | Confirm | Invalidate | Top reason | Primary risk |"
@@ -3044,6 +3053,22 @@ def test_report_watchlist_json_uses_fixture_provider(
     assert payload["run"]["skipped_count"] == 0
     assert payload["run"]["max_workers"] == 2
     assert isinstance(payload["run"]["duration_ms"], int)
+    assert (
+        payload["decision_attention"]["schema_version"]
+        == "signaldesk.watchlist_decision_attention.v1"
+    )
+    assert (
+        payload["decision_attention"]["source_rule"]
+        == "deterministic_watchlist_decision_attention_v1"
+    )
+    assert payload["decision_attention"]["decision_support_only"] is True
+    assert payload["decision_attention"]["not_trading_advice"] is True
+    assert [row["attention_type"] for row in payload["decision_attention"]["rows"]] == [
+        "range_bound_watch",
+        "range_bound_watch",
+    ]
+    assert payload["decision_attention"]["rows"][0]["symbol"] == "AMD"
+    assert payload["decision_attention"]["rows"][0]["state"] == "range_bound"
     assert [result["status"] for result in payload["results"]] == ["ok", "ok"]
     assert [result["rank"] for result in payload["ranked_setups"]] == [1, 2]
     assert payload["provenance"] == [
@@ -3949,6 +3974,12 @@ def test_web_watchlist_scan_command_renders_dashboard_presentation() -> None:
     assert payload["ranked_setup_rows"][0]["signal_state"]
     assert payload["signal_buckets"]["schema_version"] == "signaldesk.watchlist_signal_buckets.v1"
     assert any(bucket["count"] for bucket in payload["signal_buckets"]["buckets"])
+    assert (
+        payload["decision_attention"]["schema_version"]
+        == "signaldesk.watchlist_decision_attention.v1"
+    )
+    assert payload["decision_attention"]["rows"]
+    assert payload["decision_attention"]["not_trading_advice"] is True
     assert payload["rendering_contract"]["no_dashboard_analysis"] is True
 
 
