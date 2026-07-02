@@ -9,6 +9,7 @@ from urllib.parse import parse_qs, unquote
 from uuid import uuid4
 
 from signaldesk_backend import Settings, default_provider_registry, redact_provider_diagnostic
+from signaldesk_backend.models import ProviderCapability
 from signaldesk_backend.providers import MarketDataProvider
 from signaldesk_cli.main import MAX_TA_HISTORY_DAYS, _fetch_ta_report
 
@@ -191,7 +192,16 @@ def _provider_capability_payload(provider: MarketDataProvider) -> list[JsonPaylo
                 },
             }
         ]
-    return [asdict(capability) | {"available": True} for capability in capabilities]
+    return [_json_safe_provider_capability(capability) for capability in capabilities]
+
+
+def _json_safe_provider_capability(capability: ProviderCapability) -> JsonPayload:
+    payload = asdict(capability)
+    for key in ("supported_asset_classes", "supported_intervals"):
+        value = payload.get(key)
+        if isinstance(value, (frozenset, set, tuple)):
+            payload[key] = sorted(value)
+    return payload | {"available": True}
 
 
 def providers_payload() -> JsonPayload:
