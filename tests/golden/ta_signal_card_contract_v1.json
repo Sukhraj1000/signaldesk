@@ -52,7 +52,8 @@
   "required_unavailable_context_types": [
     "fundamentals",
     "catalyst",
-    "llm_explanation"
+    "llm_explanation",
+    "market_sector_relative_strength"
   ],
   "score_breakdown_categories": [
     "setup_quality",

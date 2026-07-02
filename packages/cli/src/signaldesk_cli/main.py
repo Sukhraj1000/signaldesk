@@ -1795,10 +1795,6 @@ def _summarize_enhanced_context(facts: dict[str, Any]) -> str:
 
 
 _CONTEXT_OVERLAY_NO_IMPACT = "none; overlays do not mutate deterministic signal_state"
-_CONTEXT_OVERLAY_UNAVAILABLE_NO_IMPACT = (
-    "none; unavailable overlays do not mutate deterministic signal_state"
-)
-
 
 def _context_overlay_items(
     *,
@@ -1807,17 +1803,22 @@ def _context_overlay_items(
 ) -> list[dict[str, Any]]:
     """Return provider/context overlays kept separate from deterministic TA state."""
 
-    overlays: list[dict[str, Any]] = [
+    overlays: list[dict[str, Any]] = []
+    unavailable_by_type = {str(item.get("context_type")): item for item in unavailable_context}
+    market_item = unavailable_by_type.get("market_sector_relative_strength", {})
+    overlays.append(
         {
             "overlay_type": "market_sector_relative_strength",
             "status": "unavailable",
-            "provider": None,
-            "summary": "Market/sector relative-strength context is not configured for this run.",
+            "provider": market_item.get("provider"),
+            "summary": market_item.get(
+                "reason",
+                "Market/sector relative-strength context is not configured for this run.",
+            ),
             "decision_support_impact": _CONTEXT_OVERLAY_NO_IMPACT,
-            "provenance_source": "unavailable_context",
+            "provenance_source": "unavailable_context.market_sector_relative_strength",
         }
-    ]
-    unavailable_by_type = {str(item.get("context_type")): item for item in unavailable_context}
+    )
 
     fundamentals = facts.get("fundamentals")
     if isinstance(fundamentals, dict):
@@ -1853,7 +1854,7 @@ def _context_overlay_items(
                 "status": "unavailable",
                 "provider": item.get("provider"),
                 "summary": item.get("reason", "Fundamental/valuation context is unavailable."),
-                "decision_support_impact": _CONTEXT_OVERLAY_UNAVAILABLE_NO_IMPACT,
+                "decision_support_impact": _CONTEXT_OVERLAY_NO_IMPACT,
                 "provenance_source": "unavailable_context",
             }
         )
@@ -1888,7 +1889,7 @@ def _context_overlay_items(
                 "status": "unavailable",
                 "provider": item.get("provider"),
                 "summary": item.get("reason", "Earnings/catalyst context is unavailable."),
-                "decision_support_impact": _CONTEXT_OVERLAY_UNAVAILABLE_NO_IMPACT,
+                "decision_support_impact": _CONTEXT_OVERLAY_NO_IMPACT,
                 "provenance_source": "unavailable_context",
             }
         )
@@ -3970,6 +3971,11 @@ def _technical_analysis_report(
     unavailable_context = [
         *mode_unavailable_context,
         *enhanced_unavailable_context,
+        {
+            "context_type": "market_sector_relative_strength",
+            "reason": "market/sector relative-strength context is not configured for this run",
+            "provider": None,
+        },
     ]
     fundamentals_already_unavailable = any(
         item["context_type"] == "fundamentals" for item in unavailable_context

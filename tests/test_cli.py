@@ -559,6 +559,13 @@ def test_scan_command_runs_watchlist_against_fixture_provider(
     ]
     assert first_summary["unavailable_context"] == [
         {
+            "context_type": "market_sector_relative_strength",
+            "reason": (
+                "market/sector relative-strength context is not configured for this run"
+            ),
+            "provider": None,
+        },
+        {
             "context_type": "fundamentals",
             "reason": "not available in the default technical-analysis CLI path",
             "provider": "working",
@@ -1787,6 +1794,13 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
         ],
         "unavailable_context": [
             {
+                "context_type": "market_sector_relative_strength",
+                "reason": (
+                        "market/sector relative-strength context is not configured for this run"
+                    ),
+                "provider": None,
+            },
+            {
                 "context_type": "fundamentals",
                 "reason": "not available in the default technical-analysis CLI path",
                 "provider": "working",
@@ -2005,9 +2019,11 @@ def test_ta_table_output_stays_flat_when_json_contract_sections_are_added(
     assert "what_invalidates\tunavailable" in result.stdout
     assert "risk_summary\t" in result.stdout
     assert (
-        "unavailable_context_summary\tfundamentals via working: not available in the "
-        "default technical-analysis CLI path; catalyst via working: not available in the "
-        "default technical-analysis CLI path" in result.stdout
+        "unavailable_context_summary\tmarket_sector_relative_strength via none: "
+        "market/sector relative-strength context is not configured for this run; "
+        "fundamentals via working: not available in the default technical-analysis CLI path; "
+        "catalyst via working: not available in the default technical-analysis CLI path"
+        in result.stdout
     )
     assert "facts\t" not in result.stdout
     assert "deterministic_signals\t" not in result.stdout
@@ -2862,6 +2878,13 @@ def test_report_watchlist_markdown_keeps_provider_mode_unavailable_details() -> 
             "price_provider": "local-fixture",
             "unavailable_context": [
                 {
+                    "context_type": "market_sector_relative_strength",
+                    "reason": (
+                        "market/sector relative-strength context is not configured for this run"
+                    ),
+                    "provider": None,
+                },
+                {
                     "context_type": "fundamentals",
                     "provider": "fmp",
                     "reason": "FMP_API_KEY is not configured",
@@ -3015,6 +3038,7 @@ def test_report_watchlist_json_uses_fixture_provider(
         "catalyst",
         "fundamentals",
         "llm_explanation",
+        "market_sector_relative_strength",
     ]
 
 
