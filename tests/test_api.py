@@ -63,6 +63,22 @@ def test_providers_payload_uses_backend_registry() -> None:
     assert isinstance(providers, list)
     assert any(item["provider"] == "local-fixture" and item["available"] for item in providers)
     assert any(item["provider"] == "yfinance" for item in providers)
+    assert all(isinstance(item["supported_asset_classes"], list) for item in providers)
+    assert all(isinstance(item["supported_intervals"], list) for item in providers)
+    json.dumps(payload, sort_keys=True)
+
+
+def test_wsgi_app_serves_providers_as_json() -> None:
+    status, payload, headers = _wsgi_response("/providers")
+
+    assert status == "200 OK"
+    assert payload["schema_version"] == "signaldesk.api.providers.v1"
+    assert any(
+        item["provider"] == "local-fixture" and item["available"]
+        for item in payload["providers"]
+    )
+    assert any(item["provider"] == "yfinance" for item in payload["providers"])
+    assert any(header[0] == "X-SignalDesk-Request-Id" for header in headers)
 
 
 def test_wsgi_app_routes_json_errors() -> None:
