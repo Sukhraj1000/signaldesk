@@ -107,6 +107,8 @@ def _decision_support_panel(decision_support: Mapping[str, Any]) -> dict[str, An
         ),
         "confirmation_level": decision_support.get("confirmation_level"),
         "invalidation_level": decision_support.get("invalidation_level"),
+        "bullish_event_count": decision_support.get("bullish_event_count"),
+        "bearish_event_count": decision_support.get("bearish_event_count"),
         "source_rule": decision_support.get("source_rule"),
         "decision_support_only": decision_support.get("decision_support_only", True),
         "not_trading_advice": decision_support.get("not_trading_advice", True),
