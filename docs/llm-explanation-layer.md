@@ -38,6 +38,8 @@ The prompt payload contains only:
 
 - `schema_version` and `task`
 - fixed guardrails
+- explicit explanation requirements: summarize deterministic TA state, cite facts used, include risks/unavailable context, and avoid buy/sell/hold/target/stop instructions
+- required signal fact paths for decision-support state, momentum, trend, confirmation/invalidation levels, and classification reasons
 - paths that label provider/news text as untrusted data
 - paths intentionally excluded from prompt construction, especially prior narrative
 - a validated `signal_card` with `narrative: null`

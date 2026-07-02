@@ -136,6 +136,8 @@ def test_llm_prompt_payload_schema_documents_guarded_input_shape() -> None:
         "schema_version",
         "task",
         "guardrails",
+        "explanation_requirements",
+        "required_signal_fact_paths",
         "untrusted_provider_text_fields",
         "excluded_signal_card_fields",
         "signal_card",
@@ -145,6 +147,32 @@ def test_llm_prompt_payload_schema_documents_guarded_input_shape() -> None:
     assert schema["properties"]["guardrails"]["minItems"] == len(payload["guardrails"])
     assert schema["properties"]["signal_card"]["type"] == "object"
     assert schema["properties"]["output_schema"]["type"] == "object"
+
+
+def test_build_ta_llm_prompt_payload_highlights_signal_state_fact_paths() -> None:
+    payload = build_ta_llm_prompt_payload(_report_with_untrusted_provider_text())
+
+    assert payload["explanation_requirements"] == [
+        "Summarize the deterministic TA state from signal_card.decision_support.",
+        "Cite only existing signal_card paths in deterministic_facts_used.",
+        "Include risks and unavailable context without adding new facts.",
+        "Do not provide buy, sell, hold, price-target, or stop-loss instructions.",
+    ]
+    assert payload["required_signal_fact_paths"] == [
+        "signal_card.decision_support.signal_state",
+        "signal_card.decision_support.momentum_state",
+        "signal_card.decision_support.trend_state",
+        "signal_card.decision_support.confirmation_level",
+        "signal_card.decision_support.invalidation_level",
+        "signal_card.decision_support.classification_reasons",
+        "signal_card.levels.confirmation",
+        "signal_card.levels.invalidation",
+    ]
+    decision_support = payload["signal_card"]["decision_support"]
+    assert decision_support["signal_state"] == "neutral_range"
+    assert decision_support["momentum_state"] == "neutral"
+    assert decision_support["confirmation_level"] is None
+    assert decision_support["invalidation_level"] is None
 
 
 def test_documented_llm_prompt_payload_schema_matches_backend_contract() -> None:
