@@ -2,13 +2,15 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:signaldesk:schema:llm_prompt:v1",
   "title": "SignalDesk LLM prompt payload v1",
-  "description": "Guarded structured input contract for optional LLM explanations. The payload contains only a validated SignalDesk signal_card, fixed guardrails, untrusted-text labels, excluded-field labels, and the strict explanation output schema.",
+  "description": "Guarded structured input contract for optional LLM explanations. The payload contains only a validated SignalDesk signal_card, fixed guardrails, explicit explanation requirements, required signal fact paths, untrusted-text labels, excluded-field labels, and the strict explanation output schema.",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schema_version",
     "task",
     "guardrails",
+    "explanation_requirements",
+    "required_signal_fact_paths",
     "untrusted_provider_text_fields",
     "excluded_signal_card_fields",
     "signal_card",
@@ -30,6 +32,26 @@
         "pattern": "\\S"
       },
       "description": "Fixed instructions constraining the LLM to structured SignalDesk facts only."
+    },
+    "explanation_requirements": {
+      "type": "array",
+      "minItems": 4,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "description": "Fixed explanation-only requirements: summarize deterministic TA state, cite facts used, include risks/unavailable context, and avoid trade instructions."
+    },
+    "required_signal_fact_paths": {
+      "type": "array",
+      "minItems": 8,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "description": "Signal-card paths for state, momentum, confirmation/invalidation levels, and classification reasons that LLM explanations should consider when present."
     },
     "untrusted_provider_text_fields": {
       "type": "array",
