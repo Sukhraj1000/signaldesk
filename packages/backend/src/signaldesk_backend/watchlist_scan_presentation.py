@@ -36,6 +36,9 @@ def build_watchlist_scan_presentation(watchlist_report: Mapping[str, Any]) -> di
             "failed": summary.get("failed", 0),
             "skipped": summary.get("skipped", 0),
         },
+        "decision_support_summary": _decision_support_summary(
+            watchlist_report.get("decision_support_summary")
+        ),
         "run_summary": _run_summary(watchlist_report, run),
         "ranked_setup_rows": [
             _ranked_setup_row(result)
@@ -101,6 +104,49 @@ def _optional_mapping_section(
     if not isinstance(value, Mapping):
         raise ValueError(f"watchlist report {section} section must be a JSON object")
     return value
+
+
+def _decision_support_summary(value: object) -> dict[str, Any]:
+    """Expose backend decision-support summary without dashboard recalculation."""
+
+    defaults: dict[str, Any] = {
+        "schema_version": None,
+        "source_rule": None,
+        "decision_support_only": True,
+        "not_trading_advice": True,
+        "total_ok_symbols": 0,
+        "non_empty_states": [],
+        "counts_by_state": {},
+        "top_symbols_by_state": {},
+        "disclaimer": None,
+    }
+    if value is None:
+        return defaults
+    if not isinstance(value, Mapping):
+        raise ValueError(
+            "watchlist report decision_support_summary section must be a JSON object"
+        )
+    return {
+        "schema_version": value.get("schema_version", defaults["schema_version"]),
+        "source_rule": value.get("source_rule", defaults["source_rule"]),
+        "decision_support_only": value.get(
+            "decision_support_only", defaults["decision_support_only"]
+        ),
+        "not_trading_advice": value.get(
+            "not_trading_advice", defaults["not_trading_advice"]
+        ),
+        "total_ok_symbols": value.get("total_ok_symbols", defaults["total_ok_symbols"]),
+        "non_empty_states": list(
+            value.get("non_empty_states", defaults["non_empty_states"])
+        ),
+        "counts_by_state": dict(
+            value.get("counts_by_state", defaults["counts_by_state"])
+        ),
+        "top_symbols_by_state": dict(
+            value.get("top_symbols_by_state", defaults["top_symbols_by_state"])
+        ),
+        "disclaimer": value.get("disclaimer", defaults["disclaimer"]),
+    }
 
 
 def _run_summary(

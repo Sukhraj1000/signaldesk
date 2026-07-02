@@ -2258,6 +2258,12 @@ WATCHLIST_SIGNAL_BUCKET_LABELS = {
     "unavailable": "Unavailable",
 }
 WATCHLIST_SIGNAL_BUCKETS_SCHEMA_VERSION = "signaldesk.watchlist_signal_buckets.v1"
+WATCHLIST_DECISION_SUPPORT_SUMMARY_SCHEMA_VERSION = (
+    "signaldesk.watchlist_decision_support_summary.v1"
+)
+WATCHLIST_DECISION_SUPPORT_DISCLAIMER = (
+    "Decision-support only; not investment advice or trade instructions."
+)
 
 
 def _signal_state_label(signal_state: object) -> str:
@@ -2297,6 +2303,47 @@ def _watchlist_signal_buckets(
         "source_rule": "deterministic_watchlist_signal_buckets_v1",
         "decision_support_only": True,
         "buckets": [buckets[state] for state in WATCHLIST_SIGNAL_BUCKET_STATES],
+    }
+
+
+def _watchlist_decision_support_summary(signal_buckets: dict[str, Any]) -> dict[str, Any]:
+    """Summarize deterministic watchlist buckets without adding new analysis."""
+
+    buckets = signal_buckets.get("buckets", [])
+    if not isinstance(buckets, list):
+        buckets = []
+    counts_by_state: dict[str, int] = {}
+    top_symbols_by_state: dict[str, list[str]] = {}
+    non_empty_states: list[str] = []
+    total_ok_symbols = 0
+    for bucket in buckets:
+        if not isinstance(bucket, dict):
+            continue
+        state = str(bucket.get("state") or "unavailable")
+        rows = bucket.get("rows", [])
+        if not isinstance(rows, list):
+            rows = []
+        count = int(bucket.get("count") or len(rows))
+        counts_by_state[state] = count
+        symbols = [
+            str(row.get("symbol"))
+            for row in rows
+            if isinstance(row, dict) and row.get("symbol")
+        ]
+        top_symbols_by_state[state] = symbols[:5]
+        total_ok_symbols += count
+        if count > 0:
+            non_empty_states.append(state)
+    return {
+        "schema_version": WATCHLIST_DECISION_SUPPORT_SUMMARY_SCHEMA_VERSION,
+        "source_rule": "deterministic_watchlist_decision_summary_v1",
+        "decision_support_only": True,
+        "not_trading_advice": True,
+        "total_ok_symbols": total_ok_symbols,
+        "non_empty_states": non_empty_states,
+        "counts_by_state": counts_by_state,
+        "top_symbols_by_state": top_symbols_by_state,
+        "disclaimer": WATCHLIST_DECISION_SUPPORT_DISCLAIMER,
     }
 
 
@@ -2929,6 +2976,7 @@ def _watchlist_report_payload(
     """Return the stable JSON/Markdown payload for watchlist reports."""
 
     summary = _watchlist_scan_summary(results, ranked_setups, failed_symbols, skipped_symbols)
+    signal_buckets = _watchlist_signal_buckets(results, ranked_setups)
     return {
         "schema_version": WATCHLIST_REPORT_SCHEMA_VERSION,
         "report_type": "watchlist",
@@ -2954,7 +3002,8 @@ def _watchlist_report_payload(
         "failed_symbols": failed_symbols,
         "skipped_symbols": skipped_symbols,
         "summary": summary,
-        "signal_buckets": _watchlist_signal_buckets(results, ranked_setups),
+        "signal_buckets": signal_buckets,
+        "decision_support_summary": _watchlist_decision_support_summary(signal_buckets),
         "provenance": _watchlist_report_provenance(results),
     }
 
