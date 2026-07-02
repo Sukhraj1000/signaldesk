@@ -13,6 +13,7 @@ _CANONICAL_SIGNAL_CARD_SECTIONS = (
     "risk",
     "score",
     "decision_support",
+    "context_overlays",
     "provenance",
     "unavailable_context",
     "llm",
@@ -32,6 +33,7 @@ def assemble_ta_signal_card_report(
     risk: dict[str, Any],
     score: dict[str, Any],
     decision_support: dict[str, Any],
+    context_overlays: dict[str, Any] | None = None,
     provenance: list[dict[str, Any]],
     unavailable_context: list[dict[str, Any]],
     deterministic_signals: dict[str, Any],
@@ -51,6 +53,11 @@ def assemble_ta_signal_card_report(
     if schema_version != identity.get("schema_version"):
         raise ValueError("signal-card schema_version must match identity schema_version")
 
+    context_overlays = context_overlays or {
+        "items": [],
+        "source_rule": "separated_context_overlays_v1",
+        "decision_support_impact": "none; overlays do not mutate deterministic signal_state",
+    }
     _require_signal_card_sections(
         identity=identity,
         provider_mode=provider_mode,
@@ -60,6 +67,7 @@ def assemble_ta_signal_card_report(
         risk=risk,
         score=score,
         decision_support=decision_support,
+        context_overlays=context_overlays,
     )
     signal_card: dict[str, Any] = {
         "identity": identity,
@@ -71,6 +79,7 @@ def assemble_ta_signal_card_report(
         "risk": risk,
         "score": score,
         "decision_support": decision_support,
+        "context_overlays": context_overlays,
         "provenance": provenance,
         "unavailable_context": unavailable_context,
         "llm": llm,
@@ -89,6 +98,7 @@ def assemble_ta_signal_card_report(
         "risk": risk,
         "score": score,
         "decision_support": decision_support,
+        "context_overlays": context_overlays,
         "signal_card": signal_card,
         "deterministic_signals": deterministic_signals,
         "risks": risk["flags"],
@@ -226,3 +236,9 @@ def _require_signal_card_sections(**sections: dict[str, Any]) -> None:
         raise ValueError(
             f"signal-card decision_support section missing required field(s): {missing}"
         )
+
+    context_overlays = sections["context_overlays"]
+    if not isinstance(context_overlays, dict) or "items" not in context_overlays:
+        raise ValueError("signal-card context_overlays section must include items")
+    if not isinstance(context_overlays["items"], list):
+        raise ValueError("signal-card context_overlays.items must be a list")

@@ -651,6 +651,70 @@
         "provider"
       ],
       "type": "object"
+    },
+    "context_overlay": {
+      "additionalProperties": true,
+      "properties": {
+        "overlay_type": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "available",
+            "unavailable"
+          ]
+        },
+        "provider": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "summary": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "decision_support_impact": {
+          "const": "none; overlays do not mutate deterministic signal_state"
+        },
+        "provenance_source": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "overlay_type",
+        "status",
+        "provider",
+        "summary",
+        "decision_support_impact",
+        "provenance_source"
+      ],
+      "type": "object"
+    },
+    "context_overlays": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/context_overlay"
+          },
+          "type": "array"
+        },
+        "source_rule": {
+          "const": "separated_context_overlays_v1"
+        },
+        "decision_support_impact": {
+          "const": "none; overlays do not mutate deterministic signal_state"
+        }
+      },
+      "required": [
+        "items",
+        "source_rule",
+        "decision_support_impact"
+      ],
+      "type": "object"
     }
   },
   "$id": "https://signaldesk.local/schemas/signaldesk.ta.v1.schema.json",
@@ -755,6 +819,9 @@
             "$ref": "#/$defs/unavailable_context"
           },
           "type": "array"
+        },
+        "context_overlays": {
+          "$ref": "#/$defs/context_overlays"
         }
       },
       "required": [
@@ -767,6 +834,7 @@
         "risk",
         "score",
         "decision_support",
+        "context_overlays",
         "provenance",
         "unavailable_context",
         "llm",
@@ -782,6 +850,9 @@
         "$ref": "#/$defs/unavailable_context"
       },
       "type": "array"
+    },
+    "context_overlays": {
+      "$ref": "#/$defs/context_overlays"
     }
   },
   "required": [
@@ -795,6 +866,7 @@
     "risk",
     "score",
     "decision_support",
+    "context_overlays",
     "provenance",
     "unavailable_context",
     "llm",

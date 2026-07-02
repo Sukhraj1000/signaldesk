@@ -1398,6 +1398,16 @@ def test_ta_command_enhanced_mode_adds_fmp_context_without_ta_signal_blending(
         item["context_type"] == "fundamentals" for item in payload["unavailable_context"]
     )
     assert payload["deterministic_signals"]["events"] == payload["events"]
+    assert payload["signal_card"]["context_overlays"] == payload["context_overlays"]
+    overlays = {item["overlay_type"]: item for item in payload["context_overlays"]["items"]}
+    assert overlays["fundamental_valuation"]["status"] == "available"
+    assert overlays["fundamental_valuation"]["fields"]["pe_ratio"] == "42.5"
+    assert overlays["earnings_catalyst_risk"]["status"] == "available"
+    assert overlays["earnings_catalyst_risk"]["fields"]["event_count"] == 1
+    assert all(
+        item["decision_support_impact"] == "none; overlays do not mutate deterministic signal_state"
+        for item in payload["context_overlays"]["items"]
+    )
 
     table_result = CliRunner().invoke(
         app, ["ta", "AMD", "--mode", "enhanced", "--llm", "none", "--output", "table"]
@@ -1879,6 +1889,7 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
     }
     expected["signal_state"] = payload["signal_state"]
     expected["deterministic_signals"]["signal_state"] = payload["signal_state"]
+    expected["context_overlays"] = payload["context_overlays"]
     expected["signal_card"] = {
         "identity": expected["identity"],
         "provider_mode": expected["provider_mode"],
@@ -1889,6 +1900,7 @@ def test_ta_json_contract_has_explicit_fact_signal_risk_provenance_sections(
         "risk": expected["risk"],
         "score": expected["score"],
         "decision_support": expected["decision_support"],
+        "context_overlays": expected["context_overlays"],
         "provenance": expected["provenance"],
         "unavailable_context": expected["unavailable_context"],
         "llm": "none",
@@ -1945,6 +1957,8 @@ def test_ta_command_outputs_markdown_from_signal_card(monkeypatch: MonkeyPatch) 
     assert "## Confirmation and invalidation" in result.stdout
     assert "- What confirms it: `unavailable`" in result.stdout
     assert "- What invalidates it: `unavailable`" in result.stdout
+    assert "## Context overlays" in result.stdout
+    assert "`fundamental_valuation` `unavailable` via `working`" in result.stdout
     assert "## Risks" in result.stdout
     assert "technical analysis only" in result.stdout
     assert "## Unavailable context" in result.stdout

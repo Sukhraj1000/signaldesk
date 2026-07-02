@@ -11,6 +11,7 @@ REPORT_BOUNDARIES = {
         "facts",
         "deterministic_signals",
         "risks",
+        "context_overlays",
         "unavailable_context",
         "optional_narrative",
     ],
@@ -68,6 +69,9 @@ def build_signal_card_presentation(signal_card: Mapping[str, Any]) -> dict[str, 
             "invalidation": _emphasized_display_items(levels.get("invalidation")),
         },
         "event_rows": _display_items(signal_card.get("events")),
+        "context_overlay_panel": _display_items(
+            signal_card.get("context_overlays", {}).get("items", [])
+        ),
         "risk_panel": {
             "flags": _display_items(risk.get("flags")),
             "unavailable_context": _display_items(signal_card.get("unavailable_context")),
@@ -95,6 +99,7 @@ def _require_card_sections(signal_card: Mapping[str, Any]) -> None:
         "events",
         "risk",
         "score",
+        "context_overlays",
         "provenance",
         "unavailable_context",
     )
@@ -129,6 +134,7 @@ def _display_item(item: object) -> dict[str, Any]:
         label = (
             item.get("kind")
             or item.get("category")
+            or item.get("overlay_type")
             or item.get("context_type")
             or item.get("provider")
         )
