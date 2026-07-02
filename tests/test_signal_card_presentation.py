@@ -379,6 +379,17 @@ def test_watchlist_scan_presentation_groups_canonical_report_rows() -> None:
         ],
         "skipped_symbols": [],
         "summary": {"total": 2, "ok": 1, "failed": 1, "skipped": 0},
+        "decision_support_summary": {
+            "schema_version": "signaldesk.watchlist_decision_support_summary.v1",
+            "source_rule": "deterministic_watchlist_decision_summary_v1",
+            "decision_support_only": True,
+            "not_trading_advice": True,
+            "total_ok_symbols": 1,
+            "non_empty_states": ["improving"],
+            "counts_by_state": {"improving": 1},
+            "top_symbols_by_state": {"improving": ["AMD"]},
+            "disclaimer": "Decision-support only; not investment advice or trade instructions.",
+        },
         "provenance": [{"provider": "local-fixture", "source": "historical_candles"}],
     }
 
@@ -396,6 +407,8 @@ def test_watchlist_scan_presentation_groups_canonical_report_rows() -> None:
         "failed": 1,
         "skipped": 0,
     }
+    assert presentation["decision_support_summary"]["non_empty_states"] == ["improving"]
+    assert presentation["decision_support_summary"]["not_trading_advice"] is True
     assert presentation["run_summary"] == {
         "run_id": "watchlist-scan-test",
         "generated_at": "2024-01-01T00:00:00+00:00",
@@ -488,6 +501,36 @@ def test_watchlist_scan_presentation_rejects_null_run_section() -> None:
         assert "run section must be a JSON object" in str(exc)
     else:
         raise AssertionError("null run metadata should fail")
+
+
+def test_watchlist_scan_presentation_normalizes_partial_decision_support_summary() -> None:
+    payload = {
+        "watchlist": "watchlists/default.yaml",
+        "watchlist_model": {"name": "Default TA Watchlist"},
+        "generated_at": "2024-01-01T00:00:00+00:00",
+        "provider_mode": {"mode": "explicit", "price_provider": "local-fixture"},
+        "symbols": ["AMD"],
+        "ranked_setups": [],
+        "failed_symbols": [],
+        "skipped_symbols": [],
+        "summary": {"total": 1, "ok": 0, "failed": 0, "skipped": 0},
+        "decision_support_summary": {"non_empty_states": ["technically_strong"]},
+        "provenance": [],
+    }
+
+    presentation = build_watchlist_scan_presentation(payload)
+
+    assert presentation["decision_support_summary"] == {
+        "schema_version": None,
+        "source_rule": None,
+        "decision_support_only": True,
+        "not_trading_advice": True,
+        "total_ok_symbols": 0,
+        "non_empty_states": ["technically_strong"],
+        "counts_by_state": {},
+        "top_symbols_by_state": {},
+        "disclaimer": None,
+    }
 
 def test_watchlist_scan_presentation_rejects_string_symbols() -> None:
     payload = {

@@ -828,6 +828,16 @@ def test_scan_payload_groups_decision_support_signal_buckets(
     assert "confirmation_level" in first_row
     assert "invalidation_level" in first_row
     assert first_row["rationale"]
+    decision_summary = payload["decision_support_summary"]
+    assert decision_summary["schema_version"] == "signaldesk.watchlist_decision_support_summary.v1"
+    assert decision_summary["source_rule"] == "deterministic_watchlist_decision_summary_v1"
+    assert decision_summary["decision_support_only"] is True
+    assert decision_summary["not_trading_advice"] is True
+    assert decision_summary["total_ok_symbols"] == 2
+    assert decision_summary["non_empty_states"] == [first_state]
+    assert decision_summary["counts_by_state"][first_state] == 2
+    assert decision_summary["top_symbols_by_state"][first_state] == ["AMD", "MSFT"]
+    assert "not investment advice" in decision_summary["disclaimer"]
 
 
 def test_scan_payload_ranks_successes_and_splits_failures(
