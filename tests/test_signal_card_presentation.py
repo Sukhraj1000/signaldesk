@@ -120,6 +120,23 @@ def test_fixture_signal_card_builds_dashboard_presentation_model() -> None:
         "mode": "explicit",
         "price_provider": "local-fixture",
     }
+    assert presentation["decision_support_panel"] == {
+        "signal_state": "improving_needs_confirmation",
+        "momentum_state": "improving",
+        "trend_state": "range_bound",
+        "strength_score": "55",
+        "risk_score": "40",
+        "setup_quality_score": "70",
+        "classification_reasons": [
+            "Trend regime is range_bound by range_bound_test_fixture.",
+            "Bullish evidence is present but still needs confirmation.",
+        ],
+        "confirmation_level": {"kind": "breakout_confirmation", "price": "121.00"},
+        "invalidation_level": {"kind": "setup_invalidation", "price": "99.00"},
+        "source_rule": "deterministic_decision_support_classification_v1",
+        "decision_support_only": True,
+        "not_trading_advice": True,
+    }
     assert presentation["level_groups"]["support"][0]["label"] == "support"
     assert "emphasis" not in presentation["level_groups"]["support"][0]
     assert presentation["level_groups"]["confirmation"][0]["label"] == "breakout_confirmation"
